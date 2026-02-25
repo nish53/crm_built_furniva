@@ -201,14 +201,17 @@ async def import_csv(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="File must be a CSV")
+    filename = file.filename.lower()
+    if not filename.endswith('.csv') and not filename.endswith('.txt'):
+        raise HTTPException(status_code=400, detail="File must be a CSV or TXT file")
     
     content = await file.read()
     content_str = content.decode('utf-8')
     
     if channel.lower() == "amazon":
-        orders = parse_amazon_csv(content_str)
+        # Detect delimiter - tab for .txt files, comma for .csv
+        delimiter = '\t' if filename.endswith('.txt') else ','
+        orders = parse_amazon_csv(content_str, delimiter=delimiter)
     elif channel.lower() == "flipkart":
         orders = parse_flipkart_csv(content_str)
     else:
