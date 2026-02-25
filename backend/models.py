@@ -93,6 +93,8 @@ class OrderBase(BaseModel):
     state: Optional[str] = None
     pincode: str
     sku: str
+    master_sku: Optional[str] = None
+    fnsku: Optional[str] = None
     asin: Optional[str] = None
     product_name: str
     quantity: int = 1
