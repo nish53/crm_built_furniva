@@ -22,7 +22,7 @@ from routes.financial_routes import router as financial_router
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-app = FastAPI(title="E-commerce Operations Management")
+app = FastAPI(title="E-commerce Operations Management", redirect_slashes=False)
 
 app.add_middleware(
     CORSMiddleware,
