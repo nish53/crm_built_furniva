@@ -381,13 +381,16 @@ const ImportCSVModal = ({ onClose, onSuccess }) => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Upload CSV File</label>
+            <label className="text-sm font-medium">Upload Order File</label>
             <Input
               data-testid="csv-file-input"
               type="file"
-              accept=".csv"
+              accept=".csv,.txt"
               onChange={(e) => setFile(e.target.files[0])}
             />
+            <p className="text-xs text-muted-foreground">
+              Supports CSV files and Amazon's tab-separated TXT reports
+            </p>
           </div>
 
           <div className="flex justify-end gap-2">
