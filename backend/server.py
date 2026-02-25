@@ -13,6 +13,7 @@ from routes.dashboard_routes import router as dashboard_router
 from routes.product_routes import router as product_router
 from routes.user_routes import router as user_router
 from routes.whatsapp_routes import router as whatsapp_router
+from routes.automation_routes import router as automation_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
