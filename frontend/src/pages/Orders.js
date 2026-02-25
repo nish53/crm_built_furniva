@@ -364,7 +364,7 @@ const ImportCSVModal = ({ onClose, onSuccess }) => {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="font-[Manrope]">Import Orders from CSV</CardTitle>
+          <CardTitle className="font-[Manrope]">Import Orders</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
