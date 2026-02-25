@@ -283,12 +283,14 @@ export const Orders = () => {
                       </td>
                       <td className="py-4 px-4">
                         <span className="text-sm text-muted-foreground">
-                          {format(new Date(order.dispatch_by), 'MMM dd, yyyy')}
+                          {order.dispatch_by && !isNaN(new Date(order.dispatch_by).getTime())
+                            ? format(new Date(order.dispatch_by), 'MMM dd, yyyy')
+                            : 'N/A'}
                         </span>
                       </td>
                       <td className="py-4 px-4 text-right">
                         <span className="text-sm font-medium">
-                          ₹{order.price.toLocaleString()}
+                          ₹{(order.price || 0).toLocaleString()}
                         </span>
                       </td>
                       <td className="py-4 px-4 text-right">
