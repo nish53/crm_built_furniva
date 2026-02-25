@@ -65,6 +65,7 @@ function App() {
             <Route path="orders" element={<Orders />} />
             <Route path="orders/new" element={<NewOrder />} />
             <Route path="orders/:id" element={<OrderDetail />} />
+            <Route path="whatsapp" element={<WhatsAppCRM />} />
             <Route
               path="tasks"
               element={
