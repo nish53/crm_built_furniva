@@ -48,13 +48,13 @@ export const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-2xl mb-4">
-            <Package className="w-8 h-8 text-primary" />
+          <div className="inline-flex items-center justify-center mb-4">
+            <img src="/furni-logo.png" alt="FURNI" className="h-16" />
           </div>
           <h1 className="text-3xl font-bold font-[Manrope] text-foreground mb-2">
-            Operations Hub
+            FURNI Operations Hub
           </h1>
-          <p className="text-muted-foreground">Manage your e-commerce operations</p>
+          <p className="text-muted-foreground">Manage your furniture business seamlessly</p>
         </div>
 
         <Card className="shadow-lg border-border/60">
