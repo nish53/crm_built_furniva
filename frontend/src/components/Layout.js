@@ -24,6 +24,7 @@ export const Layout = () => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Orders', href: '/orders', icon: Package },
+    { name: 'WhatsApp', href: '/whatsapp', icon: MessageSquare },
     { name: 'Tasks', href: '/tasks', icon: CheckSquare },
     { name: 'Inventory', href: '/inventory', icon: Archive },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
