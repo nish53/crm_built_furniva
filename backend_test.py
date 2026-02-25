@@ -309,7 +309,7 @@ class BackendTester:
         return False
     
     def test_recent_orders(self):
-        """Test recent orders API"""
+        """Test recent orders API - Should work without date errors after dispatch_by fix"""
         if not self.token:
             self.log_test("Recent Orders", False, "No authentication token")
             return False
@@ -320,15 +320,31 @@ class BackendTester:
             try:
                 orders = response.json()
                 if isinstance(orders, list):
-                    self.log_test("Recent Orders", True, f"Retrieved {len(orders)} recent orders", 
-                                {"count": len(orders)})
-                    return True
+                    # Verify dates are properly formatted for any orders with dispatch_by
+                    date_errors = []
+                    for order in orders:
+                        if order.get("dispatch_by"):
+                            try:
+                                # Try to parse the date to verify it's valid
+                                datetime.fromisoformat(order["dispatch_by"].replace('Z', '+00:00'))
+                            except (ValueError, AttributeError) as e:
+                                date_errors.append(f"Order {order.get('order_number', 'unknown')}: {str(e)}")
+                    
+                    if not date_errors:
+                        self.log_test("Recent Orders", True, 
+                                    f"✅ DISPATCH_BY DATE FIX VERIFIED - {len(orders)} recent orders with proper date formatting", 
+                                    {"count": len(orders), "sample_order": orders[0] if orders else None})
+                        return True
+                    else:
+                        self.log_test("Recent Orders", False, 
+                                    f"❌ DATE VALIDATION ERRORS PERSIST: {len(date_errors)} orders with invalid dates", 
+                                    {"errors": date_errors[:3]})  # Show first 3 errors
                 else:
                     self.log_test("Recent Orders", False, "Response is not a list", {"response": orders})
-            except:
-                self.log_test("Recent Orders", False, "Invalid JSON response", {"text": response.text})
+            except Exception as e:
+                self.log_test("Recent Orders", False, f"❌ DASHBOARD ENDPOINT FAILED: {str(e)}", {"text": response.text})
         else:
-            self.log_test("Recent Orders", False, f"HTTP {response.status_code}", {"text": response.text})
+            self.log_test("Recent Orders", False, f"❌ DASHBOARD ENDPOINT HTTP ERROR: {response.status_code}", {"text": response.text})
         
         return False
     
