@@ -56,11 +56,9 @@ export const Layout = () => {
       >
         <div className="flex flex-col h-full">
           <div className="h-16 flex items-center justify-between px-6 border-b border-border">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Package className="w-5 h-5 text-primary" />
-              </div>
-              <h2 className="text-lg font-bold font-[Manrope] text-foreground">Operations</h2>
+            <div className="flex items-center gap-3">
+              <img src="/furni-logo.png" alt="FURNI" className="h-10" />
+              <h2 className="text-lg font-bold font-[Manrope] text-foreground">FURNI</h2>
             </div>
             <button
               className="lg:hidden"
