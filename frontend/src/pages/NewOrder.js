@@ -51,7 +51,7 @@ export const NewOrder = () => {
         price: parseFloat(formData.price),
       };
 
-      await api.post('/orders', payload);
+      await api.post('/orders/', payload);
       toast.success('Order created successfully');
       navigate('/orders');
     } catch (error) {
