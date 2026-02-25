@@ -31,7 +31,7 @@ export const Tasks = () => {
 
   const fetchTasks = async () => {
     try {
-      const response = await api.get('/tasks');
+      const response = await api.get('/tasks/');
       setTasks(response.data);
     } catch (error) {
       toast.error('Failed to fetch tasks');
