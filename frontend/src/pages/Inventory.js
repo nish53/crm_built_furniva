@@ -44,7 +44,7 @@ export const Inventory = () => {
   const createProduct = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/products', formData);
+      await api.post('/products/', formData);
       toast.success('Product created');
       setShowForm(false);
       setFormData({
