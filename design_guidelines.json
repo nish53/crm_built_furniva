@@ -1,0 +1,194 @@
+{
+  "design_identity": {
+    "name": "Industrial Zen",
+    "core_philosophy": "Precision meets Craft. A dashboard that feels like a well-organized digital workshop.",
+    "emotional_tone": ["Efficient", "Trustworthy", "Calm", "Tactile"],
+    "archetype": "Swiss High-Contrast (Structure) + Organic Earthy (Soul)"
+  },
+  "typography": {
+    "headings": {
+      "family": "Manrope",
+      "weights": ["400", "600", "800"],
+      "usage": "Page titles, Section headers, Modal titles",
+      "letter_spacing": "-0.02em"
+    },
+    "body": {
+      "family": "Public Sans",
+      "weights": ["400", "500"],
+      "usage": "General text, Form labels, Table content"
+    },
+    "data": {
+      "family": "JetBrains Mono",
+      "weights": ["400"],
+      "usage": "SKUs, Order IDs, Tracking Numbers, JSON snippets"
+    }
+  },
+  "colors": {
+    "light": {
+      "background": "#F5F5F0",
+      "surface": "#FFFFFF",
+      "primary": "#1A4D2E",
+      "primary_foreground": "#FFFFFF",
+      "secondary": "#E8E8E3",
+      "secondary_foreground": "#2D3436",
+      "accent": "#E07A5F",
+      "accent_foreground": "#FFFFFF",
+      "border": "#E2E2E2",
+      "muted": "#F0F0F0",
+      "muted_foreground": "#64748B",
+      "destructive": "#EF4444"
+    },
+    "dark": {
+      "background": "#0D1210",
+      "surface": "#161C19",
+      "primary": "#4ADE80",
+      "primary_foreground": "#000000",
+      "secondary": "#2A332E",
+      "secondary_foreground": "#FFFFFF",
+      "accent": "#F97316",
+      "accent_foreground": "#FFFFFF",
+      "border": "#2A332E",
+      "muted": "#2A332E",
+      "muted_foreground": "#94A3B8",
+      "destructive": "#F87171"
+    }
+  },
+  "layout_strategies": {
+    "dashboard": {
+      "type": "Bento Grid Mode B (High Density)",
+      "grid_cols": "grid-cols-1 md:grid-cols-4 lg:grid-cols-12",
+      "gap": "gap-4",
+      "widgets": {
+        "kpi_summary": "col-span-1 md:col-span-2 lg:col-span-3",
+        "main_chart": "col-span-full lg:col-span-8 row-span-2",
+        "recent_activity": "col-span-full lg:col-span-4 row-span-2",
+        "pending_tasks": "col-span-full lg:col-span-6"
+      }
+    },
+    "tables": {
+      "style": "Clean, flat, high-density",
+      "row_height": "h-12",
+      "header_style": "uppercase text-xs font-bold text-muted-foreground tracking-wider bg-secondary/30"
+    },
+    "detail_view": {
+      "structure": "Split View",
+      "left_panel": "w-2/3 (Timeline, Order Details, Customer Info)",
+      "right_panel": "w-1/3 (Actions, Quick Tasks, Internal Notes)"
+    }
+  },
+  "components": {
+    "buttons": {
+      "radius": "rounded-lg",
+      "variants": {
+        "default": "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
+        "outline": "border-2 border-primary/20 hover:bg-primary/5 text-primary",
+        "ghost": "hover:bg-secondary text-foreground"
+      }
+    },
+    "cards": {
+      "radius": "rounded-xl",
+      "shadow": "shadow-sm border border-border/60",
+      "padding": "p-6"
+    },
+    "inputs": {
+      "radius": "rounded-md",
+      "border": "border-input focus:border-primary focus:ring-1 focus:ring-primary",
+      "bg": "bg-background/50"
+    },
+    "status_badges": {
+      "shape": "rounded-full",
+      "padding": "px-2.5 py-0.5",
+      "font": "text-xs font-medium uppercase tracking-wide"
+    }
+  },
+  "visual_enhancers": {
+    "textures": {
+      "noise": "opacity-5 mix-blend-overlay fixed inset-0 pointer-events-none z-50",
+      "gradients": "None. Use solid colors or very subtle mesh gradients for 'Success' states only."
+    },
+    "motion": {
+      "hover": "transition-transform duration-200 ease-out hover:-translate-y-0.5",
+      "click": "active:scale-95",
+      "page_load": "animate-in fade-in slide-in-from-bottom-4 duration-500"
+    }
+  },
+  "image_urls": {
+    "product_placeholders": [
+      {
+        "url": "https://images.unsplash.com/photo-1554104707-a76b270e4bbb?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "category": "Furniture",
+        "desc": "White metal chair"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1449247709967-d4461a6a6103?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "category": "Furniture",
+        "desc": "Wooden table setup"
+      }
+    ],
+    "logistics": [
+      {
+        "url": "https://images.unsplash.com/photo-1769477145932-edd5a9d7567c?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "category": "Dispatch",
+        "desc": "Loading truck"
+      },
+      {
+        "url": "https://images.pexels.com/photos/15379824/pexels-photo-15379824.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "Tracking",
+        "desc": "Delivery truck in city"
+      }
+    ],
+    "inventory": [
+      {
+        "url": "https://images.unsplash.com/photo-1769355104335-acef3aa4c9b6?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "category": "Warehouse",
+        "desc": "Cardboard boxes storage"
+      },
+      {
+        "url": "https://images.pexels.com/photos/29653988/pexels-photo-29653988.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "Stock",
+        "desc": "Stacked boxes"
+      }
+    ],
+    "users": [
+      {
+        "url": "https://images.pexels.com/photos/8866775/pexels-photo-8866775.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "Support",
+        "desc": "Customer service agents"
+      },
+      {
+        "url": "https://images.pexels.com/photos/9659893/pexels-photo-9659893.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "Customer",
+        "desc": "Diverse team"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Install 'lucide-react' for icons.",
+    "Install 'recharts' for analytics.",
+    "Install 'date-fns' for date formatting.",
+    "Use 'sonner' for all toast notifications.",
+    "Use 'TanStack Table' (shadcn table) for the Order List - it's critical for performance with 100+ rows.",
+    "For the CSV Import, create a dedicated 'Drag & Drop' zone that parses the file immediately using 'papaparse' (add to package.json) and shows a preview table BEFORE upload.",
+    "The 'Order Detail' view should use a 'Timeline' component for tracking history (Ordered -> Dispatch -> Delivery -> Return).",
+    "Implement a 'Quick Actions' floating bar or command palette (Cmd+K) for power users to search orders or change status quickly.",
+    "Strictly follow the color palette. Do NOT use default blue for primary actions. Use the defined Forest Green."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Avoid generic 'AI slop' aesthetics. Use defined 'Industrial Zen' identity.",
+    "Dark colors look good when used independently without gradients.",
+    "Don't make generic centered layouts. Use grids and asymmetry.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) for sticky headers only.",
+    "MUST NOT apply universal transition 'transition: all'.",
+    "MUST NOT center align the app container.",
+    "Always use modern button styles (pill or sharp) relevant to app style.",
+    "NEVER use AI assistant Emoji characters for icons.",
+    "Every interaction needs micro-animations.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Subtle grain textures/noise overlays separate good from extraordinary.",
+    "Main agent relies on provided image URLs. Missing categories = placeholder text is FORBIDDEN.",
+    "Prioritize using pre-existing components from src/components/ui.",
+    "Components MUST use named exports.",
+    "Use 'sonner' for toasts."
+  ]
+}
