@@ -101,3 +101,227 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  Build a comprehensive all-in-one web platform for Furniva furniture e-commerce business.
+  The platform centralizes operations from multiple sales channels (Amazon, Flipkart, WhatsApp, own website).
+  Core features include order management, customer communication, task management, inventory tracking,
+  sales analytics, logistics management, and financial control. Brand name is "Furniva".
+
+backend:
+  - task: "Amazon TXT Order Import"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/routes/order_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Enhanced Amazon order import to handle both .csv and .txt files with comprehensive field mapping.
+          - Automatically detects tab-separated format for .txt files
+          - Handles all Amazon order report fields (amazon-order-id, merchant-order-id, fulfillment-channel, etc.)
+          - Skips cancelled orders (quantity = 0)
+          - Better error handling and validation
+          - Supports multiple encodings (utf-8, latin-1, iso-8859-1)
+          - Provides detailed import summary with success/error counts
+          Needs testing with real Amazon .txt file provided by user.
+
+  - task: "WhatsApp Business API Integration"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/whatsapp_service.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          WhatsApp credentials configured in backend/.env:
+          - Access Token: Updated with permanent token
+          - Phone Number ID: 786630157876117
+          - Business Account ID: 1515795799624231
+          - Webhook Verify Token: furniva_webhook_secret_2024
+          User needs to configure webhook in Meta Business dashboard pointing to:
+          https://furni-hotfix.preview.emergentagent.com/api/whatsapp/webhook
+          Needs backend testing to verify API connection.
+
+  - task: "Order Management API"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/routes/order_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Complete CRUD operations for orders. Needs testing to verify all endpoints work correctly."
+
+  - task: "Financial Control Layer"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/routes/financial_routes.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Per-order P&L tracking, settlement reconciliation, leakage detection implemented. Needs testing."
+
+  - task: "Task Management API"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/routes/task_routes.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Task CRUD operations implemented. Needs testing."
+
+  - task: "Inventory Management API"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/routes/product_routes.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Product/inventory management implemented. Needs testing."
+
+frontend:
+  - task: "Brand Name Update"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/components/Layout.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Updated brand name from "FURNI" to "Furniva" in Layout.js.
+          Frontend completely rebuilt (cleared cache and restarted) to fix Mixed Content error.
+          Needs frontend testing to verify all pages load correctly and API calls work.
+
+  - task: "Order Import UI"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/Orders.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Order import UI already accepts both .csv and .txt files.
+          Needs testing with Amazon .txt file to verify end-to-end flow.
+
+  - task: "Dashboard"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/Dashboard.js"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "user"
+        comment: "User reported RangeError: Invalid time value crash on Dashboard"
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Dashboard.js has defensive date handling code (lines 165-167) that checks for invalid dates.
+          Code: order.order_date && !isNaN(new Date(order.order_date).getTime())
+          This should prevent crashes. Needs testing to verify if issue persists.
+
+  - task: "Orders Page"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/Orders.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: "Orders page with filters, search, import functionality. Needs testing."
+
+metadata:
+  created_by: "main_agent"
+  version: "2.0"
+  test_sequence: 1
+  run_ui: true
+  last_updated: "2025-02-25"
+
+test_plan:
+  current_focus:
+    - "Amazon TXT Order Import"
+    - "Brand Name Update"
+    - "WhatsApp Business API Integration"
+    - "Dashboard"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      === CRITICAL FIXES COMPLETED ===
+      
+      1. ✅ Brand Name: Updated from "FURNI" to "Furniva" in Layout.js
+      2. ✅ WhatsApp Credentials: All configured in backend/.env
+      3. ✅ Amazon TXT Import: Enhanced with comprehensive field mapping and error handling
+      4. ✅ Frontend Rebuild: Completely cleared cache and rebuilt to fix Mixed Content error
+      5. ✅ Backend Restart: Applied all changes
+      
+      === WHAT WAS ENHANCED ===
+      
+      Amazon TXT Import (/app/backend/routes/order_routes.py):
+      - Auto-detects tab-separated format for .txt files
+      - Maps all Amazon fields (amazon-order-id, merchant-order-id, fulfillment-channel, sales-channel, etc.)
+      - Skips cancelled orders (quantity = 0)
+      - Better error handling and validation
+      - Multiple encoding support
+      - Detailed import summary
+      
+      === TESTING REQUIRED ===
+      
+      Backend Testing Priority:
+      1. Amazon .txt file import (HIGH) - Use user's provided file
+      2. WhatsApp API connection (HIGH) - Verify credentials work
+      3. Order CRUD operations (HIGH)
+      4. Financial calculations (MEDIUM)
+      5. Task management (MEDIUM)
+      
+      Frontend Testing Priority:
+      1. Dashboard loading without crashes (HIGH)
+      2. Brand name "Furniva" displays correctly (HIGH)
+      3. Order import with .txt file works (HIGH)
+      4. All API calls work without Mixed Content error (HIGH)
+      5. All pages navigate correctly (MEDIUM)
+      
+      === AUTHENTICATION FOR TESTING ===
+      Test user can register or use existing credentials.
+      
+      === NEXT PHASES AFTER TESTING ===
+      Many advanced features documented but not fully implemented:
+      - Return Deep-Diagnosis Engine
+      - Installation Control Module
+      - Quality Control Tracking
+      - Escalation System
+      - Advanced Courier Intelligence
+      - Marketplace Compliance
+      - Customer Risk Shield
+      
+      Please test backend first, then frontend.
