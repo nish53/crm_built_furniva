@@ -158,42 +158,76 @@ backend:
           User needs to configure webhook in Meta Business dashboard pointing to:
           https://furni-hotfix.preview.emergentagent.com/api/whatsapp/webhook
           Needs backend testing to verify API connection.
+      - working: "NA"
+        agent: "testing"
+        comment: |
+          WhatsApp API not tested as it requires external Meta Business configuration.
+          Credentials are properly configured in backend/.env. User must:
+          1. Configure webhook URL in Meta Business dashboard
+          2. Verify webhook token matches furniva_webhook_secret_2024
+          This is a configuration task rather than code issue.
 
   - task: "Order Management API"
     implemented: true
-    working: "NA"
+    working: false
     file: "/app/backend/routes/order_routes.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Complete CRUD operations for orders. Needs testing to verify all endpoints work correctly."
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ Order retrieval endpoint failing with HTTP 500 due to Pydantic validation errors.
+          - Create order: ✅ Working
+          - Get order by ID: ✅ Working 
+          - Update order: ✅ Working
+          - List orders: ❌ Failing - some imported Amazon orders have empty dispatch_by dates causing validation errors
+          Root cause: Amazon import created orders with empty string dispatch_by dates instead of valid datetime or null.
+          Fix needed: Update order import to handle empty dates properly or make dispatch_by optional in model.
 
   - task: "Financial Control Layer"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/routes/financial_routes.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Per-order P&L tracking, settlement reconciliation, leakage detection implemented. Needs testing."
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ Financial API working correctly:
+          - Order financial calculation: ✅ Working (calculates profit, margin, costs)
+          - Profit analysis endpoint: ✅ Working
+          - All required fields present in response (gross_profit, profit_margin, net_revenue)
+          Successfully calculated financials for test order with proper commission, costs, and profit margins.
 
   - task: "Task Management API"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/routes/task_routes.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Task CRUD operations implemented. Needs testing."
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ Task Management API fully functional:
+          - Create task: ✅ Working
+          - List tasks: ✅ Working
+          - Update task status: ✅ Working
+          All CRUD operations successful with proper authentication and data handling.
 
   - task: "Inventory Management API"
     implemented: true
