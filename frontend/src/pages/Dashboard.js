@@ -160,9 +160,11 @@ export const Dashboard = () => {
                     <p className="text-sm text-muted-foreground mt-1">{order.customer_name} • {order.product_name}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium">₹{order.price.toLocaleString()}</p>
+                    <p className="text-sm font-medium">₹{(order.price || 0).toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">
-                      {format(new Date(order.order_date), 'MMM dd, yyyy')}
+                      {order.order_date && !isNaN(new Date(order.order_date).getTime()) 
+                        ? format(new Date(order.order_date), 'MMM dd, yyyy')
+                        : 'N/A'}
                     </p>
                   </div>
                 </div>
