@@ -57,8 +57,8 @@ export const Layout = () => {
         <div className="flex flex-col h-full">
           <div className="h-16 flex items-center justify-between px-6 border-b border-border">
             <div className="flex items-center gap-3">
-              <img src="/furni-logo.png" alt="FURNI" className="h-10" />
-              <h2 className="text-lg font-bold font-[Manrope] text-foreground">FURNI</h2>
+              <img src="/furni-logo.png" alt="Furniva" className="h-10" />
+              <h2 className="text-lg font-bold font-[Manrope] text-foreground">Furniva</h2>
             </div>
             <button
               className="lg:hidden"
