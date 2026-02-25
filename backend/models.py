@@ -82,7 +82,7 @@ class OrderBase(BaseModel):
     channel: OrderChannel
     order_number: str
     order_date: datetime
-    dispatch_by: datetime
+    dispatch_by: Optional[datetime] = None
     delivery_by: Optional[datetime] = None
     customer_id: str
     customer_name: str
