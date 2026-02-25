@@ -21,7 +21,10 @@ async def create_order(
     order_dict["id"] = str(uuid.uuid4())
     order_dict["created_at"] = datetime.now(timezone.utc).isoformat()
     order_dict["order_date"] = order_dict["order_date"].isoformat()
-    order_dict["dispatch_by"] = order_dict["dispatch_by"].isoformat()
+    
+    if order_dict.get("dispatch_by"):
+        order_dict["dispatch_by"] = order_dict["dispatch_by"].isoformat()
+    
     if order_dict.get("delivery_by"):
         order_dict["delivery_by"] = order_dict["delivery_by"].isoformat()
     
