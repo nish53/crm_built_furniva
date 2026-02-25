@@ -84,9 +84,17 @@ async def get_order(
 async def update_order(
     order_id: str,
     update_data: OrderUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
+    # Get old order status before update
+    old_order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not old_order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    old_status = old_order.get("status")
+    
     update_dict = {k: v for k, v in update_data.model_dump(exclude_unset=True).items() if v is not None}
     
     if not update_dict:
@@ -103,6 +111,18 @@ async def update_order(
     
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Trigger automation if status changed
+    new_status = update_dict.get("status")
+    if new_status and new_status != old_status:
+        from automation_service import automation_service
+        background_tasks.add_task(
+            automation_service.process_order_status_change,
+            order_id,
+            old_status,
+            new_status,
+            db
+        )
     
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     return Order(**order)
