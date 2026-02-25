@@ -8,6 +8,9 @@ import { Orders } from './pages/Orders';
 import { OrderDetail } from './pages/OrderDetail';
 import { NewOrder } from './pages/NewOrder';
 import { WhatsAppCRM } from './pages/WhatsAppCRM';
+import { Tasks } from './pages/Tasks';
+import { Inventory } from './pages/Inventory';
+import { Analytics } from './pages/Analytics';
 import { Layout } from './components/Layout';
 import './App.css';
 
