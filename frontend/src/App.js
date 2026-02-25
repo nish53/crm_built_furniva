@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Orders } from './pages/Orders';
 import { OrderDetail } from './pages/OrderDetail';
 import { NewOrder } from './pages/NewOrder';
+import { WhatsAppCRM } from './pages/WhatsAppCRM';
 import { Layout } from './components/Layout';
 import './App.css';
 
