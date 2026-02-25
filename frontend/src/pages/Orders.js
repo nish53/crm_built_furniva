@@ -49,7 +49,7 @@ export const Orders = () => {
       if (channelFilter !== 'all') params.channel = channelFilter;
       if (searchTerm) params.search = searchTerm;
 
-      const response = await api.get('/orders', { params });
+      const response = await api.get('/orders/', { params });
       setOrders(response.data);
     } catch (error) {
       toast.error('Failed to fetch orders');
