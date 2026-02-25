@@ -35,6 +35,7 @@ app.include_router(dashboard_router, prefix="/api")
 app.include_router(product_router, prefix="/api")
 app.include_router(user_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")
+app.include_router(automation_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_db_client():
