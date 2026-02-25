@@ -363,8 +363,10 @@ class BackendTester:
             "marketplace_commission_rate": 15.0
         }
         
-        calc_url = f"/financials/calculate/{order_id}"
-        calc_response = self.make_request("POST", calc_url, financial_params)
+        # Build query string for GET-style parameters
+        param_str = "&".join([f"{k}={v}" for k, v in financial_params.items()])
+        calc_url = f"/financials/calculate/{order_id}?{param_str}"
+        calc_response = self.make_request("POST", calc_url)
         
         if calc_response.status_code == 200:
             try:
