@@ -271,13 +271,50 @@ async def import_csv(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
+    """Import orders from CSV or TXT file
+    
+    Supports:
+    - Amazon: .csv (comma-separated) or .txt (tab-separated)
+    - Flipkart: .csv (comma-separated)
+    
+    Automatically skips:
+    - Duplicate orders (same order number)
+    - Cancelled orders (quantity = 0)
+    - Invalid rows
+    """
     filename = file.filename.lower()
     if not filename.endswith('.csv') and not filename.endswith('.txt'):
-        raise HTTPException(status_code=400, detail="File must be a CSV or TXT file")
+        raise HTTPException(
+            status_code=400, 
+            detail="File must be a CSV or TXT file. Amazon supports both .csv and .txt formats."
+        )
     
-    content = await file.read()
-    content_str = content.decode('utf-8')
+    try:
+        content = await file.read()
+        
+        # Try multiple encodings
+        content_str = None
+        for encoding in ['utf-8', 'utf-8-sig', 'latin-1', 'iso-8859-1']:
+            try:
+                content_str = content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if not content_str:
+            raise HTTPException(
+                status_code=400,
+                detail="Unable to decode file. Please ensure it's a valid text file."
+            )
+        
+        # Validate file has content
+        if not content_str.strip():
+            raise HTTPException(status_code=400, detail="File is empty")
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error reading file: {str(e)}")
     
+    # Parse orders based on channel
     if channel.lower() == "amazon":
         # Detect delimiter - tab for .txt files, comma for .csv
         delimiter = '\t' if filename.endswith('.txt') else ','
@@ -287,10 +324,18 @@ async def import_csv(
     else:
         raise HTTPException(status_code=400, detail="Invalid channel. Must be 'amazon' or 'flipkart'")
     
+    if not orders:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid orders found in file. Please check the file format and ensure it contains order data."
+        )
+    
     imported_count = 0
     skipped_count = 0
+    error_count = 0
     
     for order_data in orders:
+        # Check for duplicates
         existing = await db.orders.find_one({"order_number": order_data["order_number"]}, {"_id": 0})
         if existing:
             skipped_count += 1
@@ -301,20 +346,39 @@ async def import_csv(
             order_data["customer_id"] = str(uuid.uuid4())
             order_data["created_at"] = datetime.now(timezone.utc).isoformat()
             
+            # Parse dates with error handling
             if order_data.get("order_date"):
-                order_data["order_date"] = date_parser.parse(order_data["order_date"]).isoformat()
+                try:
+                    order_data["order_date"] = date_parser.parse(order_data["order_date"]).isoformat()
+                except Exception:
+                    order_data["order_date"] = datetime.now(timezone.utc).isoformat()
+            
             if order_data.get("dispatch_by"):
-                order_data["dispatch_by"] = date_parser.parse(order_data["dispatch_by"]).isoformat()
+                try:
+                    order_data["dispatch_by"] = date_parser.parse(order_data["dispatch_by"]).isoformat()
+                except Exception:
+                    # Set dispatch date to 3 days from order date
+                    order_date = date_parser.parse(order_data["order_date"]) if order_data.get("order_date") else datetime.now(timezone.utc)
+                    order_data["dispatch_by"] = (order_date + timedelta(days=3)).isoformat()
             
             await db.orders.insert_one(order_data)
             imported_count += 1
+            
         except Exception as e:
-            skipped_count += 1
+            error_count += 1
+            print(f"Error importing order {order_data.get('order_number')}: {e}")
             continue
     
     return {
-        "message": "CSV import completed",
+        "success": True,
+        "message": f"Import completed successfully. Imported {imported_count} orders.",
         "imported": imported_count,
         "skipped": skipped_count,
-        "total": len(orders)
+        "errors": error_count,
+        "total_processed": len(orders),
+        "details": {
+            "file_name": file.filename,
+            "channel": channel,
+            "file_type": "tab-separated" if filename.endswith('.txt') else "comma-separated"
+        }
     }
