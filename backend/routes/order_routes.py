@@ -139,33 +139,103 @@ async def delete_order(
     return {"message": "Order deleted successfully"}
 
 def parse_amazon_csv(content: str, delimiter: str = ',') -> List[dict]:
-    """Parse Amazon order file (CSV or tab-separated TXT)"""
-    reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
-    orders = []
-    for row in reader:
-        try:
-            order = {
-                "channel": "amazon",
-                "order_number": row.get("order-id", row.get("Order ID", "")),
-                "order_date": row.get("purchase-date", row.get("Order Date", "")),
-                "dispatch_by": row.get("promise-date", row.get("Ship By Date", row.get("latest-ship-date", ""))),
-                "customer_name": row.get("buyer-name", row.get("Buyer Name", row.get("recipient-name", ""))),
-                "phone": row.get("buyer-phone-number", row.get("Phone", "")),
-                "shipping_address": row.get("ship-address-1", row.get("Address", "")),
-                "city": row.get("ship-city", row.get("City", "")),
-                "state": row.get("ship-state", row.get("State", "")),
-                "pincode": row.get("ship-postal-code", row.get("Pincode", "")),
-                "sku": row.get("sku", row.get("SKU", "")),
-                "asin": row.get("asin", row.get("ASIN", "")),
-                "product_name": row.get("product-name", row.get("Product", "")),
-                "quantity": int(row.get("quantity-purchased", row.get("Qty", 1)) or 1),
-                "price": float(row.get("item-price", row.get("Price", 0)) or 0),
-                "status": "pending"
-            }
-            orders.append(order)
-        except Exception as e:
-            continue
-    return orders
+    """Parse Amazon order file (CSV or tab-separated TXT)
+    
+    Supports both Amazon CSV format and tab-separated TXT format.
+    Handles all standard Amazon order report fields.
+    """
+    try:
+        reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
+        orders = []
+        
+        for row in reader:
+            try:
+                # Skip empty rows
+                if not row or not any(row.values()):
+                    continue
+                
+                # Extract order details with comprehensive field mapping
+                amazon_order_id = row.get("amazon-order-id", "")
+                merchant_order_id = row.get("merchant-order-id", "")
+                order_number = amazon_order_id or merchant_order_id or row.get("Order ID", "")
+                
+                # Skip if no order number
+                if not order_number:
+                    continue
+                
+                # Parse quantity - handle empty strings and cancelled orders
+                quantity_str = row.get("quantity", row.get("quantity-purchased", row.get("Qty", "1")))
+                try:
+                    quantity = int(float(quantity_str)) if quantity_str and quantity_str.strip() else 0
+                except (ValueError, AttributeError):
+                    quantity = 0
+                
+                # Skip cancelled orders with 0 quantity
+                if quantity == 0:
+                    continue
+                
+                # Parse price
+                price_str = row.get("item-price", row.get("Price", "0"))
+                try:
+                    price = float(price_str) if price_str and price_str.strip() else 0.0
+                except (ValueError, AttributeError):
+                    price = 0.0
+                
+                # Map order status
+                order_status = row.get("order-status", "").lower()
+                item_status = row.get("item-status", "").lower()
+                
+                if order_status == "cancelled" or item_status == "cancelled":
+                    status = "cancelled"
+                elif order_status == "shipped" or item_status == "shipped":
+                    status = "dispatched"
+                elif order_status == "pending" or item_status == "unshipped":
+                    status = "pending"
+                else:
+                    status = "pending"
+                
+                # Build order object with all fields
+                order = {
+                    "channel": "amazon",
+                    "order_number": order_number,
+                    "order_date": row.get("purchase-date", row.get("Order Date", "")),
+                    "last_updated": row.get("last-updated-date", ""),
+                    "dispatch_by": row.get("latest-ship-date", row.get("promise-date", row.get("Ship By Date", ""))),
+                    "customer_name": row.get("buyer-name", row.get("Buyer Name", row.get("recipient-name", "Customer"))),
+                    "phone": row.get("buyer-phone-number", row.get("Phone", "")),
+                    "shipping_address": row.get("ship-address-1", row.get("Address", "")),
+                    "city": row.get("ship-city", row.get("City", "")),
+                    "state": row.get("ship-state", row.get("State", "")),
+                    "pincode": row.get("ship-postal-code", row.get("Pincode", "")),
+                    "country": row.get("ship-country", "IN"),
+                    "sku": row.get("sku", row.get("SKU", "")),
+                    "asin": row.get("asin", row.get("ASIN", "")),
+                    "product_name": row.get("product-name", row.get("Product", "")),
+                    "quantity": quantity,
+                    "price": price,
+                    "currency": row.get("currency", "INR"),
+                    "fulfillment_channel": row.get("fulfillment-channel", ""),
+                    "sales_channel": row.get("sales-channel", ""),
+                    "ship_service_level": row.get("ship-service-level", ""),
+                    "item_tax": row.get("item-tax", "0"),
+                    "shipping_price": row.get("shipping-price", "0"),
+                    "shipping_tax": row.get("shipping-tax", "0"),
+                    "status": status,
+                    "notes": f"Imported from Amazon on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                }
+                
+                orders.append(order)
+                
+            except Exception as e:
+                # Log error but continue processing other orders
+                print(f"Error parsing row: {e}")
+                continue
+        
+        return orders
+        
+    except Exception as e:
+        print(f"Error reading CSV/TXT file: {e}")
+        return []
 
 def parse_flipkart_csv(content: str) -> List[dict]:
     reader = csv.DictReader(io.StringIO(content))
