@@ -52,7 +52,7 @@ export const Tasks = () => {
   const createTask = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/tasks', formData);
+      await api.post('/tasks/', formData);
       toast.success('Task created');
       setShowForm(false);
       setFormData({ title: '', description: '', priority: 'medium', assigned_to: '', due_date: '' });
