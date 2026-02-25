@@ -422,3 +422,25 @@ agent_communication:
       The core Amazon import functionality is working excellently. The order list issue is a minor data validation problem that can be fixed by updating the import to handle empty dates or making dispatch_by optional in the model.
       
       Overall: Backend is 87.5% functional (7/8 tests passed) with Amazon import fully operational.
+  - agent: "testing"  
+    message: |
+      === DISPATCH_BY FIX RETEST RESULTS ===
+      
+      ❌ CRITICAL ISSUE PERSISTS: GET /api/orders/ still failing with HTTP 500 errors
+      
+      DETAILED ANALYSIS COMPLETED:
+      - Database contains 103 total orders
+      - 97 Amazon orders have empty strings ("") for dispatch_by field  
+      - 6 test orders have valid dispatch_by values
+      - dispatch_by is Optional[datetime] in Pydantic model ✅
+      - BUT Pydantic cannot parse empty strings as datetime ❌
+      
+      ROOT CAUSE: Empty strings in database need to be converted to null or handled in validation
+      
+      WHAT'S WORKING:
+      ✅ Dashboard recent orders (different endpoint/query logic)
+      ✅ Individual order CRUD operations  
+      ✅ All other backend APIs functional
+      
+      IMMEDIATE FIX NEEDED:
+      Either update database (empty strings -> null) or add Pydantic validator to convert empty strings to None before datetime parsing.
