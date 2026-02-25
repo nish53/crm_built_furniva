@@ -355,14 +355,31 @@ async def import_csv(
                     order_data["order_date"] = date_parser.parse(order_data["order_date"]).isoformat()
                 except Exception:
                     order_data["order_date"] = datetime.now(timezone.utc).isoformat()
+            else:
+                order_data["order_date"] = datetime.now(timezone.utc).isoformat()
             
-            if order_data.get("dispatch_by"):
+            # Handle dispatch_by - remove empty strings and set to None
+            dispatch_by_val = order_data.get("dispatch_by", "").strip()
+            if dispatch_by_val:
                 try:
-                    order_data["dispatch_by"] = date_parser.parse(order_data["dispatch_by"]).isoformat()
+                    order_data["dispatch_by"] = date_parser.parse(dispatch_by_val).isoformat()
                 except Exception:
                     # Set dispatch date to 3 days from order date
                     order_date = date_parser.parse(order_data["order_date"]) if order_data.get("order_date") else datetime.now(timezone.utc)
                     order_data["dispatch_by"] = (order_date + timedelta(days=3)).isoformat()
+            else:
+                # Remove empty string or set to None - Pydantic will handle it
+                order_data.pop("dispatch_by", None)
+            
+            # Handle delivery_by similarly
+            delivery_by_val = order_data.get("delivery_by", "").strip()
+            if delivery_by_val:
+                try:
+                    order_data["delivery_by"] = date_parser.parse(delivery_by_val).isoformat()
+                except Exception:
+                    order_data.pop("delivery_by", None)
+            else:
+                order_data.pop("delivery_by", None)
             
             await db.orders.insert_one(order_data)
             imported_count += 1
