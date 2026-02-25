@@ -1,13 +1,4 @@
-@layer utilities {
-  .font-heading {
-    font-family: 'Manrope', sans-serif;
-  }
-  
-  .font-mono-data {
-    font-family: 'JetBrains Mono', monospace;
-  }
-}
-
+/* Custom animations */
 .animate-in {
   animation: fadeIn 0.5s ease-out;
 }
