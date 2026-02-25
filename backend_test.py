@@ -168,11 +168,9 @@ class BackendTester:
                 files = {
                     'file': ('amazon_orders.txt', f, 'text/plain')
                 }
-                data = {
-                    'channel': 'amazon'
-                }
                 
-                response = self.make_request("POST", "/orders/import-csv", data=data, files=files)
+                # Channel needs to be a query parameter, not form data
+                response = self.make_request("POST", "/orders/import-csv?channel=amazon", files=files)
             
             # Clean up temp file
             os.unlink(file_path)
