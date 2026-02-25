@@ -138,8 +138,9 @@ async def delete_order(
         raise HTTPException(status_code=404, detail="Order not found")
     return {"message": "Order deleted successfully"}
 
-def parse_amazon_csv(content: str) -> List[dict]:
-    reader = csv.DictReader(io.StringIO(content))
+def parse_amazon_csv(content: str, delimiter: str = ',') -> List[dict]:
+    """Parse Amazon order file (CSV or tab-separated TXT)"""
+    reader = csv.DictReader(io.StringIO(content), delimiter=delimiter)
     orders = []
     for row in reader:
         try:
@@ -147,8 +148,8 @@ def parse_amazon_csv(content: str) -> List[dict]:
                 "channel": "amazon",
                 "order_number": row.get("order-id", row.get("Order ID", "")),
                 "order_date": row.get("purchase-date", row.get("Order Date", "")),
-                "dispatch_by": row.get("promise-date", row.get("Ship By Date", "")),
-                "customer_name": row.get("buyer-name", row.get("Buyer Name", "")),
+                "dispatch_by": row.get("promise-date", row.get("Ship By Date", row.get("latest-ship-date", ""))),
+                "customer_name": row.get("buyer-name", row.get("Buyer Name", row.get("recipient-name", ""))),
                 "phone": row.get("buyer-phone-number", row.get("Phone", "")),
                 "shipping_address": row.get("ship-address-1", row.get("Address", "")),
                 "city": row.get("ship-city", row.get("City", "")),
@@ -157,8 +158,8 @@ def parse_amazon_csv(content: str) -> List[dict]:
                 "sku": row.get("sku", row.get("SKU", "")),
                 "asin": row.get("asin", row.get("ASIN", "")),
                 "product_name": row.get("product-name", row.get("Product", "")),
-                "quantity": int(row.get("quantity-purchased", row.get("Qty", 1))),
-                "price": float(row.get("item-price", row.get("Price", 0))),
+                "quantity": int(row.get("quantity-purchased", row.get("Qty", 1)) or 1),
+                "price": float(row.get("item-price", row.get("Price", 0)) or 0),
                 "status": "pending"
             }
             orders.append(order)
