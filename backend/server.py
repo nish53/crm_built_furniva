@@ -43,11 +43,12 @@ async def startup_db_client():
     # Start background automation processor
     import asyncio
     from automation_service import automation_service
+    from database import get_database as get_db
     
     async def process_automations_periodically():
         while True:
             try:
-                db = await get_database()
+                db = await get_db()
                 count = await automation_service.process_scheduled_automations(db)
                 if count > 0:
                     logger.info(f"Processed {count} scheduled automations")
