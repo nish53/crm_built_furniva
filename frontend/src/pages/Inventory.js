@@ -32,7 +32,7 @@ export const Inventory = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await api.get('/products');
+      const response = await api.get('/products/');
       setProducts(response.data);
     } catch (error) {
       toast.error('Failed to fetch products');
