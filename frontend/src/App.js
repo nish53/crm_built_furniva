@@ -69,33 +69,9 @@ function App() {
             <Route path="orders/new" element={<NewOrder />} />
             <Route path="orders/:id" element={<OrderDetail />} />
             <Route path="whatsapp" element={<WhatsAppCRM />} />
-            <Route
-              path="tasks"
-              element={
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold font-[Manrope] mb-2">Tasks</h2>
-                  <p className="text-muted-foreground">Coming soon...</p>
-                </div>
-              }
-            />
-            <Route
-              path="inventory"
-              element={
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold font-[Manrope] mb-2">Inventory</h2>
-                  <p className="text-muted-foreground">Coming soon...</p>
-                </div>
-              }
-            />
-            <Route
-              path="analytics"
-              element={
-                <div className="text-center py-12">
-                  <h2 className="text-2xl font-bold font-[Manrope] mb-2">Analytics</h2>
-                  <p className="text-muted-foreground">Coming soon...</p>
-                </div>
-              }
-            />
+            <Route path="tasks" element={<Tasks />} />
+            <Route path="inventory" element={<Inventory />} />
+            <Route path="analytics" element={<Analytics />} />
             <Route
               path="team"
               element={
