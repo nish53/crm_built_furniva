@@ -115,7 +115,7 @@ class BackendTester:
             "password": TEST_PASSWORD
         }
         
-        response = self.make_request("POST", "/auth/token", credentials)
+        response = self.make_request("POST", "/auth/login", credentials)
         
         if response.status_code == 200:
             try:
