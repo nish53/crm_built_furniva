@@ -171,7 +171,7 @@ backend:
     implemented: true
     working: false
     file: "/app/backend/routes/order_routes.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "high"
     needs_retesting: false
     status_history:
@@ -188,6 +188,26 @@ backend:
           - List orders: ❌ Failing - some imported Amazon orders have empty dispatch_by dates causing validation errors
           Root cause: Amazon import created orders with empty string dispatch_by dates instead of valid datetime or null.
           Fix needed: Update order import to handle empty dates properly or make dispatch_by optional in model.
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ DISPATCH_BY FIX INCOMPLETE - GET /api/orders/ still returns HTTP 500 errors.
+          
+          DETAILED ROOT CAUSE ANALYSIS:
+          - dispatch_by field is Optional[datetime] in model ✅ 
+          - Database contains 97 Amazon orders with empty strings ("") for dispatch_by ❌
+          - Pydantic cannot parse empty string as datetime, causing ValidationError
+          - Error: "Input should be a valid datetime or date, input is too short"
+          
+          CURRENT STATUS:
+          - Individual order operations: ✅ Working (create, get by ID, update)
+          - Order list endpoint: ❌ Still failing due to empty string validation
+          - Dashboard recent orders: ✅ Working (uses different query/logic)
+          
+          REQUIRED FIX: Need to either:
+          1. Update database to convert empty strings to null values
+          2. Add Pydantic validator to handle empty strings -> None
+          3. Modify order retrieval to filter/convert empty strings before validation
 
   - task: "Financial Control Layer"
     implemented: true
