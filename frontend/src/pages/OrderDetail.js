@@ -255,6 +255,8 @@ export const OrderDetail = () => {
             </CardContent>
           </Card>
 
+          <AutomationPanel orderId={id} />
+
           <Card className="border-border/60" data-testid="communication-card">
             <CardHeader>
               <CardTitle className="font-[Manrope]">Communication</CardTitle>
