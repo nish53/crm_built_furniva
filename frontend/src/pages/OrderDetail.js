@@ -4,6 +4,7 @@ import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { AutomationPanel } from '../components/AutomationPanel';
 import { toast } from 'sonner';
 import { ArrowLeft, Package, User, MapPin, Phone, Calendar, Truck, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
