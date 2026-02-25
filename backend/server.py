@@ -43,6 +43,7 @@ app.include_router(automation_router, prefix="/api")
 app.include_router(claim_router, prefix="/api")
 app.include_router(courier_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api")
+app.include_router(financial_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_db_client():
