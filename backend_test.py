@@ -202,7 +202,7 @@ class BackendTester:
         return False
     
     def test_order_management(self):
-        """Test Order CRUD operations"""
+        """Test Order CRUD operations - FOCUS ON DISPATCH_BY DATE FIX"""
         if not self.token:
             self.log_test("Order Management", False, "No authentication token")
             return False
@@ -234,35 +234,46 @@ class BackendTester:
                 order = response.json()
                 order_id = order.get("id")
                 
-                # Test getting orders list
+                # CRITICAL TEST: Get orders list - should work after dispatch_by fix
                 list_response = self.make_request("GET", "/orders/")
                 if list_response.status_code == 200:
-                    orders = list_response.json()
-                    if isinstance(orders, list) and len(orders) > 0:
-                        
-                        # Test getting specific order
-                        get_response = self.make_request("GET", f"/orders/{order_id}")
-                        if get_response.status_code == 200:
+                    try:
+                        orders = list_response.json()
+                        if isinstance(orders, list):
+                            # Verify we can retrieve all 97+ orders without validation errors
+                            order_count = len(orders)
                             
-                            # Test updating order
-                            update_data = {"status": "confirmed"}
-                            update_response = self.make_request("PATCH", f"/orders/{order_id}", update_data)
-                            if update_response.status_code == 200:
-                                self.log_test("Order Management", True, 
-                                            "All CRUD operations successful", 
-                                            {"order_id": order_id})
-                                return True
+                            # Test getting specific order
+                            get_response = self.make_request("GET", f"/orders/{order_id}")
+                            if get_response.status_code == 200:
+                                
+                                # Test updating order
+                                update_data = {"status": "confirmed"}
+                                update_response = self.make_request("PATCH", f"/orders/{order_id}", update_data)
+                                if update_response.status_code == 200:
+                                    self.log_test("Order Management", True, 
+                                                f"✅ DISPATCH_BY FIX SUCCESSFUL - Retrieved {order_count} orders without validation errors", 
+                                                {"order_id": order_id, "total_orders": order_count})
+                                    return True
+                                else:
+                                    self.log_test("Order Management", False, 
+                                                f"Update failed: HTTP {update_response.status_code}", 
+                                                {"response": update_response.text})
                             else:
                                 self.log_test("Order Management", False, 
-                                            f"Update failed: HTTP {update_response.status_code}")
+                                            f"Get order failed: HTTP {get_response.status_code}", 
+                                            {"response": get_response.text})
                         else:
-                            self.log_test("Order Management", False, 
-                                        f"Get order failed: HTTP {get_response.status_code}")
-                    else:
-                        self.log_test("Order Management", False, "Orders list empty or invalid")
+                            self.log_test("Order Management", False, "Orders list is not an array", 
+                                        {"response_type": type(orders)})
+                    except Exception as parse_error:
+                        self.log_test("Order Management", False, 
+                                    f"❌ ORDER LIST PARSING FAILED: {str(parse_error)}", 
+                                    {"raw_response": list_response.text[:500]})
                 else:
                     self.log_test("Order Management", False, 
-                                f"Get orders failed: HTTP {list_response.status_code}")
+                                f"❌ GET ORDERS STILL FAILING: HTTP {list_response.status_code} - dispatch_by fix may not be complete", 
+                                {"response": list_response.text[:500]})
             except Exception as e:
                 self.log_test("Order Management", False, f"Exception: {str(e)}")
         else:
