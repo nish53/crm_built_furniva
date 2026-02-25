@@ -40,6 +40,22 @@ app.include_router(automation_router, prefix="/api")
 @app.on_event("startup")
 async def startup_db_client():
     await connect_to_mongo()
+    # Start background automation processor
+    import asyncio
+    from automation_service import automation_service
+    
+    async def process_automations_periodically():
+        while True:
+            try:
+                db = await get_database()
+                count = await automation_service.process_scheduled_automations(db)
+                if count > 0:
+                    logger.info(f"Processed {count} scheduled automations")
+            except Exception as e:
+                logger.error(f"Automation processor error: {e}")
+            await asyncio.sleep(300)  # Check every 5 minutes
+    
+    asyncio.create_task(process_automations_periodically())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
