@@ -214,5 +214,13 @@ export const PriorityCards = () => {
         </Card>
       )}
     </div>
+
+    <MasterSKUDialog
+      isOpen={showMasterSKUDialog}
+      onClose={() => setShowMasterSKUDialog(false)}
+      prefilledSKU={selectedSKU}
+      onSuccess={handleSKUMappingSuccess}
+    />
+  </>
   );
 };
