@@ -14,6 +14,8 @@ import {
   X,
   MessageSquare,
   RefreshCcw,
+  DollarSign,
+  Layers,
 } from 'lucide-react';
 import { useState } from 'react';
 
