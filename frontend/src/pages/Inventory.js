@@ -37,7 +37,7 @@ export const Inventory = () => {
   // Platform Listing Form
   const [listingForm, setListingForm] = useState({
     platform: 'amazon',
-    rows: [{ platform_sku: '', platform_product_id: '', platform_fnsku: '' }]
+    rows: [{ platform_sku: '', platform_product_id: '' }]
   });
 
   // Procurement Form with box details
