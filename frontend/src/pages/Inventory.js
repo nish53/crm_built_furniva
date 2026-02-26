@@ -119,13 +119,13 @@ export const Inventory = () => {
     setSelectedSKU(sku);
     try { const res = await api.get(`/platform-listings/by-master-sku/${sku.master_sku}`); setListings(res.data); }
     catch { setListings([]); }
-    setListingForm({ platform: 'amazon', rows: [{ platform_sku: '', platform_product_id: '', platform_fnsku: '' }] });
+    setListingForm({ platform: 'amazon', rows: [{ platform_sku: '', platform_product_id: '' }] });
     setShowListingsModal(true);
   };
 
   const addListingRow = () => {
     if (listingForm.rows.length >= 10) return;
-    setListingForm({ ...listingForm, rows: [...listingForm.rows, { platform_sku: '', platform_product_id: '', platform_fnsku: '' }] });
+    setListingForm({ ...listingForm, rows: [...listingForm.rows, { platform_sku: '', platform_product_id: '' }] });
   };
   const updateListingRow = (idx, field, value) => {
     const rows = [...listingForm.rows]; rows[idx][field] = value;
