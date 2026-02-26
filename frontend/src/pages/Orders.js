@@ -116,6 +116,26 @@ export const Orders = () => {
     } catch (error) {
       toast.error('Failed to update orders');
     }
+
+  const handleBulkUpdateChannel = async (newChannel) => {
+    if (selectedOrders.length === 0) {
+      toast.error('No orders selected');
+      return;
+    }
+
+    try {
+      await api.post('/orders/bulk-update-channel', {
+        order_ids: selectedOrders,
+        channel: newChannel
+      });
+      toast.success(`Successfully updated ${selectedOrders.length} order(s) to ${newChannel}`);
+      setSelectedOrders([]);
+      fetchOrders();
+    } catch (error) {
+      toast.error('Failed to update channel');
+    }
+  };
+
   };
 
   const handleSearch = (e) => {
