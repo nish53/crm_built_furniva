@@ -3,133 +3,83 @@
 ## Overview
 A comprehensive e-commerce operations management platform for Furniva furniture business, centralizing order management from multiple sales channels (Amazon, Flipkart, WhatsApp, Website).
 
-## Core Requirements
-
-### Phase 1 - Core Features (COMPLETED)
-- **Order Management**: Central dashboard to view, manage, and track all orders
-- **Multi-Channel Support**: Amazon, Flipkart, WhatsApp, Website, Phone orders
-- **CSV/TXT Import**: Import orders from marketplaces (Amazon TXT, Flipkart CSV)
-- **Customer Communication**: WhatsApp Business API integration (webhook blocked by Meta - needs custom domain)
-- **Task Management**: Assign tasks to team members
-- **Dashboard Analytics**: Stats overview with recent orders
-- **User Authentication**: JWT-based login/registration with roles
-
-### Phase 2 - Inventory & Financial (COMPLETED - Feb 2026)
-- **Master SKU Management**: Central product identifier with full CRUD
-  - Platform-specific SKU mapping (Amazon SKU/ASIN/FNSKU, Flipkart SKU/FSN, Website SKU)
-  - Category, dimensions, weight, cost/selling price
-- **Platform Listings**: Multiple listings per platform per Master SKU
-  - Add/remove listings with platform selector
-  - ASIN, FSN, FNSKU tracking per listing
-- **Procurement Batches**: Track inventory procurement with batch-level costing
-  - Weighted average cost calculation (FIFO, LIFO, Weighted)
-  - Batch number, quantity, unit cost, supplier, notes
-  - Total stock aggregation across batches
-- **Returns Management**: Full return workflow
-  - Create returns from Order Detail page
-  - Return reasons, damage categories, installation-related flag
-  - Status workflow: Requested > Approved > Pickup > In Transit > Received > Inspected > Refunded/Replaced
-  - Return analytics by reason and by product
-- **Financial Control**: Per-order profitability tracking
-  - Product cost, shipping, packaging, installation inputs
-  - Auto-calculated: marketplace commission, TCS/TDS, gateway fees
-  - Gross profit, profit margin, contribution margin
-  - Settlement tracking and leakage detection
-  - Aggregated profit analysis dashboard
-
-### Phase 3 - Advanced Features (PLANNED)
-- Financial Control Layer UI enhancements
-- Installation Management (installer assignments, ratings)
-- Quality Control (pre-dispatch QC checklists with photo proof)
-- Escalation System (auto-flag high-value orders, late deliveries)
-- Advanced Courier Intelligence (RTO%, damage%, claim rates)
-- Marketplace Health Monitoring (ASIN suppressions, listing health)
-- Inventory Intelligence Reports (dead stock, slow-moving SKUs)
-- CRM & Risk Management (problematic customer flagging)
-- Auditing (user activity logs, data export)
-
-## Technical Architecture
-
-### Stack
-- **Frontend**: React 18, Tailwind CSS, Shadcn UI
-- **Backend**: FastAPI (Python 3.11)
-- **Database**: MongoDB (Motor async driver)
+## Technical Stack
+- **Frontend**: React 18, Tailwind CSS, Shadcn UI, Lucide Icons
+- **Backend**: FastAPI (Python 3.11), Motor (async MongoDB)
+- **Database**: MongoDB
 - **Auth**: JWT tokens
 
-### Key API Endpoints
-- `POST /api/auth/login` - User authentication
-- `POST /api/auth/register` - User registration
-- `GET/POST /api/orders/` - Orders CRUD
-- `POST /api/orders/import-csv` - Import CSV/TXT orders
-- `GET/POST /api/master-sku/` - Master SKU CRUD
-- `GET/POST /api/platform-listings/` - Platform listings CRUD
-- `GET /api/platform-listings/by-master-sku/{sku}` - Listings by Master SKU
-- `GET/POST /api/procurement-batches/` - Procurement batch CRUD
-- `GET /api/procurement-batches/average-cost/{sku}` - Average cost calculation
-- `GET/POST /api/returns/` - Returns CRUD
-- `PATCH /api/returns/{id}/status` - Update return status
-- `POST /api/financials/calculate/{order_id}` - Calculate order financials
-- `GET /api/financials/profit-analysis` - Aggregated profit analysis
-- `GET /api/financials/leakage-report` - Leakage detection
-
-### Database Models
-- **users**: id, email, name, role, hashed_password
-- **orders**: id, order_number, customer_name, channel, status, sku, master_sku, price, dates, tracking, communication flags
-- **master_sku_mappings**: id, master_sku, product_name, category, amazon_sku/asin/fnsku, flipkart_sku/fsn, website_sku, dimensions, weight, cost_price, selling_price
-- **platform_listings**: id, master_sku, platform, platform_sku, platform_product_id, platform_fnsku, is_active
-- **procurement_batches**: id, master_sku, batch_number, procurement_date, quantity, unit_cost, total_cost, supplier
-- **return_requests**: id, order_id, order_number, customer_name, return_reason, return_status, damage_category, dates
-- **order_financials**: id, order_id, selling_price, marketplace_commission, net_revenue, costs, gross_profit, profit_margin
-- **tasks**: id, title, assigned_to, due_date, status
+## Core Architecture
+- **Master SKU**: Central product identifier (no dimensions/weight/costs - those belong in procurement)
+- **Platform Listings**: Per-platform SKU/ASIN/FSN/FNSKU mappings under each Master SKU
+- **Procurement Batches**: Inventory procurement with per-box weight/dimensions, auto-calculated total weight, weighted avg cost
+- **Returns**: Full workflow with mandatory fields, status history, undo capability
 
 ## What's Been Implemented
 
-### Completed (Feb 26, 2026)
-1. Full-stack application with Furniva branding
-2. User authentication (JWT)
-3. Dashboard with stats and recent orders
-4. Orders CRUD with filtering and search
-5. Amazon TXT/CSV and Flipkart CSV import with date parsing (ISO 8601 support)
-6. **Inventory Page** - Complete Master SKU management with:
-   - Master SKU cards with stats (listings count, stock, avg cost)
-   - Create/Edit Master SKU modal with all platform fields
-   - Platform Listings modal (add/remove per platform)
-   - Procurement Batches modal (add batches, view history, weighted avg cost)
-7. **Order Detail Page** - Enhanced with:
-   - All order fields displayed (SKU, ASIN, tracking, master status, etc.)
+### Phase 1 - Core Features
+1. User authentication (JWT) with roles
+2. Dashboard with stats and recent orders
+3. Orders CRUD with filtering, search, status management
+4. Amazon TXT/CSV and Flipkart CSV import with date parsing (ISO 8601)
+5. Task management
+6. Channels management
+7. Analytics page
+8. WhatsApp CRM (configured, webhook blocked by Meta - needs custom domain)
+
+### Phase 2 - Inventory & Financial (Feb 26, 2026)
+1. **Inventory Page** - Master SKU CRUD with:
+   - Simplified form (no FNSKU/dims/weight/costs - just SKU identifiers)
+   - Platform Listings modal (add/remove per platform with SKU/ASIN/FSN/FNSKU)
+   - Procurement modal with per-box weight + dimensions (L×W×H), auto-calculated total weight
+2. **Order Detail** - Enhanced with:
+   - All order fields (tracking, master_status, fulfillment, etc.)
    - Delivery timeline card
-   - Communication checklist (DC1, CP, DNP-3/2/1, delivery, install, review)
-   - "Create Return" button with full return form
-   - "Calculate Financials" button with cost input modal
-   - Financial summary display
-8. **Returns Management** - Full page with:
-   - Returns list with search and status filter
-   - Detail modal with status progression workflow
-   - Approve/Reject, Pickup, Transit, Receive, Inspect, Refund/Replace
-9. **Costing Page** - Financial control dashboard with:
+   - **Read-only** Communication Status (green/red indicators, automated via WhatsApp CRM)
+   - Correct checklist order: Order Confirm Call → Message → DNP 1/2/3 → Dispatch → Delivery → Install → Review
+   - Always-visible "Create Return Request" button (orange styled)
+   - "Calculate Financials" modal
+3. **Returns Management** with:
+   - Status workflow with **mandatory fields** (Pickup Scheduled → pickup date required, In Transit → tracking required)
+   - **Undo/Reverse** capability at every status (reverts to previous state)
+   - Full **status history** with timestamps and user info
+   - Status history display in detail modal
+4. **Costing Page** - Financial control dashboard with:
    - 4 KPI cards (Revenue, Net Revenue, Costs, Profit)
    - Leakage report
    - How It Works guide
-10. Clean navigation sidebar (10 sections)
-11. Tasks management
-12. Channels management
-13. WhatsApp CRM (configured, webhook blocked by Meta)
-14. Analytics page
+5. Clean navigation: Dashboard → Orders → Inventory → Returns → Costing → Channels → Tasks → Analytics → WhatsApp → Team
 
 ### Bug Fixes (Feb 26, 2026)
 1. Fixed corrupted models.py - duplicate class fields in ProcurementBatchCreate and ChannelCreate
-2. Made sku and product_name optional in OrderBase to handle imported orders without these fields
-3. Fixed frontend compilation issues
+2. Made sku and product_name optional in OrderBase for imported orders
+3. Simplified MasterSKU form per user feedback
+4. Added box-level procurement tracking (weight, dimensions)
+5. Return workflow with mandatory field validation and undo
+
+## Key API Endpoints
+- `POST /api/auth/login` - Authentication
+- `GET/POST /api/orders/` - Orders CRUD
+- `POST /api/orders/import-csv` - Import CSV/TXT
+- `GET/POST /api/master-sku/` - Master SKU CRUD
+- `GET/POST /api/platform-listings/` - Platform listings CRUD
+- `GET/POST /api/procurement-batches/` - Procurement with box details
+- `GET /api/procurement-batches/average-cost/{sku}` - Weighted avg cost
+- `GET/POST /api/returns/` - Returns CRUD
+- `PATCH /api/returns/{id}/status` - Update with mandatory field validation
+- `PATCH /api/returns/{id}/undo` - Undo last status change
+- `POST /api/financials/calculate/{order_id}` - Per-order financials
+- `GET /api/financials/profit-analysis` - Aggregated analysis
 
 ## Known Issues
-1. WhatsApp webhook blocked by Meta (external - needs custom domain)
-2. Some imported orders have incomplete data (no customer name, ₹0 price)
+1. WhatsApp webhook blocked by Meta (external - needs custom domain for production)
+2. Communication checklist currently read-only; will be automated via WhatsApp CRM integration
 
 ## Next Steps (Priority Order)
-1. P1 - Installation Management module
-2. P1 - Quality Control tracking
-3. P2 - Escalation System
-4. P2 - Advanced Courier Intelligence
+1. P1 - Installation Management module (installer assignments, scheduling, ratings)
+2. P1 - Quality Control tracking (pre-dispatch QC checklists with photo proof)
+3. P2 - Escalation System (auto-flag high-value orders, late deliveries)
+4. P2 - Advanced Courier Intelligence (RTO%, damage%, claim rates)
 5. P2 - Marketplace Health Monitoring
 6. P3 - CRM & Risk Management
 7. P3 - Inventory Intelligence Reports
