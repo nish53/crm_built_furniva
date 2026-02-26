@@ -191,6 +191,35 @@ async def bulk_update_orders(
     }
 
 
+
+@router.post("/bulk-update-channel")
+async def bulk_update_channel(
+    order_ids: List[str],
+    channel: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Bulk update channel for multiple orders"""
+    if not order_ids:
+        raise HTTPException(status_code=400, detail="No order IDs provided")
+    
+    # Validate channel
+    valid_channels = ["amazon", "flipkart", "whatsapp", "website", "phone", "historical"]
+    if channel not in valid_channels:
+        raise HTTPException(status_code=400, detail=f"Invalid channel. Must be one of: {valid_channels}")
+    
+    result = await db.orders.update_many(
+        {"id": {"$in": order_ids}},
+        {"$set": {"channel": channel}}
+    )
+    
+    return {
+        "message": f"Successfully updated channel for {result.modified_count} orders",
+        "modified_count": result.modified_count,
+        "matched_count": result.matched_count
+    }
+
+
 def parse_amazon_csv(content: str, delimiter: str = ',') -> List[dict]:
     """Parse Amazon order file (CSV or tab-separated TXT)
     
