@@ -136,6 +136,45 @@ export const MasterSKU = () => {
         </Button>
       </div>
 
+      {/* Unmapped SKUs Alert */}
+      {unmappedSkus.length > 0 && (
+        <Card className="border-yellow-500/50 bg-yellow-50/50 dark:bg-yellow-950/20">
+          <CardHeader>
+            <CardTitle className="font-[Manrope] flex items-center gap-2">
+              <Package className="w-5 h-5 text-yellow-600" />
+              {unmappedSkus.length} SKU(s) Need Mapping
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {unmappedSkus.slice(0, 6).map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border">
+                  <div>
+                    <p className="font-medium text-sm">{item.sku}</p>
+                    <p className="text-xs text-muted-foreground">{item.channel} • {item.order_count} orders</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, amazon_sku: item.sku, product_name: item.product_name }));
+                      setShowForm(true);
+                      setEditingId(null);
+                    }}
+                  >
+                    Map Now
+                  </Button>
+                </div>
+              ))}
+            </div>
+            {unmappedSkus.length > 6 && (
+              <p className="text-sm text-muted-foreground mt-3">
+                And {unmappedSkus.length - 6} more unmapped SKUs...
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Search */}
       <div className="flex gap-4">
         <div className="flex-1 relative">
