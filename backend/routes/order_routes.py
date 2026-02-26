@@ -172,14 +172,18 @@ async def bulk_update_orders(
 
 @router.post("/bulk-update-channel")
 async def bulk_update_channel(
-    order_ids: List[str],
-    channel: str,
+    request_data: dict,
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
     """Update channel for multiple orders"""
+    order_ids = request_data.get("order_ids", [])
+    channel = request_data.get("channel", "")
+    
     if not order_ids:
         raise HTTPException(status_code=400, detail="No order IDs provided")
+    if not channel:
+        raise HTTPException(status_code=400, detail="Channel is required")
     
     result = await db.orders.update_many(
         {"id": {"$in": order_ids}},
