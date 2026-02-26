@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { CheckSquare, Plus, Calendar, User, AlertCircle } from 'lucide-react';
+import { CheckSquare, Plus, Calendar, User, AlertCircle, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const Tasks = () => {
@@ -16,6 +16,7 @@ export const Tasks = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [selectedTasks, setSelectedTasks] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
