@@ -18,6 +18,10 @@ from routes.claim_routes import router as claim_router
 from routes.courier_routes import router as courier_router
 from routes.analytics_routes import router as analytics_router
 from routes.financial_routes import router as financial_router
+from routes.master_sku_routes import router as master_sku_router
+from routes.import_routes import router as import_router
+from routes.return_routes import router as return_router
+from routes.channel_routes import router as channel_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -36,7 +40,7 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(order_router, prefix="/api")
 app.include_router(task_router, prefix="/api")
 app.include_router(dashboard_router, prefix="/api")
-app.include_router(product_router, prefix="/api")
+app.include_router(product_routes, prefix="/api")
 app.include_router(user_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")
 app.include_router(automation_router, prefix="/api")
@@ -44,6 +48,10 @@ app.include_router(claim_router, prefix="/api")
 app.include_router(courier_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api")
 app.include_router(financial_router, prefix="/api")
+app.include_router(master_sku_router, prefix="/api")
+app.include_router(import_router, prefix="/api")
+app.include_router(return_router, prefix="/api")
+app.include_router(channel_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_db_client():
