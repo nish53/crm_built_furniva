@@ -339,14 +339,14 @@ export const ImportWizard = () => {
                       </div>
                       <div className="col-span-2">
                         <Select
-                          value={columnMappings[column] || ''}
-                          onValueChange={(value) => handleMappingChange(column, value)}
+                          value={columnMappings[column] || '__skip__'}
+                          onValueChange={(value) => handleMappingChange(column, value === '__skip__' ? '' : value)}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select system field (or leave empty)" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">-- Ignore Column --</SelectItem>
+                            <SelectItem value="__skip__">-- Ignore Column --</SelectItem>
                             <optgroup label="Required Fields">
                               {availableFields.required_fields.map(field => (
                                 <SelectItem key={field.field} value={field.field}>
