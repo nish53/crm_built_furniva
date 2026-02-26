@@ -75,6 +75,7 @@ function App() {
             <Route path="orders/new" element={<NewOrder />} />
             <Route path="orders/:id" element={<OrderDetail />} />
             <Route path="orders/import" element={<ImportWizard />} />
+            <Route path="orders/import-historical" element={<HistoricalImport />} />
             <Route path="master-sku" element={<MasterSKU />} />
             <Route path="returns" element={<Returns />} />
             <Route path="channels" element={<Channels />} />
