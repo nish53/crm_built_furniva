@@ -194,6 +194,13 @@ export const Orders = () => {
             Import Orders
           </Button>
           <Button
+            variant="outline"
+            onClick={() => navigate('/orders/import-historical')}
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Import Historical
+          </Button>
+          <Button
             data-testid="add-order-button"
             onClick={() => navigate('/orders/new')}
           >
