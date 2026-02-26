@@ -11,7 +11,10 @@ export const MasterSKUDialog = ({ isOpen, onClose, prefilledSKU = '', onSuccess 
   const [formData, setFormData] = useState({
     master_sku: '',
     amazon_sku: '',
+    amazon_asin: '',
+    amazon_fnsku: '',
     flipkart_sku: '',
+    flipkart_fsn: '',
     website_sku: '',
     product_name: '',
     category: '',
