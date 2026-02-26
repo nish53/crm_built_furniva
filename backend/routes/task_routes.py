@@ -73,3 +73,49 @@ async def delete_task(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"message": "Task deleted successfully"}
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_tasks(
+    task_ids: List[str],
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Bulk delete multiple tasks"""
+    if not task_ids:
+        raise HTTPException(status_code=400, detail="No task IDs provided")
+    
+    result = await db.tasks.delete_many({"id": {"$in": task_ids}})
+    return {
+        "message": f"Successfully deleted {result.deleted_count} tasks",
+        "deleted_count": result.deleted_count
+    }
+
+@router.post("/bulk-update")
+async def bulk_update_tasks(
+    task_ids: List[str],
+    update_fields: dict,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Bulk update multiple tasks with same field values"""
+    if not task_ids:
+        raise HTTPException(status_code=400, detail="No task IDs provided")
+    
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="No update fields provided")
+    
+    # Handle status completion
+    if update_fields.get('status') == 'completed':
+        update_fields['completed_at'] = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.tasks.update_many(
+        {"id": {"$in": task_ids}},
+        {"$set": update_fields}
+    )
+    
+    return {
+        "message": f"Successfully updated {result.modified_count} tasks",
+        "modified_count": result.modified_count,
+        "matched_count": result.matched_count
+    }
