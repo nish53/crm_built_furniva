@@ -376,30 +376,45 @@ export const Orders = () => {
             <div className="mt-4 pt-4 border-t grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
               <div>
                 <label className="text-xs font-medium mb-1 block">Master SKU</label>
-                <Input
-                  placeholder="Master SKU"
-                  value={masterSkuFilter}
-                  onChange={(e) => setMasterSkuFilter(e.target.value)}
-                  className="h-9"
-                />
+                <Select value={masterSkuFilter} onValueChange={setMasterSkuFilter}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="All Master SKUs" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Master SKUs</SelectItem>
+                    {uniqueMasterSkus.map(sku => (
+                      <SelectItem key={sku} value={sku}>{sku}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-xs font-medium mb-1 block">City</label>
-                <Input
-                  placeholder="City"
-                  value={cityFilter}
-                  onChange={(e) => setCityFilter(e.target.value)}
-                  className="h-9"
-                />
+                <Select value={cityFilter} onValueChange={setCityFilter}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="All Cities" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Cities</SelectItem>
+                    {uniqueCities.map(city => (
+                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-xs font-medium mb-1 block">State</label>
-                <Input
-                  placeholder="State"
-                  value={stateFilter}
-                  onChange={(e) => setStateFilter(e.target.value)}
-                  className="h-9"
-                />
+                <Select value={stateFilter} onValueChange={setStateFilter}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="All States" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All States</SelectItem>
+                    {uniqueStates.map(state => (
+                      <SelectItem key={state} value={state}>{state}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-xs font-medium mb-1 block">Min Price</label>
