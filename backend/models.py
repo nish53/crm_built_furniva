@@ -111,6 +111,7 @@ class OrderBase(BaseModel):
     shipping_tax: Optional[float] = None
     total_amount: Optional[float] = None
     status: OrderStatus = OrderStatus.PENDING
+    master_status: Optional[List[str]] = []  # Multi-status: ["pending_dispatch", "in_transit", "delivered", "installation_pending", "return_requested", "replacement_pending"]
     instructions: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
 

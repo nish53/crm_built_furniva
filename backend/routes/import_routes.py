@@ -115,7 +115,7 @@ async def import_with_column_mapping(
     file: UploadFile = File(...),
     channel: str = Query(..., description="Channel name (amazon, flipkart, website, etc.)"),
     column_mappings: str = Query(..., description="JSON string of column mappings"),
-    delimiter: str = Query(",", description="Delimiter character"),
+    delimiter: str = Query(",", description="Single character delimiter"),
     has_header: bool = Query(True, description="File has header row"),
     auto_lookup_master_sku: bool = Query(True, description="Auto-lookup Master SKU from platform SKU"),
     current_user: User = Depends(get_current_active_user),
@@ -128,6 +128,12 @@ async def import_with_column_mapping(
         mappings = json.loads(column_mappings)
     except:
         raise HTTPException(status_code=400, detail="Invalid column_mappings JSON")
+    
+    # Fix delimiter - handle escape sequences
+    if delimiter == "\\t" or delimiter == "\t":
+        delimiter = '\t'
+    elif len(delimiter) != 1:
+        raise HTTPException(status_code=400, detail="Delimiter must be a single character")
     
     try:
         content = await file.read()
@@ -189,15 +195,13 @@ async def import_with_column_mapping(
                 
                 # Auto-lookup Master SKU if enabled
                 if auto_lookup_master_sku and order_data.get("sku") and not order_data.get("master_sku"):
-                    # Try to find master_sku from mapping table
-                    platform_field = {
-                        "amazon": {"$or": [{"amazon_sku": order_data["sku"]}, {"amazon_asin": order_data.get("asin")}]},
-                        "flipkart": {"$or": [{"flipkart_sku": order_data["sku"]}, {"flipkart_fsn": order_data.get("fsn_id")}]},
-                    }.get(channel.lower(), {"website_sku": order_data["sku"]})
-                    
-                    master_mapping = await db.master_sku_mappings.find_one(platform_field, {"_id": 0})
-                    if master_mapping:
-                        order_data["master_sku"] = master_mapping["master_sku"]
+                    # Look up in platform_listings collection by SKU
+                    listing = await db.platform_listings.find_one(
+                        {"platform_sku": order_data["sku"]},
+                        {"_id": 0}
+                    )
+                    if listing:
+                        order_data["master_sku"] = listing["master_sku"]
                 
                 # Add required fields
                 order_data["id"] = str(uuid.uuid4())
