@@ -13,6 +13,7 @@ export const MasterSKU = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [showAllUnmapped, setShowAllUnmapped] = useState(false);
   const [formData, setFormData] = useState({
     master_sku: '',
     product_name: '',
