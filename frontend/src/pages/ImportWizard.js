@@ -343,24 +343,20 @@ export const ImportWizard = () => {
                           onValueChange={(value) => handleMappingChange(column, value === '__skip__' ? '' : value)}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select system field (or leave empty)" />
+                            <SelectValue placeholder="Select system field" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-[400px]">
                             <SelectItem value="__skip__">-- Ignore Column --</SelectItem>
-                            <optgroup label="Required Fields">
-                              {availableFields.required_fields.map(field => (
-                                <SelectItem key={field.field} value={field.field}>
-                                  {field.field} ({field.type}) - {field.description}
-                                </SelectItem>
-                              ))}
-                            </optgroup>
-                            <optgroup label="Optional Fields">
-                              {availableFields.optional_fields.map(field => (
-                                <SelectItem key={field.field} value={field.field}>
-                                  {field.field} ({field.type}) - {field.description}
-                                </SelectItem>
-                              ))}
-                            </optgroup>
+                            {availableFields.required_fields.map(field => (
+                              <SelectItem key={field.field} value={field.field}>
+                                ⭐ {field.field} - {field.description}
+                              </SelectItem>
+                            ))}
+                            {availableFields.optional_fields.map(field => (
+                              <SelectItem key={field.field} value={field.field}>
+                                {field.field} - {field.description}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
