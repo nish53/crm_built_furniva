@@ -8,6 +8,7 @@ import { Plus, Search, Edit, Trash2, Package } from 'lucide-react';
 
 export const MasterSKU = () => {
   const [skuMappings, setSkuMappings] = useState([]);
+  const [unmappedSkus, setUnmappedSkus] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -31,6 +32,7 @@ export const MasterSKU = () => {
 
   useEffect(() => {
     fetchMappings();
+    fetchUnmappedSKUs();
   }, [searchTerm]);
 
   const fetchMappings = async () => {
