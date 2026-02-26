@@ -16,7 +16,11 @@ async def calculate_order_financials(
     shipping_cost: float,
     packaging_cost: float = 0.0,
     installation_cost: float = 0.0,
+    ads_cost: float = 0.0,
+    account_management_charges: float = 0.0,
+    other_charges: float = 0.0,
     marketplace_commission_rate: float = 15.0,
+    apply_gst: bool = True,
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
@@ -34,8 +38,15 @@ async def calculate_order_financials(
     
     net_revenue = selling_price - marketplace_commission - tcs_tds - payment_gateway_fee
     
-    # Calculate total costs
-    total_cost = product_cost + shipping_cost + packaging_cost + installation_cost
+    # Calculate total costs (including new fields)
+    total_cost = (product_cost + shipping_cost + packaging_cost + installation_cost + 
+                  ads_cost + account_management_charges + other_charges)
+    
+    # Apply GST if enabled (18% fixed)
+    gst_amount = 0.0
+    if apply_gst:
+        gst_amount = total_cost * 0.18
+        total_cost += gst_amount
     
     # Calculate profit
     gross_profit = net_revenue - total_cost
