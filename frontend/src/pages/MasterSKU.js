@@ -44,6 +44,16 @@ export const MasterSKU = () => {
       toast.error('Failed to fetch SKU mappings');
     } finally {
       setLoading(false);
+
+  const fetchUnmappedSKUs = async () => {
+    try {
+      const response = await api.get('/dashboard/priority/unmapped-skus');
+      setUnmappedSkus(response.data.unmapped_skus || []);
+    } catch (error) {
+      console.error('Failed to fetch unmapped SKUs:', error);
+    }
+  };
+
     }
   };
 
