@@ -87,20 +87,32 @@ class OrderBase(BaseModel):
     customer_id: str
     customer_name: str
     phone: str
+    phone_secondary: Optional[str] = None
+    email: Optional[str] = None
     billing_address: Optional[str] = None
     shipping_address: Optional[str] = None
+    shipping_address_line1: Optional[str] = None
+    shipping_address_line2: Optional[str] = None
+    landmark: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     pincode: str
+    country: Optional[str] = "IN"
     sku: str
     master_sku: Optional[str] = None
     fnsku: Optional[str] = None
     asin: Optional[str] = None
+    fsn_id: Optional[str] = None
     product_name: str
     quantity: int = 1
     price: float
+    item_tax: Optional[float] = None
+    shipping_price: Optional[float] = None
+    shipping_tax: Optional[float] = None
+    total_amount: Optional[float] = None
     status: OrderStatus = OrderStatus.PENDING
     instructions: Optional[str] = None
+    custom_fields: Optional[Dict[str, Any]] = None
 
 class OrderCreate(OrderBase):
     pass
@@ -109,10 +121,27 @@ class Order(OrderBase):
     model_config = ConfigDict(extra="ignore")
     id: str
     created_at: datetime
+    updated_at: Optional[datetime] = None
     dispatch_date: Optional[datetime] = None
     delivery_date: Optional[datetime] = None
     tracking_number: Optional[str] = None
+    tracking_url: Optional[str] = None
     courier_partner: Optional[str] = None
+    courier_awb: Optional[str] = None
+    pickup_status: Optional[str] = None
+    pickup_date: Optional[datetime] = None
+    in_transit_date: Optional[datetime] = None
+    out_for_delivery_date: Optional[datetime] = None
+    delivered_date: Optional[datetime] = None
+    rto_initiated_date: Optional[datetime] = None
+    rto_delivered_date: Optional[datetime] = None
+    return_requested: bool = False
+    return_reason: Optional[str] = None
+    return_date: Optional[datetime] = None
+    return_tracking_number: Optional[str] = None
+    return_status: Optional[str] = None
+    refund_amount: Optional[float] = None
+    refund_date: Optional[datetime] = None
     dc1_called: bool = False
     dc1_date: Optional[datetime] = None
     cp_sent: bool = False
@@ -125,10 +154,17 @@ class Order(OrderBase):
     install_conf: bool = False
     deliver_conf: bool = False
     review_conf: bool = False
-    pickup_status: Optional[str] = None
     cancellation_reason: Optional[str] = None
     assigned_to: Optional[str] = None
     internal_notes: Optional[str] = None
+    fulfillment_channel: Optional[str] = None
+    sales_channel: Optional[str] = None
+    ship_service_level: Optional[str] = None
+    payment_method: Optional[str] = None
+    is_business_order: bool = False
+    is_prime: bool = False
+    gift_message: Optional[str] = None
+    last_updated: Optional[datetime] = None
 
 class OrderUpdate(BaseModel):
     status: Optional[OrderStatus] = None
