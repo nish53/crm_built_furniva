@@ -444,15 +444,6 @@ export const Orders = () => {
         </CardContent>
       </Card>
 
-      {showImportModal && (
-        <ImportCSVModal
-          onClose={() => setShowImportModal(false)}
-          onSuccess={() => {
-            fetchOrders();
-            setShowImportModal(false);
-          }}
-        />
-      )}
     </div>
   );
 };
