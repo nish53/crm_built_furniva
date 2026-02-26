@@ -124,10 +124,10 @@ export const Orders = () => {
           <Button
             data-testid="import-csv-button"
             variant="outline"
-            onClick={() => setShowImportModal(true)}
+            onClick={() => navigate('/orders/import')}
           >
             <Upload className="w-4 h-4 mr-2" />
-            Import CSV
+            Import Orders
           </Button>
           <Button
             data-testid="add-order-button"
