@@ -11,6 +11,8 @@ import { WhatsAppCRM } from './pages/WhatsAppCRM';
 import { Tasks } from './pages/Tasks';
 import { Inventory } from './pages/Inventory';
 import { Analytics } from './pages/Analytics';
+import { ImportWizard } from './pages/ImportWizard';
+import { MasterSKU } from './pages/MasterSKU';
 import { Layout } from './components/Layout';
 import './App.css';
 
