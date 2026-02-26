@@ -381,9 +381,6 @@ export const Orders = () => {
                       Channel
                     </th>
                     <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                      Channel
-                    </th>
-                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
                       Status
                     </th>
                     <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
