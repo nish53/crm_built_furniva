@@ -287,6 +287,44 @@ backend:
         comment: "Product/inventory management implemented. Needs testing."
       - working: true
         agent: "testing"
+
+  - task: "Bulk Operations - Orders"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/routes/order_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Implemented bulk operations for orders:
+          - POST /api/orders/bulk-delete - Delete multiple orders by IDs
+          - POST /api/orders/bulk-update - Update multiple orders with same field values
+          - Proper validation and error handling
+          - Returns count of affected orders
+          - Datetime field conversion support
+          Needs backend testing to verify endpoints work correctly.
+
+  - task: "Bulk Operations - Tasks"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/routes/task_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Implemented bulk operations for tasks:
+          - POST /api/tasks/bulk-delete - Delete multiple tasks by IDs
+          - POST /api/tasks/bulk-update - Update multiple tasks with same field values
+          - Auto-completion timestamp when status is "completed"
+          - Returns count of affected tasks
+          Needs backend testing to verify endpoints work correctly.
+
         comment: |
           ✅ Dashboard Stats API working correctly:
           - Returns all required metrics (total_orders, pending_orders, dispatched_today, etc.)
