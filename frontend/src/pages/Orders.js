@@ -201,6 +201,50 @@ export const Orders = () => {
         </div>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {selectedOrders.length > 0 && (
+        <Card className="border-primary/50 bg-primary/5">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <span className="font-medium">
+                  {selectedOrders.length} order(s) selected
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedOrders([])}
+                >
+                  Clear Selection
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select onValueChange={handleBulkUpdateStatus}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Update Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                    <SelectItem value="dispatched">Dispatched</SelectItem>
+                    <SelectItem value="delivered">Delivered</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Selected
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="border-border/60">
         <CardContent className="pt-6">
           <div className="flex flex-col lg:flex-row gap-4">
