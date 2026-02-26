@@ -62,6 +62,64 @@ export const Orders = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedOrders(orders.map(o => o.id));
+    } else {
+      setSelectedOrders([]);
+    }
+  };
+
+  const handleSelectOrder = (orderId) => {
+    setSelectedOrders(prev => {
+      if (prev.includes(orderId)) {
+        return prev.filter(id => id !== orderId);
+      } else {
+        return [...prev, orderId];
+      }
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedOrders.length === 0) {
+      toast.error('No orders selected');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedOrders.length} order(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await api.post('/orders/bulk-delete', selectedOrders);
+      toast.success(`Successfully deleted ${selectedOrders.length} order(s)`);
+      setSelectedOrders([]);
+      fetchOrders();
+    } catch (error) {
+      toast.error('Failed to delete orders');
+    }
+  };
+
+  const handleBulkUpdateStatus = async (newStatus) => {
+    if (selectedOrders.length === 0) {
+      toast.error('No orders selected');
+      return;
+    }
+
+    try {
+      await api.post('/orders/bulk-update', {
+        order_ids: selectedOrders,
+        update_fields: { status: newStatus }
+      });
+      toast.success(`Successfully updated ${selectedOrders.length} order(s) to ${newStatus}`);
+      setSelectedOrders([]);
+      fetchOrders();
+    } catch (error) {
+      toast.error('Failed to update orders');
+    }
+  };
+
     fetchOrders();
   };
 
