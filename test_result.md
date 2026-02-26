@@ -357,6 +357,83 @@ frontend:
     needs_retesting: true
     status_history:
       - working: "NA"
+
+  - task: "Import Wizard Bug Fix"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/ImportWizard.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          FIXED: Missing function handleContinueToImport that was causing import to fail.
+          - Added function to validate column mappings
+          - Ensures at least one column is mapped before proceeding
+          - Navigates from step 2 (mapping) to step 3 (import)
+          User reported import not working - this was the bug.
+          Needs frontend testing to verify import flow works end-to-end.
+
+  - task: "New Order Form - Missing Fields"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/NewOrder.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Added missing fields to new order creation form:
+          - delivery_by: Date field for expected delivery date
+          - phone_secondary: Alternate phone number field
+          Both fields were in the backend model but missing from the form.
+          Form now properly handles optional dates (null values).
+          Needs testing to ensure order creation works with new fields.
+
+  - task: "Bulk Operations UI - Orders"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/Orders.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Implemented complete bulk operations UI for orders:
+          - Checkbox column in orders table with "select all" functionality
+          - Bulk actions bar appears when orders are selected
+          - Shows count of selected orders with clear selection button
+          - Bulk update status dropdown (pending, confirmed, dispatched, delivered, cancelled)
+          - Bulk delete button with confirmation dialog
+          - Proper state management for selected orders
+          - API calls to new bulk endpoints
+          Needs frontend testing to verify all bulk operations work correctly.
+
+  - task: "Bulk Operations UI - Tasks"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/Tasks.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          Implemented complete bulk operations UI for tasks:
+          - Checkbox in each task card
+          - Bulk actions bar with selection count
+          - Bulk update status (pending, in_progress, completed)
+          - Bulk delete with confirmation
+          - Clear selection functionality
+          Needs frontend testing to verify all task bulk operations work.
+
         agent: "main"
         comment: |
           Order import UI already accepts both .csv and .txt files.
