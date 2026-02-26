@@ -309,7 +309,13 @@ export const Tasks = () => {
           tasks.map((task) => (
             <Card key={task.id} className="border-border/60 hover:shadow-md transition-shadow" data-testid={`task-${task.id}`}>
               <CardContent className="p-6">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedTasks.includes(task.id)}
+                    onChange={() => handleSelectTask(task.id)}
+                    className="mt-1 rounded border-border"
+                  />
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
                       <h3 className="text-lg font-semibold font-[Manrope]">{task.title}</h3>
