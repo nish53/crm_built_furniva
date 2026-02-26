@@ -71,6 +71,64 @@ export const Tasks = () => {
     } catch (error) {
       toast.error('Failed to update task');
     }
+
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedTasks(tasks.map(t => t.id));
+    } else {
+      setSelectedTasks([]);
+    }
+  };
+
+  const handleSelectTask = (taskId) => {
+    setSelectedTasks(prev => {
+      if (prev.includes(taskId)) {
+        return prev.filter(id => id !== taskId);
+      } else {
+        return [...prev, taskId];
+      }
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedTasks.length === 0) {
+      toast.error('No tasks selected');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedTasks.length} task(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await api.post('/tasks/bulk-delete', selectedTasks);
+      toast.success(`Successfully deleted ${selectedTasks.length} task(s)`);
+      setSelectedTasks([]);
+      fetchTasks();
+    } catch (error) {
+      toast.error('Failed to delete tasks');
+    }
+  };
+
+  const handleBulkUpdateStatus = async (newStatus) => {
+    if (selectedTasks.length === 0) {
+      toast.error('No tasks selected');
+      return;
+    }
+
+    try {
+      await api.post('/tasks/bulk-update', {
+        task_ids: selectedTasks,
+        update_fields: { status: newStatus }
+      });
+      toast.success(`Successfully updated ${selectedTasks.length} task(s) to ${newStatus}`);
+      setSelectedTasks([]);
+      fetchTasks();
+    } catch (error) {
+      toast.error('Failed to update tasks');
+    }
+  };
+
   };
 
   const getPriorityColor = (priority) => {
