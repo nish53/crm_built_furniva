@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from models import DashboardStats, User
 from auth import get_current_active_user
 from database import get_database
