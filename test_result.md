@@ -156,7 +156,7 @@ backend:
           - Business Account ID: 1515795799624231
           - Webhook Verify Token: furniva_webhook_secret_2024
           User needs to configure webhook in Meta Business dashboard pointing to:
-          https://furniva-sku-hub.preview.emergentagent.com/api/whatsapp/webhook
+          https://order-workflow-hub-1.preview.emergentagent.com/api/whatsapp/webhook
           Needs backend testing to verify API connection.
       - working: "NA"
         agent: "testing"

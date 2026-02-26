@@ -14,7 +14,7 @@ from typing import Dict, Optional
 import uuid
 
 # Configuration
-BASE_URL = "https://furniva-sku-hub.preview.emergentagent.com/api"
+BASE_URL = "https://order-workflow-hub-1.preview.emergentagent.com/api"
 TEST_EMAIL = "furniva.test@example.com"
 TEST_PASSWORD = "FurnivaTest2024!"
 AMAZON_FILE_URL = "https://customer-assets.emergentagent.com/job_f2de6cc3-8aa1-4379-80d9-a437283f6fc0/artifacts/lry81d6f_136186573948020509.txt"
