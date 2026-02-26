@@ -44,6 +44,8 @@ export const MasterSKU = () => {
       toast.error('Failed to fetch SKU mappings');
     } finally {
       setLoading(false);
+    }
+  };
 
   const fetchUnmappedSKUs = async () => {
     try {
@@ -51,9 +53,6 @@ export const MasterSKU = () => {
       setUnmappedSkus(response.data.unmapped_skus || []);
     } catch (error) {
       console.error('Failed to fetch unmapped SKUs:', error);
-    }
-  };
-
     }
   };
 
