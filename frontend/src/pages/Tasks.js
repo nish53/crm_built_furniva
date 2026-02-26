@@ -23,6 +23,8 @@ export const Tasks = () => {
     priority: 'medium',
     assigned_to: '',
     due_date: '',
+    order_id: '',
+    order_details: '',
   });
 
   useEffect(() => {
