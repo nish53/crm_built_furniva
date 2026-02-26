@@ -141,6 +141,56 @@ async def delete_order(
         raise HTTPException(status_code=404, detail="Order not found")
     return {"message": "Order deleted successfully"}
 
+@router.post("/bulk-delete")
+async def bulk_delete_orders(
+    order_ids: List[str],
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Bulk delete multiple orders"""
+    if not order_ids:
+        raise HTTPException(status_code=400, detail="No order IDs provided")
+    
+    result = await db.orders.delete_many({"id": {"$in": order_ids}})
+    return {
+        "message": f"Successfully deleted {result.deleted_count} orders",
+        "deleted_count": result.deleted_count
+    }
+
+@router.post("/bulk-update")
+async def bulk_update_orders(
+    order_ids: List[str],
+    update_fields: dict,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Bulk update multiple orders with same field values"""
+    if not order_ids:
+        raise HTTPException(status_code=400, detail="No order IDs provided")
+    
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="No update fields provided")
+    
+    # Convert datetime fields if present
+    for key, value in update_fields.items():
+        if isinstance(value, str) and 'date' in key.lower():
+            try:
+                update_fields[key] = datetime.fromisoformat(value.replace('Z', '+00:00')).isoformat()
+            except:
+                pass
+    
+    result = await db.orders.update_many(
+        {"id": {"$in": order_ids}},
+        {"$set": update_fields}
+    )
+    
+    return {
+        "message": f"Successfully updated {result.modified_count} orders",
+        "modified_count": result.modified_count,
+        "matched_count": result.matched_count
+    }
+
+
 def parse_amazon_csv(content: str, delimiter: str = ',') -> List[dict]:
     """Parse Amazon order file (CSV or tab-separated TXT)
     
