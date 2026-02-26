@@ -206,6 +206,122 @@ export const OrderDetail = () => {
             </CardContent>
           </Card>
 
+
+          {/* Communication Status - for historical orders */}
+          {order.is_historical && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-[Manrope] flex items-center gap-2">
+                  <Phone className="w-5 h-5" />
+                  Communication Status (Historical)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {order.assembly_type && (
+                    <div className="p-3 bg-primary/5 rounded-lg">
+                      <p className="text-xs text-muted-foreground">Assembly Type</p>
+                      <p className="font-medium capitalize">{order.assembly_type}</p>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2">
+                      {order.order_conf_calling ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      <span className="text-sm">Order Confirmation Call</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {order.dispatch_conf_sent ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      <span className="text-sm">Dispatch Confirmation</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {order.dnp_day1 ? (
+                        <AlertCircle className="w-4 h-4 text-orange-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      <span className="text-sm">Did Not Pick Day 1</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {order.confirmed_day1 ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      <span className="text-sm">Confirmed Day 1</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {order.dnp_day2 ? (
+                        <AlertCircle className="w-4 h-4 text-orange-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      <span className="text-sm">Did Not Pick Day 2</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {order.confirmed_day2 ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      <span className="text-sm">Confirmed Day 2</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {order.dnp_day3 ? (
+                        <AlertCircle className="w-4 h-4 text-orange-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      <span className="text-sm">Did Not Pick Day 3</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {order.confirmed_day3 ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      <span className="text-sm">Confirmed Day 3</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {order.deliver_conf ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      <span className="text-sm">Delivery Confirmation</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {order.review_conf ? (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-400" />
+                      )}
+                      <span className="text-sm">Review Confirmation</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+
           {/* Timeline */}
           <Card data-testid="timeline-card">
             <CardHeader><CardTitle className="font-[Manrope] flex items-center gap-2"><Calendar className="w-5 h-5" />Timeline</CardTitle></CardHeader>
