@@ -18,6 +18,7 @@ async def create_procurement_batch(
     batch_dict = batch.model_dump()
     batch_dict["id"] = str(uuid.uuid4())
     batch_dict["total_cost"] = batch.quantity * batch.unit_cost
+    batch_dict["total_weight"] = sum(batch.box_weights) if batch.box_weights else 0.0
     batch_dict["created_at"] = datetime.now(timezone.utc).isoformat()
     
     # Convert datetime to ISO string
