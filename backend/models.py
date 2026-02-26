@@ -448,14 +448,6 @@ class ChannelCreate(BaseModel):
     supports_tracking: bool = True
     commission_rate: Optional[float] = None
 
-    id: str
-    name: str
-    base_rate: float
-    per_kg_rate: float
-    performance_score: float = 0.0
-    active: bool = True
-    service_pincodes: Optional[List[str]] = None
-
 class ClaimBase(BaseModel):
     order_id: str
     type: ClaimType
