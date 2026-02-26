@@ -56,7 +56,8 @@ def test_login():
             register_data = {
                 "email": "testuser@furniva.com",
                 "password": "testpass123", 
-                "name": "Test User"
+                "name": "Test User",
+                "role": "admin"
             }
             
             reg_response = requests.post(f"{BASE_URL}/auth/register", json=register_data)
