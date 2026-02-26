@@ -58,6 +58,11 @@ export const Orders = () => {
       if (statusFilter !== 'all') params.status = statusFilter;
       if (channelFilter !== 'all') params.channel = channelFilter;
       if (searchTerm) params.search = searchTerm;
+      if (masterSkuFilter) params.master_sku = masterSkuFilter;
+      if (cityFilter) params.city = cityFilter;
+      if (stateFilter) params.state = stateFilter;
+      if (minPrice) params.min_price = minPrice;
+      if (maxPrice) params.max_price = maxPrice;
 
       const response = await api.get('/orders/', { params });
       setOrders(response.data);
