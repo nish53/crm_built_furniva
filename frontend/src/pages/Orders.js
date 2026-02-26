@@ -341,8 +341,66 @@ export const Orders = () => {
                   <SelectItem value="phone">Phone</SelectItem>
                 </SelectContent>
               </Select>
+
+              <Button variant="outline" onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>
+                <Filter className="w-4 h-4 mr-2" />
+                {showAdvancedFilters ? 'Hide' : 'More'} Filters
+              </Button>
             </div>
           </div>
+
+          {/* Advanced Filters */}
+          {showAdvancedFilters && (
+            <div className="mt-4 pt-4 border-t grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div>
+                <label className="text-xs font-medium mb-1 block">Master SKU</label>
+                <Input
+                  placeholder="Master SKU"
+                  value={masterSkuFilter}
+                  onChange={(e) => setMasterSkuFilter(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">City</label>
+                <Input
+                  placeholder="City"
+                  value={cityFilter}
+                  onChange={(e) => setCityFilter(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">State</label>
+                <Input
+                  placeholder="State"
+                  value={stateFilter}
+                  onChange={(e) => setStateFilter(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">Min Price</label>
+                <Input
+                  type="number"
+                  placeholder="Min ₹"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-1 block">Max Price</label>
+                <Input
+                  type="number"
+                  placeholder="Max ₹"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  className="h-9"
+                />
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
