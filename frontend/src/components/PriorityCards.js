@@ -7,12 +7,15 @@ import { AlertTriangle, Package, Clock, Tag } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { MasterSKUDialog } from './MasterSKUDialog';
 
 export const PriorityCards = () => {
   const [dispatchPending, setDispatchPending] = useState(null);
   const [delayedOrders, setDelayedOrders] = useState(null);
   const [unmappedSkus, setUnmappedSkus] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showMasterSKUDialog, setShowMasterSKUDialog] = useState(false);
+  const [selectedSKU, setSelectedSKU] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
