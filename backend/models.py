@@ -103,7 +103,7 @@ class OrderBase(BaseModel):
     fnsku: Optional[str] = None
     asin: Optional[str] = None
     fsn_id: Optional[str] = None
-    product_name: str
+    product_name: Optional[str] = None
     quantity: int = 1
     price: float
     item_tax: Optional[float] = None
