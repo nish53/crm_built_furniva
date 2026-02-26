@@ -38,19 +38,41 @@ export const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState('all');
-  const [masterSkuFilter, setMasterSkuFilter] = useState('');
-  const [cityFilter, setCityFilter] = useState('');
-  const [stateFilter, setStateFilter] = useState('');
+  const [masterSkuFilter, setMasterSkuFilter] = useState('all');
+  const [cityFilter, setCityFilter] = useState('all');
+  const [stateFilter, setStateFilter] = useState('all');
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
+  const [uniqueMasterSkus, setUniqueMasterSkus] = useState([]);
+  const [uniqueCities, setUniqueCities] = useState([]);
+  const [uniqueStates, setUniqueStates] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchOrders();
+    fetchFilterOptions();
   }, [statusFilter, channelFilter, masterSkuFilter, cityFilter, stateFilter, minPrice, maxPrice]);
+
+  const fetchFilterOptions = async () => {
+    try {
+      const response = await api.get('/orders/', { params: { limit: 1000 } });
+      const allOrders = response.data;
+      
+      // Extract unique values
+      const skus = [...new Set(allOrders.map(o => o.master_sku).filter(Boolean))].sort();
+      const cities = [...new Set(allOrders.map(o => o.city).filter(Boolean))].sort();
+      const states = [...new Set(allOrders.map(o => o.state).filter(Boolean))].sort();
+      
+      setUniqueMasterSkus(skus);
+      setUniqueCities(cities);
+      setUniqueStates(states);
+    } catch (error) {
+      console.error('Failed to fetch filter options');
+    }
+  };
 
   const fetchOrders = async () => {
     try {
