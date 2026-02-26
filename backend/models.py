@@ -243,6 +243,162 @@ class Product(ProductBase):
 
 class CourierPartner(BaseModel):
     model_config = ConfigDict(extra="ignore")
+
+
+# Master SKU Mapping Models
+class MasterSKUMapping(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    master_sku: str
+    product_name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    amazon_sku: Optional[str] = None
+    amazon_asin: Optional[str] = None
+    amazon_fnsku: Optional[str] = None
+    flipkart_sku: Optional[str] = None
+    flipkart_fsn: Optional[str] = None
+    website_sku: Optional[str] = None
+    dimensions: Optional[str] = None
+    weight: Optional[float] = None
+    cost_price: Optional[float] = None
+    selling_price: Optional[float] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+class MasterSKUMappingCreate(BaseModel):
+    master_sku: str
+    product_name: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    amazon_sku: Optional[str] = None
+    amazon_asin: Optional[str] = None
+    amazon_fnsku: Optional[str] = None
+    flipkart_sku: Optional[str] = None
+    flipkart_fsn: Optional[str] = None
+    website_sku: Optional[str] = None
+    dimensions: Optional[str] = None
+    weight: Optional[float] = None
+    cost_price: Optional[float] = None
+    selling_price: Optional[float] = None
+
+# Import Mapping Template Models
+class ImportMappingTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    channel: str
+    description: Optional[str] = None
+    column_mappings: Dict[str, str]  # {"csv_column": "system_field"}
+    date_format: Optional[str] = None
+    delimiter: Optional[str] = ","
+    has_header: bool = True
+    is_default: bool = False
+    created_at: datetime
+    created_by: str
+
+class ImportMappingTemplateCreate(BaseModel):
+    name: str
+    channel: str
+    description: Optional[str] = None
+    column_mappings: Dict[str, str]
+    date_format: Optional[str] = None
+    delimiter: Optional[str] = ","
+    has_header: bool = True
+    is_default: bool = False
+
+# Return Management Models
+class ReturnReason(str, Enum):
+    DEFECTIVE = "defective"
+    DAMAGED = "damaged"
+    WRONG_ITEM = "wrong_item"
+    NOT_AS_DESCRIBED = "not_as_described"
+    SIZE_ISSUE = "size_issue"
+    QUALITY_ISSUE = "quality_issue"
+    CUSTOMER_CHANGED_MIND = "customer_changed_mind"
+    DELIVERY_DELAY = "delivery_delay"
+    OTHER = "other"
+
+class ReturnStatus(str, Enum):
+    REQUESTED = "requested"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PICKUP_SCHEDULED = "pickup_scheduled"
+    IN_TRANSIT = "in_transit"
+    RECEIVED = "received"
+    INSPECTED = "inspected"
+    REFUNDED = "refunded"
+    REPLACED = "replaced"
+
+class DamageCategory(str, Enum):
+    SCRATCH = "scratch"
+    CRACK = "crack"
+    DENT = "dent"
+    BROKEN = "broken"
+    MISSING_PARTS = "missing_parts"
+    PACKAGING_DAMAGE = "packaging_damage"
+    NO_DAMAGE = "no_damage"
+
+class ReturnRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    order_id: str
+    order_number: str
+    customer_id: str
+    customer_name: str
+    phone: str
+    return_reason: ReturnReason
+    return_reason_details: Optional[str] = None
+    damage_category: Optional[DamageCategory] = None
+    return_status: ReturnStatus
+    requested_date: datetime
+    approved_date: Optional[datetime] = None
+    pickup_date: Optional[datetime] = None
+    received_date: Optional[datetime] = None
+    inspection_date: Optional[datetime] = None
+    refund_date: Optional[datetime] = None
+    return_tracking_number: Optional[str] = None
+    courier_partner: Optional[str] = None
+    qc_notes: Optional[str] = None
+    is_installation_related: bool = False
+    batch_number: Optional[str] = None
+    damage_images: Optional[List[str]] = []
+    refund_amount: Optional[float] = None
+    refund_method: Optional[str] = None
+    replacement_order_id: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+class ReturnRequestCreate(BaseModel):
+    order_id: str
+    return_reason: ReturnReason
+    return_reason_details: Optional[str] = None
+    damage_category: Optional[DamageCategory] = None
+    is_installation_related: bool = False
+    damage_images: Optional[List[str]] = []
+
+# Channel Management Models
+class Channel(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    display_name: str
+    is_active: bool = True
+    required_fields: List[str] = []
+    optional_fields: List[str] = []
+    supports_tracking: bool = True
+    commission_rate: Optional[float] = None
+    created_at: datetime
+
+class ChannelCreate(BaseModel):
+    name: str
+    display_name: str
+    is_active: bool = True
+    required_fields: List[str] = []
+    optional_fields: List[str] = []
+    supports_tracking: bool = True
+    commission_rate: Optional[float] = None
+
     id: str
     name: str
     base_rate: float
