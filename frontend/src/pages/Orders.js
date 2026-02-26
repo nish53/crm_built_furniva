@@ -421,10 +421,17 @@ export const Orders = () => {
                         </div>
                       </td>
                       <td className="py-4 px-4">
-                        <p className="text-sm">{order.product_name}</p>
-                        <p className="text-xs text-muted-foreground font-[JetBrains_Mono]">
-                          {order.sku}
-                        </p>
+                        {order.master_sku ? (
+                          <div>
+                            <p className="font-medium text-sm">{order.master_sku}</p>
+                            <p className="text-xs text-muted-foreground">{order.product_name}</p>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                            <span className="text-xs text-yellow-700 font-medium">SKU Not Mapped</span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-4 px-4">
                         <span className="text-xs uppercase tracking-wider text-muted-foreground">
