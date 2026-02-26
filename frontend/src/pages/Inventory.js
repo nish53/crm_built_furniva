@@ -424,7 +424,6 @@ export const Inventory = () => {
                             <p className="text-sm font-medium font-[JetBrains_Mono] truncate">SKU: {l.platform_sku || '-'}</p>
                             <p className="text-xs text-muted-foreground truncate">
                               {l.platform === 'amazon' ? 'ASIN' : l.platform === 'flipkart' ? 'FSN' : 'ID'}: {l.platform_product_id || '-'}
-                              {l.platform_fnsku && ` | FNSKU: ${l.platform_fnsku}`}
                             </p>
                           </div>
                         </div>
