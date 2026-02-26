@@ -93,6 +93,7 @@ def test_create_orders_for_bulk_testing():
     orders_to_create = [
         {
             "order_number": f"TEST-BULK-{uuid.uuid4().hex[:8].upper()}",
+            "customer_id": str(uuid.uuid4()),
             "customer_name": "Amit Kumar",
             "phone": "9876543210",
             "phone_secondary": "8765432109",  # New field
@@ -111,6 +112,7 @@ def test_create_orders_for_bulk_testing():
         },
         {
             "order_number": f"TEST-BULK-{uuid.uuid4().hex[:8].upper()}", 
+            "customer_id": str(uuid.uuid4()),
             "customer_name": "Priya Sharma",
             "phone": "9123456789",
             "phone_secondary": "8123456789",  # New field
@@ -129,6 +131,7 @@ def test_create_orders_for_bulk_testing():
         },
         {
             "order_number": f"TEST-BULK-{uuid.uuid4().hex[:8].upper()}",
+            "customer_id": str(uuid.uuid4()),
             "customer_name": "Rajesh Patel", 
             "phone": "9876543211",
             "shipping_address": "789 Commercial Street, Mumbai",
@@ -145,6 +148,7 @@ def test_create_orders_for_bulk_testing():
         },
         {
             "order_number": f"TEST-BULK-{uuid.uuid4().hex[:8].upper()}",
+            "customer_id": str(uuid.uuid4()),
             "customer_name": "Sneha Gupta",
             "phone": "9765432108", 
             "phone_secondary": "8765432108",  # New field
