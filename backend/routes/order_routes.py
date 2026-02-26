@@ -37,9 +37,18 @@ async def get_orders(
     channel: Optional[OrderChannel] = None,
     pincode: Optional[str] = None,
     state: Optional[str] = None,
+    city: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     search: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    master_sku: Optional[str] = None,
+    assembly_type: Optional[str] = None,
+    month: Optional[str] = None,
+    shipping_provider: Optional[str] = None,
+    sort_by: Optional[str] = "created_at",
+    sort_order: Optional[str] = "desc",
     skip: int = 0,
     limit: int = 100,
     current_user: User = Depends(get_current_active_user),
@@ -54,13 +63,44 @@ async def get_orders(
     if pincode:
         query["pincode"] = pincode
     if state:
-        query["state"] = state
-    if start_date:
-        query["order_date"] = {"$gte": start_date}
-    if end_date:
-        if "order_date" not in query:
-            query["order_date"] = {}
-        query["order_date"]["$lte"] = end_date
+        query["state"] = {"$regex": state, "$options": "i"}
+    if city:
+        query["city"] = {"$regex": city, "$options": "i"}
+    if master_sku:
+        query["master_sku"] = master_sku
+    if assembly_type:
+        query["assembly_type"] = assembly_type
+    if shipping_provider:
+        query["courier_partner"] = {"$regex": shipping_provider, "$options": "i"}
+    
+    # Price range
+    if min_price is not None or max_price is not None:
+        query["price"] = {}
+        if min_price is not None:
+            query["price"]["$gte"] = min_price
+        if max_price is not None:
+            query["price"]["$lte"] = max_price
+    
+    # Month filter
+    if month:
+        try:
+            year, month_num = month.split('-')
+            start_dt = datetime(int(year), int(month_num), 1, tzinfo=timezone.utc).isoformat()
+            if int(month_num) == 12:
+                end_dt = datetime(int(year) + 1, 1, 1, tzinfo=timezone.utc).isoformat()
+            else:
+                end_dt = datetime(int(year), int(month_num) + 1, 1, tzinfo=timezone.utc).isoformat()
+            query["order_date"] = {"$gte": start_dt, "$lt": end_dt}
+        except:
+            pass
+    elif start_date or end_date:
+        if start_date:
+            query["order_date"] = {"$gte": start_date}
+        if end_date:
+            if "order_date" not in query:
+                query["order_date"] = {}
+            query["order_date"]["$lte"] = end_date
+    
     if search:
         query["$or"] = [
             {"order_number": {"$regex": search, "$options": "i"}},
@@ -69,7 +109,8 @@ async def get_orders(
             {"tracking_number": {"$regex": search, "$options": "i"}}
         ]
     
-    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    sort_direction = -1 if sort_order == "desc" else 1
+    orders = await db.orders.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(limit).to_list(limit)
     return orders
 
 @router.get("/{order_id}", response_model=Order)
