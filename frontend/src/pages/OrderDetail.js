@@ -655,6 +655,82 @@ export const OrderDetail = () => {
           </Card>
         </div>
       )}
+
+      {/* ===== EDIT ORDER MODAL ===== */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="edit-order-modal">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="font-[Manrope]">Edit Order</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowEditModal(false)}><X className="w-4 h-4" /></Button>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSaveEdit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Status</label>
+                    <Select value={editForm.status} onValueChange={v => setEditForm({ ...editForm, status: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="confirmed">Confirmed</SelectItem>
+                        <SelectItem value="dispatched">Dispatched</SelectItem>
+                        <SelectItem value="delivered">Delivered</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                        <SelectItem value="returned">Returned</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Tracking Number</label>
+                    <Input value={editForm.tracking_number} onChange={e => setEditForm({ ...editForm, tracking_number: e.target.value })} placeholder="Tracking number" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Courier Partner</label>
+                    <Input value={editForm.courier_partner} onChange={e => setEditForm({ ...editForm, courier_partner: e.target.value })} placeholder="Courier partner" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Customer Name</label>
+                    <Input value={editForm.customer_name} onChange={e => setEditForm({ ...editForm, customer_name: e.target.value })} placeholder="Customer name" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Phone</label>
+                    <Input value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} placeholder="Phone" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Alternate Phone</label>
+                    <Input value={editForm.phone_secondary} onChange={e => setEditForm({ ...editForm, phone_secondary: e.target.value })} placeholder="Alternate phone" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground">Shipping Address</label>
+                    <Input value={editForm.shipping_address} onChange={e => setEditForm({ ...editForm, shipping_address: e.target.value })} placeholder="Shipping address" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">City</label>
+                    <Input value={editForm.city} onChange={e => setEditForm({ ...editForm, city: e.target.value })} placeholder="City" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">State</label>
+                    <Input value={editForm.state} onChange={e => setEditForm({ ...editForm, state: e.target.value })} placeholder="State" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Pincode</label>
+                    <Input value={editForm.pincode} onChange={e => setEditForm({ ...editForm, pincode: e.target.value })} placeholder="Pincode" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs font-medium text-muted-foreground">Instructions</label>
+                    <Input value={editForm.instructions} onChange={e => setEditForm({ ...editForm, instructions: e.target.value })} placeholder="Special instructions" />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setShowEditModal(false)} className="flex-1">Cancel</Button>
+                  <Button type="submit" className="flex-1" disabled={updating}>Save Changes</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
