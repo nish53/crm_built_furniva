@@ -15,6 +15,7 @@ import { ImportWizard } from './pages/ImportWizard';
 import { MasterSKU } from './pages/MasterSKU';
 import { Returns } from './pages/Returns';
 import { Channels } from './pages/Channels';
+import { Costing } from './pages/Costing';
 import { Layout } from './components/Layout';
 import './App.css';
 
