@@ -10,6 +10,8 @@ import { Upload, ArrowLeft, FileText } from 'lucide-react';
 export const HistoricalImport = () => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const [showErrorModal, setShowErrorModal] = useState(false);
   const navigate = useNavigate();
 
   const handleFileChange = (e) => {
