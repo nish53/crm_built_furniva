@@ -334,6 +334,11 @@ class PlatformListingCreate(BaseModel):
     is_active: bool = True
 
 # Procurement Batches (Cost tracking per batch)
+class BoxDimension(BaseModel):
+    length: float = 0
+    width: float = 0
+    height: float = 0
+
 class ProcurementBatch(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
@@ -343,6 +348,10 @@ class ProcurementBatch(BaseModel):
     quantity: int
     unit_cost: float
     total_cost: float
+    num_boxes: int = 1
+    box_weights: List[float] = []
+    total_weight: float = 0.0
+    box_dimensions: List[Dict[str, float]] = []
     supplier: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
@@ -353,6 +362,9 @@ class ProcurementBatchCreate(BaseModel):
     procurement_date: datetime
     quantity: int
     unit_cost: float
+    num_boxes: int = 1
+    box_weights: List[float] = []
+    box_dimensions: List[Dict[str, float]] = []
     supplier: Optional[str] = None
     notes: Optional[str] = None
 
