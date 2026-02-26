@@ -9,9 +9,189 @@ import csv
 import io
 from dateutil import parser as date_parser
 
-router = APIRouter()
+router = APIRouter(prefix="/orders", tags=["orders"])
 
-# ... keeping all existing code but updating parse_bool and import functions ...
+# ===== ORDER CRUD ENDPOINTS =====
+
+@router.get("/", response_model=List[Order])
+async def get_orders(
+    status: Optional[str] = None,
+    channel: Optional[str] = None,
+    search: Optional[str] = None,
+    master_sku: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get orders with optional filters"""
+    query = {}
+    
+    if status:
+        query["status"] = status
+    if channel:
+        query["channel"] = channel
+    if master_sku:
+        query["master_sku"] = master_sku
+    if city:
+        query["city"] = {"$regex": city, "$options": "i"}
+    if state:
+        query["state"] = {"$regex": state, "$options": "i"}
+    
+    if search:
+        query["$or"] = [
+            {"order_number": {"$regex": search, "$options": "i"}},
+            {"customer_name": {"$regex": search, "$options": "i"}},
+            {"phone": {"$regex": search, "$options": "i"}},
+            {"sku": {"$regex": search, "$options": "i"}},
+            {"tracking_number": {"$regex": search, "$options": "i"}},
+        ]
+    
+    if min_price is not None or max_price is not None:
+        price_query = {}
+        if min_price is not None:
+            price_query["$gte"] = min_price
+        if max_price is not None:
+            price_query["$lte"] = max_price
+        query["price"] = price_query
+    
+    orders = await db.orders.find(query, {"_id": 0}).sort("order_date", -1).skip(skip).limit(limit).to_list(limit)
+    return orders
+
+@router.get("/{order_id}", response_model=Order)
+async def get_order(
+    order_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get a single order by ID"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return order
+
+@router.post("/", response_model=Order)
+async def create_order(
+    order: OrderCreate,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Create a new order"""
+    order_dict = order.model_dump()
+    order_dict["id"] = str(uuid.uuid4())
+    order_dict["customer_id"] = str(uuid.uuid4())
+    order_dict["created_at"] = datetime.now(timezone.utc).isoformat()
+    
+    # Ensure order_date is set
+    if not order_dict.get("order_date"):
+        order_dict["order_date"] = datetime.now(timezone.utc).isoformat()
+    
+    await db.orders.insert_one(order_dict)
+    return Order(**order_dict)
+
+@router.patch("/{order_id}", response_model=Order)
+async def update_order(
+    order_id: str,
+    order_update: OrderUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Update an existing order"""
+    existing = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Only update provided fields
+    update_data = order_update.model_dump(exclude_unset=True)
+    
+    if update_data:
+        await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    updated_order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return Order(**updated_order)
+
+@router.delete("/{order_id}")
+async def delete_order(
+    order_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Delete an order"""
+    result = await db.orders.delete_one({"id": order_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"message": "Order deleted successfully"}
+
+@router.post("/bulk-delete")
+async def bulk_delete_orders(
+    order_ids: List[str],
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Delete multiple orders"""
+    if not order_ids:
+        raise HTTPException(status_code=400, detail="No order IDs provided")
+    
+    result = await db.orders.delete_many({"id": {"$in": order_ids}})
+    return {
+        "message": f"Successfully deleted {result.deleted_count} order(s)",
+        "deleted_count": result.deleted_count
+    }
+
+@router.post("/bulk-update")
+async def bulk_update_orders(
+    order_ids: List[str],
+    status: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Update multiple orders with the same status"""
+    if not order_ids:
+        raise HTTPException(status_code=400, detail="No order IDs provided")
+    
+    update_data = {}
+    if status:
+        update_data["status"] = status
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No update data provided")
+    
+    result = await db.orders.update_many(
+        {"id": {"$in": order_ids}},
+        {"$set": update_data}
+    )
+    
+    return {
+        "message": f"Successfully updated {result.modified_count} order(s)",
+        "modified_count": result.modified_count
+    }
+
+@router.post("/bulk-update-channel")
+async def bulk_update_channel(
+    order_ids: List[str],
+    channel: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Update channel for multiple orders"""
+    if not order_ids:
+        raise HTTPException(status_code=400, detail="No order IDs provided")
+    
+    result = await db.orders.update_many(
+        {"id": {"$in": order_ids}},
+        {"$set": {"channel": channel}}
+    )
+    
+    return {
+        "message": f"Successfully updated channel for {result.modified_count} order(s)",
+        "modified_count": result.modified_count
+    }
+
+# ===== HISTORICAL IMPORT ENDPOINT =====
 
 @router.post("/import-historical")
 async def import_historical_orders(
