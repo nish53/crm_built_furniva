@@ -38,13 +38,19 @@ export const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState('all');
+  const [masterSkuFilter, setMasterSkuFilter] = useState('');
+  const [cityFilter, setCityFilter] = useState('');
+  const [stateFilter, setStateFilter] = useState('');
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchOrders();
-  }, [statusFilter, channelFilter]);
+  }, [statusFilter, channelFilter, masterSkuFilter, cityFilter, stateFilter, minPrice, maxPrice]);
 
   const fetchOrders = async () => {
     try {
