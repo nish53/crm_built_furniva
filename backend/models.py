@@ -356,29 +356,6 @@ class ProcurementBatchCreate(BaseModel):
     supplier: Optional[str] = None
     notes: Optional[str] = None
 
-    model_config = ConfigDict(extra="ignore")
-    id: str
-    name: str
-    channel: str
-    description: Optional[str] = None
-    column_mappings: Dict[str, str]  # {"csv_column": "system_field"}
-    date_format: Optional[str] = None
-    delimiter: Optional[str] = ","
-    has_header: bool = True
-    is_default: bool = False
-    created_at: datetime
-    created_by: str
-
-class ImportMappingTemplateCreate(BaseModel):
-    name: str
-    channel: str
-    description: Optional[str] = None
-    column_mappings: Dict[str, str]
-    date_format: Optional[str] = None
-    delimiter: Optional[str] = ","
-    has_header: bool = True
-    is_default: bool = False
-
 # Return Management Models
 class ReturnReason(str, Enum):
     DEFECTIVE = "defective"
