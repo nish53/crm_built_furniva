@@ -478,10 +478,12 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Amazon TXT Order Import"
-    - "Brand Name Update"
-    - "WhatsApp Business API Integration"
-    - "Dashboard"
+    - "Import Wizard Bug Fix"
+    - "New Order Form - Missing Fields"
+    - "Bulk Operations - Orders"
+    - "Bulk Operations - Tasks"
+    - "Bulk Operations UI - Orders"
+    - "Bulk Operations UI - Tasks"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
