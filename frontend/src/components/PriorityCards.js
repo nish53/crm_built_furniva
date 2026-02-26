@@ -52,12 +52,23 @@ export const PriorityCards = () => {
     }
   };
 
+  const handleMapSKU = (sku) => {
+    setSelectedSKU(sku);
+    setShowMasterSKUDialog(true);
+  };
+
+  const handleSKUMappingSuccess = () => {
+    fetchPriorityData();
+    setShowMasterSKUDialog(false);
+  };
+
   if (loading) {
     return null;
   }
 
   return (
-    <div className="space-y-4">
+    <>
+      <div className="space-y-4">
       {/* Dispatch Pending Today */}
       {dispatchPending && dispatchPending.count > 0 && (
         <Card className="border-orange-500/50 bg-orange-50/50 dark:bg-orange-950/20">
