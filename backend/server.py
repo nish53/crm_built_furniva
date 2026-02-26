@@ -22,6 +22,8 @@ from routes.master_sku_routes import router as master_sku_router
 from routes.import_routes import router as import_router
 from routes.return_routes import router as return_router
 from routes.channel_routes import router as channel_router
+from routes.platform_listing_routes import router as platform_listing_router
+from routes.procurement_batch_routes import router as procurement_batch_router
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -52,6 +54,8 @@ app.include_router(master_sku_router, prefix="/api")
 app.include_router(import_router, prefix="/api")
 app.include_router(return_router, prefix="/api")
 app.include_router(channel_router, prefix="/api")
+app.include_router(platform_listing_router, prefix="/api")
+app.include_router(procurement_batch_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_db_client():
