@@ -73,6 +73,7 @@ export const Tasks = () => {
     } catch (error) {
       toast.error('Failed to update task');
     }
+  };
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
