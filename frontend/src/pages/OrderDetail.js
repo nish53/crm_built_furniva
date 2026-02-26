@@ -435,6 +435,10 @@ export const OrderDetail = () => {
           <Card data-testid="quick-actions-card">
             <CardHeader><CardTitle className="font-[Manrope]">Quick Actions</CardTitle></CardHeader>
             <CardContent className="space-y-2">
+              <Button variant="outline" className="w-full" onClick={handleEditOrder} data-testid="edit-order-button">
+                <Edit className="w-4 h-4 mr-2" />Edit Order
+              </Button>
+              
               {order.status === 'pending' && (
                 <Button className="w-full" onClick={() => updateOrderStatus('confirmed')} disabled={updating} data-testid="confirm-order-button">
                   <CheckCircle className="w-4 h-4 mr-2" />Confirm Order
