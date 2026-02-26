@@ -323,6 +323,14 @@ export const Orders = () => {
               <table className="w-full" data-testid="orders-table">
                 <thead>
                   <tr className="border-b border-border">
+                    <th className="text-left py-3 px-4 w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedOrders.length === orders.length && orders.length > 0}
+                        onChange={handleSelectAll}
+                        className="rounded border-border"
+                      />
+                    </th>
                     <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase tracking-wider">
                       Order #
                     </th>
@@ -356,6 +364,14 @@ export const Orders = () => {
                       className="border-b border-border/40 hover:bg-secondary/30 transition-colors duration-150"
                       data-testid={`order-row-${order.id}`}
                     >
+                      <td className="py-4 px-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedOrders.includes(order.id)}
+                          onChange={() => handleSelectOrder(order.id)}
+                          className="rounded border-border"
+                        />
+                      </td>
                       <td className="py-4 px-4">
                         <span className="font-[JetBrains_Mono] text-sm font-medium">
                           {order.order_number}
