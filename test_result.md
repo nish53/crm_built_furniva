@@ -290,11 +290,11 @@ backend:
 
   - task: "Bulk Operations - Orders"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/routes/order_routes.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
@@ -306,6 +306,36 @@ backend:
           - Returns count of affected orders
           - Datetime field conversion support
           Needs backend testing to verify endpoints work correctly.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ BULK OPERATIONS - ORDERS FULLY FUNCTIONAL
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          1. ✅ Bulk Update Orders (POST /api/orders/bulk-update)
+             - Successfully updated 2 orders from 'pending' to 'dispatched' status
+             - Returned correct counts: modified_count: 2, matched_count: 2
+             - Proper validation and error handling working
+          
+          2. ✅ Bulk Delete Orders (POST /api/orders/bulk-delete)
+             - Successfully deleted 2 orders by their IDs
+             - Returned correct count: deleted_count: 2
+             - Proper cleanup without errors
+          
+          3. ✅ Enhanced Order Creation with New Fields
+             - phone_secondary field: ✅ Properly stored and retrieved
+             - delivery_by field: ✅ Properly stored and retrieved as ISO datetime
+             - All existing order fields working correctly
+          
+          VALIDATION RESULTS:
+          - Created 4 test orders for bulk testing: ✅ All successful
+          - Orders with phone_secondary: ✅ Stored correctly (8899776655)
+          - Orders with delivery_by: ✅ Stored correctly (2026-03-19T13:21:58...)
+          - Bulk status updates: ✅ Working perfectly
+          - Bulk deletions: ✅ Working perfectly
+          - Error handling: ✅ Proper validation messages
+          
+          Both bulk operations endpoints are production-ready and working as designed.
 
   - task: "Bulk Operations - Tasks"
     implemented: true
