@@ -283,6 +283,56 @@ class MasterSKUMappingCreate(BaseModel):
 
 # Import Mapping Template Models
 class ImportMappingTemplate(BaseModel):
+
+
+# Platform Listings (One Master SKU can have MULTIPLE listings per platform)
+class PlatformListing(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    master_sku: str
+    platform: str  # amazon, flipkart, website, etc.
+    platform_sku: Optional[str] = None  # Seller SKU
+    platform_product_id: Optional[str] = None  # ASIN for Amazon, FSN for Flipkart
+    platform_fnsku: Optional[str] = None  # FNSKU
+    listing_title: Optional[str] = None
+    listing_url: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+class PlatformListingCreate(BaseModel):
+    master_sku: str
+    platform: str
+    platform_sku: Optional[str] = None
+    platform_product_id: Optional[str] = None
+    platform_fnsku: Optional[str] = None
+    listing_title: Optional[str] = None
+    listing_url: Optional[str] = None
+    is_active: bool = True
+
+# Procurement Batches (Cost tracking per batch)
+class ProcurementBatch(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    master_sku: str
+    batch_number: str
+    procurement_date: datetime
+    quantity: int
+    unit_cost: float
+    total_cost: float
+    supplier: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: datetime
+
+class ProcurementBatchCreate(BaseModel):
+    master_sku: str
+    batch_number: str
+    procurement_date: datetime
+    quantity: int
+    unit_cost: float
+    supplier: Optional[str] = None
+    notes: Optional[str] = None
+
     model_config = ConfigDict(extra="ignore")
     id: str
     name: str
