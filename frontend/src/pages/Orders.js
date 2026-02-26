@@ -117,6 +117,7 @@ export const Orders = () => {
     } catch (error) {
       toast.error('Failed to update orders');
     }
+  };
 
   const handleBulkUpdateChannel = async (newChannel) => {
     if (selectedOrders.length === 0) {
@@ -135,8 +136,6 @@ export const Orders = () => {
     } catch (error) {
       toast.error('Failed to update channel');
     }
-  };
-
   };
 
   const handleSearch = (e) => {
