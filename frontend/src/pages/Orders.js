@@ -61,9 +61,6 @@ export const Orders = () => {
     }
   };
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-
   const handleSelectAll = (e) => {
     if (e.target.checked) {
       setSelectedOrders(orders.map(o => o.id));
@@ -445,6 +442,5 @@ export const Orders = () => {
       </Card>
 
     </div>
-  );
   );
 };
