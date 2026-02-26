@@ -13,6 +13,8 @@ import { Inventory } from './pages/Inventory';
 import { Analytics } from './pages/Analytics';
 import { ImportWizard } from './pages/ImportWizard';
 import { MasterSKU } from './pages/MasterSKU';
+import { Returns } from './pages/Returns';
+import { Channels } from './pages/Channels';
 import { Layout } from './components/Layout';
 import './App.css';
 
@@ -72,6 +74,8 @@ function App() {
             <Route path="orders/:id" element={<OrderDetail />} />
             <Route path="orders/import" element={<ImportWizard />} />
             <Route path="master-sku" element={<MasterSKU />} />
+            <Route path="returns" element={<Returns />} />
+            <Route path="channels" element={<Channels />} />
             <Route path="whatsapp" element={<WhatsAppCRM />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="inventory" element={<Inventory />} />
