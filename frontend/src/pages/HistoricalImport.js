@@ -155,6 +155,62 @@ export const HistoricalImport = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Error Details Modal */}
+      {showErrorModal && importResult && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[80vh] overflow-hidden">
+            <CardHeader>
+              <CardTitle className="font-[Manrope] flex items-center justify-between">
+                Import Errors & Skipped Rows
+                <Button variant="ghost" size="sm" onClick={() => setShowErrorModal(false)}>
+                  ✕
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-y-auto max-h-[60vh]">
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Imported</p>
+                    <p className="text-2xl font-bold text-green-600">{importResult.imported}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Skipped</p>
+                    <p className="text-2xl font-bold text-yellow-600">{importResult.skipped}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Errors</p>
+                    <p className="text-2xl font-bold text-red-600">{importResult.errors}</p>
+                  </div>
+                </div>
+
+                {importResult.error_details && importResult.error_details.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-2">Error Details:</h4>
+                    <div className="space-y-2">
+                      {importResult.error_details.map((error, idx) => (
+                        <div key={idx} className="p-3 bg-red-50 border border-red-200 rounded text-sm">
+                          <code className="text-red-900">{error}</code>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button variant="outline" onClick={() => setShowErrorModal(false)}>
+                    Close
+                  </Button>
+                  <Button onClick={() => navigate('/orders')}>
+                    Go to Orders
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
