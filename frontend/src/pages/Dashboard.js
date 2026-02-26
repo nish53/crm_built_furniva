@@ -130,6 +130,9 @@ export const Dashboard = () => {
         })}
       </div>
 
+      {/* Priority Alerts */}
+      <PriorityCards />
+
       <Card className="border-border/60" data-testid="recent-orders-card">
         <CardHeader>
           <CardTitle className="font-[Manrope]">Recent Orders</CardTitle>
