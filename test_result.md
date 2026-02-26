@@ -107,6 +107,12 @@ user_problem_statement: |
   The platform centralizes operations from multiple sales channels (Amazon, Flipkart, WhatsApp, own website).
   Core features include order management, customer communication, task management, inventory tracking,
   sales analytics, logistics management, and financial control. Brand name is "Furniva".
+  
+  PHASE A ENHANCEMENTS (Current Session):
+  1. Fix import functionality (ImportWizard bug)
+  2. Add missing fields to new order form (delivery_by, alternate_number)
+  3. Implement bulk operations for orders (bulk delete, bulk update status)
+  4. Implement bulk operations for tasks (bulk delete, bulk update status)
 
 backend:
   - task: "Amazon TXT Order Import"
