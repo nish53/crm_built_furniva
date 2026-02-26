@@ -412,6 +412,8 @@ class ReturnRequest(BaseModel):
     return_reason_details: Optional[str] = None
     damage_category: Optional[DamageCategory] = None
     return_status: ReturnStatus
+    previous_status: Optional[str] = None
+    status_history: List[Dict[str, Any]] = []
     requested_date: datetime
     approved_date: Optional[datetime] = None
     pickup_date: Optional[datetime] = None
