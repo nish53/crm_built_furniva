@@ -400,6 +400,7 @@ def test_enhanced_order_creation():
     # Create order with both new fields
     order_data = {
         "order_number": f"TEST-ENHANCED-{uuid.uuid4().hex[:8].upper()}",
+        "customer_id": str(uuid.uuid4()),
         "customer_name": "Vikram Singh",
         "phone": "9988776655",
         "phone_secondary": "8899776655",  # New field
