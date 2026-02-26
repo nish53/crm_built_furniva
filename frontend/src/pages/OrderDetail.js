@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { AutomationPanel } from '../components/AutomationPanel';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Package, User, MapPin, Phone, Calendar, Truck,
-  CheckCircle, RefreshCcw, DollarSign, X, ClipboardList, FileText
+  ArrowLeft, Package, User, Calendar, Truck,
+  CheckCircle, RefreshCcw, DollarSign, X, FileText, AlertTriangle
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -24,13 +24,11 @@ export const OrderDetail = () => {
   const [showFinancialModal, setShowFinancialModal] = useState(false);
   const [financials, setFinancials] = useState(null);
 
-  // Return form
   const [returnForm, setReturnForm] = useState({
     return_reason: '', return_reason_details: '',
     damage_category: '', is_installation_related: false
   });
 
-  // Financial form
   const [finForm, setFinForm] = useState({
     product_cost: '', shipping_cost: '', packaging_cost: '',
     installation_cost: '', marketplace_commission_rate: '15'
@@ -42,14 +40,10 @@ export const OrderDetail = () => {
     try {
       const res = await api.get(`/orders/${id}`);
       setOrder(res.data);
-      // Try loading financials
-      try {
-        const fRes = await api.get(`/financials/order/${id}`);
-        setFinancials(fRes.data);
-      } catch { setFinancials(null); }
-    } catch {
-      toast.error('Failed to fetch order');
-    } finally { setLoading(false); }
+      try { const fRes = await api.get(`/financials/order/${id}`); setFinancials(fRes.data); }
+      catch { setFinancials(null); }
+    } catch { toast.error('Failed to fetch order'); }
+    finally { setLoading(false); }
   };
 
   const updateOrderStatus = async (status) => {
@@ -92,9 +86,7 @@ export const OrderDetail = () => {
       toast.success('Return request created');
       setShowReturnModal(false);
       fetchOrder();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to create return');
-    }
+    } catch (err) { toast.error(err.response?.data?.detail || 'Failed to create return'); }
   };
 
   const handleCalculateFinancials = async (e) => {
@@ -114,15 +106,8 @@ export const OrderDetail = () => {
     } catch { toast.error('Failed to calculate financials'); }
   };
 
-  const safeDate = (d) => {
-    if (!d) return null;
-    try { return format(new Date(d), 'MMM dd, yyyy HH:mm'); } catch { return '-'; }
-  };
-
-  const safeDateShort = (d) => {
-    if (!d) return '-';
-    try { return format(new Date(d), 'MMM dd, yyyy'); } catch { return '-'; }
-  };
+  const safeDate = (d) => { if (!d) return null; try { return format(new Date(d), 'MMM dd, yyyy HH:mm'); } catch { return '-'; } };
+  const safeDateShort = (d) => { if (!d) return '-'; try { return format(new Date(d), 'MMM dd, yyyy'); } catch { return '-'; } };
 
   if (loading) return (
     <div className="flex items-center justify-center h-[60vh]">
@@ -130,18 +115,26 @@ export const OrderDetail = () => {
     </div>
   );
 
-  if (!order) return (
-    <div className="text-center py-12"><p className="text-muted-foreground">Order not found</p></div>
-  );
+  if (!order) return <div className="text-center py-12"><p className="text-muted-foreground">Order not found</p></div>;
 
   const statusColors = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    confirmed: 'bg-blue-100 text-blue-800',
-    dispatched: 'bg-indigo-100 text-indigo-800',
-    delivered: 'bg-green-100 text-green-800',
-    cancelled: 'bg-red-100 text-red-800',
-    returned: 'bg-orange-100 text-orange-800',
+    pending: 'bg-yellow-100 text-yellow-800', confirmed: 'bg-blue-100 text-blue-800',
+    dispatched: 'bg-indigo-100 text-indigo-800', delivered: 'bg-green-100 text-green-800',
+    cancelled: 'bg-red-100 text-red-800', returned: 'bg-orange-100 text-orange-800',
   };
+
+  // Communication checklist - correct workflow order, read-only (green/red)
+  const commChecklist = [
+    { key: 'dc1_called', label: 'Order Confirmation Call', dateKey: 'dc1_date' },
+    { key: 'cp_sent', label: 'Order Confirmation Message Sent' },
+    { key: 'dnp1_conf', label: 'DNP Day 1 (Did Not Pick)' },
+    { key: 'dnp2_conf', label: 'DNP Day 2' },
+    { key: 'dnp3_conf', label: 'DNP Day 3' },
+    { key: 'dp_conf', label: 'Dispatch Confirmation' },
+    { key: 'deliver_conf', label: 'Delivery Confirmation' },
+    { key: 'install_conf', label: 'Installation Confirmation' },
+    { key: 'review_conf', label: 'Review Request' },
+  ];
 
   return (
     <div className="space-y-6" data-testid="order-detail-page">
@@ -151,26 +144,18 @@ export const OrderDetail = () => {
           <ArrowLeft className="w-4 h-4 mr-2" />Back
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold font-[Manrope] tracking-tight">
-            Order {order.order_number}
-          </h1>
+          <h1 className="text-3xl font-bold font-[Manrope] tracking-tight">Order {order.order_number}</h1>
           <p className="text-muted-foreground mt-1">{safeDate(order.order_date)}</p>
         </div>
-        <Badge className={statusColors[order.status] || 'bg-gray-100 text-gray-800'}>
-          {order.status?.toUpperCase()}
-        </Badge>
+        <Badge className={statusColors[order.status] || 'bg-gray-100 text-gray-800'}>{order.status?.toUpperCase()}</Badge>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - 2/3 */}
+        {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
           {/* Order Info */}
           <Card data-testid="order-info-card">
-            <CardHeader>
-              <CardTitle className="font-[Manrope] flex items-center gap-2">
-                <Package className="w-5 h-5" />Order Information
-              </CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="font-[Manrope] flex items-center gap-2"><Package className="w-5 h-5" />Order Information</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
                 <InfoField label="Order Number" value={order.order_number} mono />
@@ -178,14 +163,13 @@ export const OrderDetail = () => {
                 <InfoField label="SKU" value={order.sku} mono />
                 <InfoField label="Master SKU" value={order.master_sku || '-'} mono />
                 <InfoField label="ASIN" value={order.asin || '-'} mono />
-                <InfoField label="FNSKU" value={order.fnsku || '-'} mono />
                 <InfoField label="Product" value={order.product_name} />
                 <InfoField label="Quantity" value={order.quantity} />
                 <InfoField label="Price" value={`₹${(order.price || 0).toLocaleString()}`} />
                 <InfoField label="Item Tax" value={order.item_tax ? `₹${order.item_tax}` : '-'} />
                 <InfoField label="Shipping Price" value={order.shipping_price ? `₹${order.shipping_price}` : '-'} />
                 <InfoField label="Total" value={order.total_amount ? `₹${order.total_amount.toLocaleString()}` : '-'} />
-                <InfoField label="Dispatch By" value={safeDateShort(order.dispatch_by)} accent />
+                <InfoField label="Dispatch By" value={safeDateShort(order.dispatch_by)} />
                 <InfoField label="Delivery By" value={safeDateShort(order.delivery_by)} />
                 <InfoField label="Payment" value={order.payment_method || '-'} />
                 <InfoField label="Fulfillment" value={order.fulfillment_channel || '-'} />
@@ -195,21 +179,15 @@ export const OrderDetail = () => {
                 {order.is_business_order && <Badge className="self-center bg-purple-100 text-purple-800">Business</Badge>}
               </div>
 
-              {/* Master Status Tags */}
               {order.master_status?.length > 0 && (
                 <div className="mt-4">
                   <p className="text-xs text-muted-foreground mb-2">Master Status</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {order.master_status.map((s, i) => (
-                      <Badge key={i} variant="outline" className="text-xs capitalize">
-                        {s.replace(/_/g, ' ')}
-                      </Badge>
-                    ))}
+                    {order.master_status.map((s, i) => <Badge key={i} variant="outline" className="text-xs capitalize">{s.replace(/_/g, ' ')}</Badge>)}
                   </div>
                 </div>
               )}
 
-              {/* Tracking */}
               {(order.tracking_number || order.courier_partner) && (
                 <div className="mt-4 p-3 bg-primary/5 rounded-lg">
                   <p className="text-xs text-muted-foreground mb-1">Tracking</p>
@@ -228,13 +206,9 @@ export const OrderDetail = () => {
             </CardContent>
           </Card>
 
-          {/* Delivery Timeline */}
+          {/* Timeline */}
           <Card data-testid="timeline-card">
-            <CardHeader>
-              <CardTitle className="font-[Manrope] flex items-center gap-2">
-                <Calendar className="w-5 h-5" />Timeline
-              </CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="font-[Manrope] flex items-center gap-2"><Calendar className="w-5 h-5" />Timeline</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
                 <TimelineItem label="Order Date" date={safeDateShort(order.order_date)} active />
@@ -252,13 +226,9 @@ export const OrderDetail = () => {
             </CardContent>
           </Card>
 
-          {/* Customer Info */}
+          {/* Customer */}
           <Card data-testid="customer-info-card">
-            <CardHeader>
-              <CardTitle className="font-[Manrope] flex items-center gap-2">
-                <User className="w-5 h-5" />Customer
-              </CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="font-[Manrope] flex items-center gap-2"><User className="w-5 h-5" />Customer</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <InfoField label="Name" value={order.customer_name} />
@@ -270,22 +240,16 @@ export const OrderDetail = () => {
                   <p className="text-sm font-medium">
                     {[order.shipping_address_line1, order.shipping_address_line2, order.landmark].filter(Boolean).join(', ') || order.shipping_address || order.billing_address || '-'}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {[order.city, order.state, order.pincode].filter(Boolean).join(', ')}
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{[order.city, order.state, order.pincode].filter(Boolean).join(', ')}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Financial Summary */}
+          {/* Financials */}
           {financials && (
             <Card data-testid="financial-card">
-              <CardHeader>
-                <CardTitle className="font-[Manrope] flex items-center gap-2">
-                  <DollarSign className="w-5 h-5" />Financials
-                </CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="font-[Manrope] flex items-center gap-2"><DollarSign className="w-5 h-5" />Financials</CardTitle></CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <FinBox label="Selling Price" value={`₹${financials.selling_price}`} />
@@ -302,13 +266,11 @@ export const OrderDetail = () => {
           )}
         </div>
 
-        {/* Right Column - 1/3 */}
+        {/* Right Column */}
         <div className="space-y-6">
           {/* Quick Actions */}
           <Card data-testid="quick-actions-card">
-            <CardHeader>
-              <CardTitle className="font-[Manrope]">Quick Actions</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="font-[Manrope]">Quick Actions</CardTitle></CardHeader>
             <CardContent className="space-y-2">
               {order.status === 'pending' && (
                 <Button className="w-full" onClick={() => updateOrderStatus('confirmed')} disabled={updating} data-testid="confirm-order-button">
@@ -325,44 +287,62 @@ export const OrderDetail = () => {
                   <CheckCircle className="w-4 h-4 mr-2" />Mark Delivered
                 </Button>
               )}
-              {!order.return_requested && ['delivered', 'dispatched'].includes(order.status) && (
-                <Button variant="outline" className="w-full" onClick={() => setShowReturnModal(true)} data-testid="create-return-button">
-                  <RefreshCcw className="w-4 h-4 mr-2" />Create Return
+
+              {/* Return Actions - Always visible for actionable statuses */}
+              {!order.return_requested && (
+                <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => setShowReturnModal(true)} data-testid="create-return-button">
+                  <RefreshCcw className="w-4 h-4 mr-2" />Create Return Request
                 </Button>
               )}
+              {order.return_requested && !order.replacement_order_id && (
+                <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => {
+                  setReturnForm({ ...returnForm, return_reason: 'customer_changed_mind' });
+                  setShowReturnModal(true);
+                }} data-testid="create-replacement-button">
+                  <RefreshCcw className="w-4 h-4 mr-2" />Request Replacement
+                </Button>
+              )}
+              {order.return_requested && (
+                <Button variant="outline" className="w-full" onClick={() => navigate('/returns')} data-testid="view-returns-button">
+                  <AlertTriangle className="w-4 h-4 mr-2" />View Returns
+                </Button>
+              )}
+
               <Button variant="outline" className="w-full" onClick={() => setShowFinancialModal(true)} data-testid="calculate-financials-button">
                 <DollarSign className="w-4 h-4 mr-2" />{financials ? 'Recalculate' : 'Calculate'} Financials
               </Button>
             </CardContent>
           </Card>
 
-          {/* Communication Checklist */}
+          {/* Communication Checklist - READ ONLY, green/red indicators */}
           <Card data-testid="communication-card">
             <CardHeader>
-              <CardTitle className="font-[Manrope] flex items-center gap-2">
-                <ClipboardList className="w-5 h-5" />Communication
-              </CardTitle>
+              <CardTitle className="font-[Manrope] text-sm">Communication Status</CardTitle>
+              <p className="text-xs text-muted-foreground">Automated via WhatsApp CRM</p>
             </CardHeader>
-            <CardContent className="space-y-2.5">
-              <CheckItem label="Delivery Confirmation 1 Called" checked={order.dc1_called} date={order.dc1_date} />
-              <CheckItem label="Confirmation Photo Sent" checked={order.cp_sent} />
-              <CheckItem label="DNP-3 Confirmation" checked={order.dnp3_conf} />
-              <CheckItem label="DNP-2 Confirmation" checked={order.dnp2_conf} />
-              <CheckItem label="DNP-1 Confirmation" checked={order.dnp1_conf} />
-              <CheckItem label="Delivery Day Confirmation" checked={order.dp_conf} />
-              <CheckItem label="Installation Confirmation" checked={order.install_conf} />
-              <CheckItem label="Delivery Confirmation" checked={order.deliver_conf} />
-              <CheckItem label="Review Confirmation" checked={order.review_conf} />
-              <div className="pt-2 border-t border-border/50 space-y-2">
+            <CardContent className="space-y-2">
+              {commChecklist.map(({ key, label, dateKey }) => {
+                const done = !!order[key];
+                const dateVal = dateKey ? order[dateKey] : null;
+                return (
+                  <div key={key} className="flex items-center justify-between text-sm" data-testid={`comm-${key}`}>
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2.5 h-2.5 rounded-full ${done ? 'bg-green-500' : 'bg-red-400'}`} />
+                      <span className={done ? 'text-foreground' : 'text-muted-foreground'}>{label}</span>
+                    </div>
+                    {dateVal && <span className="text-xs text-muted-foreground">{safeDateShort(dateVal)}</span>}
+                    {!dateVal && <span className="text-xs text-muted-foreground">{done ? 'Done' : 'Pending'}</span>}
+                  </div>
+                );
+              })}
+              <div className="pt-2 border-t border-border/50 space-y-2 mt-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Assembly Type</span>
                   <span className="font-medium">{order.assembly_type || 'Not set'}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Paid Assembly</span>
-                  <Badge variant={order.paid_assembly ? 'default' : 'outline'} className="text-xs">
-                    {order.paid_assembly ? 'Yes' : 'No'}
-                  </Badge>
+                  <Badge variant={order.paid_assembly ? 'default' : 'outline'} className="text-xs">{order.paid_assembly ? 'Yes' : 'No'}</Badge>
                 </div>
               </div>
             </CardContent>
@@ -387,14 +367,8 @@ export const OrderDetail = () => {
 
           {order.internal_notes && (
             <Card>
-              <CardHeader>
-                <CardTitle className="font-[Manrope] flex items-center gap-2">
-                  <FileText className="w-5 h-5" />Internal Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm whitespace-pre-wrap">{order.internal_notes}</p>
-              </CardContent>
+              <CardHeader><CardTitle className="font-[Manrope] flex items-center gap-2"><FileText className="w-5 h-5" />Internal Notes</CardTitle></CardHeader>
+              <CardContent><p className="text-sm whitespace-pre-wrap">{order.internal_notes}</p></CardContent>
             </Card>
           )}
 
@@ -452,15 +426,12 @@ export const OrderDetail = () => {
                 </div>
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="checkbox" checked={returnForm.is_installation_related}
-                    onChange={e => setReturnForm({ ...returnForm, is_installation_related: e.target.checked })}
-                    className="rounded border-input" />
+                    onChange={e => setReturnForm({ ...returnForm, is_installation_related: e.target.checked })} className="rounded border-input" />
                   Installation related issue
                 </label>
                 <div className="flex gap-3">
                   <Button type="button" variant="outline" onClick={() => setShowReturnModal(false)} className="flex-1">Cancel</Button>
-                  <Button type="submit" className="flex-1" disabled={!returnForm.return_reason} data-testid="submit-return-btn">
-                    Create Return
-                  </Button>
+                  <Button type="submit" className="flex-1" disabled={!returnForm.return_reason} data-testid="submit-return-btn">Create Return</Button>
                 </div>
               </form>
             </CardContent>
@@ -485,32 +456,27 @@ export const OrderDetail = () => {
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Product Cost *</label>
                     <Input type="number" step="0.01" required value={finForm.product_cost}
-                      onChange={e => setFinForm({ ...finForm, product_cost: e.target.value })}
-                      placeholder="0.00" data-testid="input-product-cost" />
+                      onChange={e => setFinForm({ ...finForm, product_cost: e.target.value })} placeholder="0.00" data-testid="input-product-cost" />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Shipping Cost *</label>
                     <Input type="number" step="0.01" required value={finForm.shipping_cost}
-                      onChange={e => setFinForm({ ...finForm, shipping_cost: e.target.value })}
-                      placeholder="0.00" />
+                      onChange={e => setFinForm({ ...finForm, shipping_cost: e.target.value })} placeholder="0.00" />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Packaging Cost</label>
                     <Input type="number" step="0.01" value={finForm.packaging_cost}
-                      onChange={e => setFinForm({ ...finForm, packaging_cost: e.target.value })}
-                      placeholder="0.00" />
+                      onChange={e => setFinForm({ ...finForm, packaging_cost: e.target.value })} placeholder="0.00" />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Installation Cost</label>
                     <Input type="number" step="0.01" value={finForm.installation_cost}
-                      onChange={e => setFinForm({ ...finForm, installation_cost: e.target.value })}
-                      placeholder="0.00" />
+                      onChange={e => setFinForm({ ...finForm, installation_cost: e.target.value })} placeholder="0.00" />
                   </div>
                   <div className="col-span-2">
                     <label className="text-xs font-medium text-muted-foreground">Commission Rate (%)</label>
                     <Input type="number" step="0.1" value={finForm.marketplace_commission_rate}
-                      onChange={e => setFinForm({ ...finForm, marketplace_commission_rate: e.target.value })}
-                      placeholder="15" />
+                      onChange={e => setFinForm({ ...finForm, marketplace_commission_rate: e.target.value })} placeholder="15" />
                   </div>
                 </div>
                 <div className="flex gap-3">
@@ -526,13 +492,10 @@ export const OrderDetail = () => {
   );
 };
 
-// Sub-components
-const InfoField = ({ label, value, mono, accent }) => (
+const InfoField = ({ label, value, mono }) => (
   <div>
     <p className="text-xs text-muted-foreground">{label}</p>
-    <p className={`text-sm font-medium ${mono ? 'font-[JetBrains_Mono]' : ''} ${accent ? 'text-accent' : ''}`}>
-      {value || '-'}
-    </p>
+    <p className={`text-sm font-medium ${mono ? 'font-[JetBrains_Mono]' : ''}`}>{value || '-'}</p>
   </div>
 );
 
@@ -540,16 +503,6 @@ const TimelineItem = ({ label, date, active, warn }) => (
   <div className={`p-2 rounded-lg border text-center ${active ? (warn ? 'border-orange-200 bg-orange-50' : 'border-primary/20 bg-primary/5') : 'border-border/40 bg-muted/30 opacity-50'}`}>
     <p className="text-xs text-muted-foreground">{label}</p>
     <p className="text-sm font-medium">{date}</p>
-  </div>
-);
-
-const CheckItem = ({ label, checked, date }) => (
-  <div className="flex items-center justify-between text-sm">
-    <span className="text-muted-foreground">{label}</span>
-    <div className="flex items-center gap-2">
-      {date && <span className="text-xs text-muted-foreground">{format(new Date(date), 'MMM dd')}</span>}
-      <Badge variant={checked ? 'default' : 'outline'} className="text-xs">{checked ? 'Done' : 'Pending'}</Badge>
-    </div>
   </div>
 );
 
