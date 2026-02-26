@@ -312,51 +312,6 @@ export const MasterSKU = () => {
                   </div>
                 </div>
 
-                {/* Product Details */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-foreground">Product Details</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Dimensions</label>
-                      <Input
-                        value={formData.dimensions}
-                        onChange={(e) => setFormData({...formData, dimensions: e.target.value})}
-                        placeholder="e.g., 120x80x75 cm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Weight (kg)</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.weight}
-                        onChange={(e) => setFormData({...formData, weight: e.target.value})}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Cost Price (₹)</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.cost_price}
-                        onChange={(e) => setFormData({...formData, cost_price: e.target.value})}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Selling Price (₹)</label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={formData.selling_price}
-                        onChange={(e) => setFormData({...formData, selling_price: e.target.value})}
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                </div>
-
                 <div className="flex space-x-4">
                   <Button type="button" variant="outline" onClick={resetForm} className="flex-1">
                     Cancel
