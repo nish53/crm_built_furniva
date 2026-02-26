@@ -459,17 +459,7 @@ async def import_historical_orders(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """Import historical orders with comprehensive status data
-    
-    Expected headers:
-    Order ID, Order Date, Dispatch By, Delivery By, Actual Dispatch Date,
-    Order Conf Calling, Assembly Type, Dispatch Confirmation Sent,
-    Did Not Pick Day 1, Confirmed on Day 1?, Did Not Pick Day 2, Confirmed on Day 2?,
-    Did Not Pick Day 3, Confirmed on Day 3?, Deliver Conf, Review Conf,
-    Delivery Date, Customer Name, Billing No., Shipping No., Place, State,
-    Pincode, SKU, Qty, Tracking, Actual Shipping Company, Instructions,
-    Live Status, Price, Pickup Status, Reason for Cancellation/Replacement
-    """
+    """Import historical orders with comprehensive status data"""
     filename = file.filename.lower()
     if not filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="File must be a CSV file")
@@ -515,17 +505,27 @@ async def import_historical_orders(
                     skipped_count += 1
                     continue
                 
-                # Parse dates
+                # Parse dates with dd/mm/yyyy format
                 def parse_date(date_str):
-                    if not date_str or date_str.strip() == "":
+                    if not date_str or date_str.strip() == "" or date_str.lower() == 'na':
                         return None
                     try:
-                        return date_parser.parse(date_str).isoformat()
+                        # Try dd/mm/yyyy format first
+                        parts = date_str.strip().split('/')
+                        if len(parts) == 3:
+                            day, month, year = parts
+                            if len(year) == 2:
+                                year = '20' + year
+                            return datetime(int(year), int(month), int(day), tzinfo=timezone.utc).isoformat()
+                        # Fallback to dateparser
+                        return date_parser.parse(date_str).replace(tzinfo=timezone.utc).isoformat()
                     except:
                         return None
                 
-                # Map status
-                live_status = row.get("Live Status", "").lower()
+                # Map status - handle "Pickup Pending" correctly
+                live_status = row.get("Live Status", "").lower().strip()
+                pickup_status = row.get("Pickup Status", "").lower().strip()
+                
                 status_mapping = {
                     "delivered": "delivered",
                     "in transit": "dispatched",
@@ -535,7 +535,19 @@ async def import_historical_orders(
                     "lost": "cancelled",
                     "replaced": "replacement"
                 }
-                status = status_mapping.get(live_status, "delivered")
+                
+                # Handle pickup pending specifically
+                if "pickup pending" in live_status or "pickup pending" in pickup_status:
+                    status = "pending"
+                else:
+                    status = status_mapping.get(live_status, "delivered")
+                
+                # Parse boolean fields for calling confirmations
+                def parse_bool(value):
+                    if not value:
+                        return False
+                    val = str(value).lower().strip()
+                    return val in ['yes', 'done', 'completed', 'true', '1', 'sent']
                 
                 # Build order object
                 order = {
@@ -546,11 +558,11 @@ async def import_historical_orders(
                     "dispatch_by": parse_date(row.get("Dispatch By")),
                     "delivery_by": parse_date(row.get("Delivery By")),
                     "dispatch_date": parse_date(row.get("Actual Dispatch Date")),
-                    "delivery_date": parse_date(row.get("Delivery Date")),
+                    "delivery_date": parse_date(row.get("Delivery Date")) if status == "delivered" else None,
                     "customer_id": str(uuid.uuid4()),
                     "customer_name": row.get("Customer Name", "Unknown"),
-                    "phone": row.get("Billing No.", row.get("Shipping No.", "")),
-                    "phone_secondary": row.get("Shipping No.") if row.get("Shipping No.") != row.get("Billing No.") else None,
+                    "phone": row.get("Billing No.", row.get("Shipping No.", "")).strip(),
+                    "phone_secondary": row.get("Shipping No.", "").strip() if row.get("Shipping No.") != row.get("Billing No.") else None,
                     "city": row.get("Place", ""),
                     "state": row.get("State", ""),
                     "pincode": row.get("Pincode", ""),
@@ -562,15 +574,21 @@ async def import_historical_orders(
                     "tracking_number": row.get("Tracking", ""),
                     "courier_partner": row.get("Actual Shipping Company", ""),
                     "instructions": row.get("Instructions", ""),
-                    "assembly_type": row.get("Assembly Type", ""),
-                    "dc1_called": row.get("Order Conf Calling", "").lower() in ["yes", "done", "completed"],
-                    "cp_sent": row.get("Dispatch Confirmation Sent", "").lower() in ["yes", "done", "sent"],
-                    "dnp1_conf": row.get("Did Not Pick Day 1", "").lower() in ["yes", "true"],
-                    "dnp2_conf": row.get("Did Not Pick Day 2", "").lower() in ["yes", "true"],
-                    "dnp3_conf": row.get("Did Not Pick Day 3", "").lower() in ["yes", "true"],
-                    "deliver_conf": row.get("Deliver Conf", "").lower() in ["yes", "done", "sent"],
-                    "review_conf": row.get("Review Conf", "").lower() in ["yes", "done", "sent"],
-                    "pickup_status": row.get("Pickup Status", ""),
+                    
+                    # Historical calling/confirmation data
+                    "assembly_type": row.get("Assembly Type", "").strip(),
+                    "order_conf_calling": parse_bool(row.get("Order Conf Calling")),
+                    "dispatch_conf_sent": parse_bool(row.get("Dispatch Confirmation Sent")),
+                    "dnp_day1": parse_bool(row.get("Did Not Pick Day 1")),
+                    "confirmed_day1": parse_bool(row.get("Confirmed on Day 1?")),
+                    "dnp_day2": parse_bool(row.get("Did Not Pick Day 2")),
+                    "confirmed_day2": parse_bool(row.get("Confirmed on Day 2?")),
+                    "dnp_day3": parse_bool(row.get("Did Not Pick Day 3")),
+                    "confirmed_day3": parse_bool(row.get("Confirmed on Day 3?")),
+                    "deliver_conf": parse_bool(row.get("Deliver Conf")),
+                    "review_conf": parse_bool(row.get("Review Conf")),
+                    
+                    "pickup_status": pickup_status,
                     "cancellation_reason": row.get("Reason for Cancellation/Replacement", ""),
                     "internal_notes": f"Imported from historical data. Original status: {live_status}",
                     "created_at": datetime.now(timezone.utc).isoformat(),
@@ -583,7 +601,7 @@ async def import_historical_orders(
             except Exception as e:
                 error_count += 1
                 errors.append(f"Row {row_num}: {str(e)}")
-                if len(errors) <= 10:  # Only store first 10 errors
+                if len(errors) <= 10:
                     continue
         
         return {
