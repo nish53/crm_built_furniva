@@ -40,6 +40,12 @@ export const HistoricalImport = () => {
         },
       });
 
+      setImportResult(response.data);
+      
+      if (response.data.errors > 0) {
+        setShowErrorModal(true);
+      }
+
       toast.success(
         <div>
           <div className="font-bold">Import Completed!</div>
@@ -49,8 +55,9 @@ export const HistoricalImport = () => {
         </div>
       );
 
-      // Navigate back to orders after 2 seconds
-      setTimeout(() => navigate('/orders'), 2000);
+      if (response.data.errors === 0) {
+        setTimeout(() => navigate('/orders'), 2000);
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Import failed');
     } finally {
