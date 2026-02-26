@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Package, DollarSign, List, ShoppingCart } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Package, List, ShoppingCart, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const InventoryNew = () => {
@@ -20,23 +20,18 @@ export const InventoryNew = () => {
   const [listings, setListings] = useState([]);
   const [batches, setBatches] = useState([]);
   const [averageCost, setAverageCost] = useState(null);
+  const [editingListing, setEditingListing] = useState(null);
 
   const [masterSKUForm, setMasterSKUForm] = useState({
     master_sku: '',
     product_name: '',
     description: '',
-    category: '',
-    dimensions: '',
-    weight: ''
+    category: ''
   });
 
   const [listingForm, setListingForm] = useState({
     platform: 'amazon',
-    platform_sku: '',
-    platform_product_id: '',
-    platform_fnsku: '',
-    listing_title: '',
-    is_active: true
+    listings: [{ platform_sku: '', platform_product_id: '' }]
   });
 
   const [procurementForm, setProcurementForm] = useState({
@@ -44,7 +39,11 @@ export const InventoryNew = () => {
     procurement_date: new Date().toISOString().split('T')[0],
     quantity: '',
     unit_cost: '',
-    supplier: ''
+    supplier: '',
+    weight: '',
+    num_boxes: '1',
+    box_dimensions: [{ length: '', width: '', height: '' }],
+    reorder_level: ''
   });
 
   useEffect(() => {
@@ -98,18 +97,27 @@ export const InventoryNew = () => {
     }
   };
 
-  const handleCreateListing = async (e) => {
+  const handleCreateListings = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/platform-listings/', {
-        ...listingForm,
-        master_sku: selectedMasterSKU
-      });
-      toast.success('Listing added successfully');
+      const promises = listingForm.listings
+        .filter(l => l.platform_sku && l.platform_product_id)
+        .map(listing => 
+          api.post('/platform-listings/', {
+            master_sku: selectedMasterSKU,
+            platform: listingForm.platform,
+            platform_sku: listing.platform_sku,
+            platform_product_id: listing.platform_product_id,
+            is_active: true
+          })
+        );
+      
+      await Promise.all(promises);
+      toast.success(`${promises.length} listing(s) added successfully`);
       resetListingForm();
       openListingsModal(selectedMasterSKU);
     } catch (error) {
-      toast.error('Failed to create listing');
+      toast.error('Failed to create listings');
     }
   };
 
@@ -122,6 +130,24 @@ export const InventoryNew = () => {
     } catch (error) {
       toast.error('Failed to delete listing');
     }
+  };
+
+  const addListingPair = () => {
+    setListingForm({
+      ...listingForm,
+      listings: [...listingForm.listings, { platform_sku: '', platform_product_id: '' }]
+    });
+  };
+
+  const removeListingPair = (index) => {
+    const newListings = listingForm.listings.filter((_, i) => i !== index);
+    setListingForm({ ...listingForm, listings: newListings });
+  };
+
+  const updateListingPair = (index, field, value) => {
+    const newListings = [...listingForm.listings];
+    newListings[index][field] = value;
+    setListingForm({ ...listingForm, listings: newListings });
   };
 
   const openProcurementModal = async (masterSku) => {
@@ -143,17 +169,24 @@ export const InventoryNew = () => {
     e.preventDefault();
     try {
       await api.post('/procurement-batches/', {
-        ...procurementForm,
         master_sku: selectedMasterSKU,
+        batch_number: procurementForm.batch_number,
         procurement_date: new Date(procurementForm.procurement_date).toISOString(),
         quantity: parseInt(procurementForm.quantity),
-        unit_cost: parseFloat(procurementForm.unit_cost)
+        unit_cost: parseFloat(procurementForm.unit_cost),
+        supplier: procurementForm.supplier,
+        notes: JSON.stringify({
+          weight: procurementForm.weight,
+          num_boxes: procurementForm.num_boxes,
+          box_dimensions: procurementForm.box_dimensions,
+          reorder_level: procurementForm.reorder_level
+        })
       });
-      toast.success('Procurement batch added');
+      toast.success('Procurement/Inventory added');
       resetProcurementForm();
       openProcurementModal(selectedMasterSKU);
     } catch (error) {
-      toast.error('Failed to create procurement batch');
+      toast.error('Failed to create procurement');
     }
   };
 
@@ -168,25 +201,37 @@ export const InventoryNew = () => {
     }
   };
 
+  const addBoxDimension = () => {
+    setProcurementForm({
+      ...procurementForm,
+      box_dimensions: [...procurementForm.box_dimensions, { length: '', width: '', height: '' }]
+    });
+  };
+
+  const removeBoxDimension = (index) => {
+    const newDims = procurementForm.box_dimensions.filter((_, i) => i !== index);
+    setProcurementForm({ ...procurementForm, box_dimensions: newDims });
+  };
+
+  const updateBoxDimension = (index, field, value) => {
+    const newDims = [...procurementForm.box_dimensions];
+    newDims[index][field] = value;
+    setProcurementForm({ ...procurementForm, box_dimensions: newDims });
+  };
+
   const resetMasterSKUForm = () => {
     setMasterSKUForm({
       master_sku: '',
       product_name: '',
       description: '',
-      category: '',
-      dimensions: '',
-      weight: ''
+      category: ''
     });
   };
 
   const resetListingForm = () => {
     setListingForm({
       platform: 'amazon',
-      platform_sku: '',
-      platform_product_id: '',
-      platform_fnsku: '',
-      listing_title: '',
-      is_active: true
+      listings: [{ platform_sku: '', platform_product_id: '' }]
     });
   };
 
@@ -196,15 +241,13 @@ export const InventoryNew = () => {
       procurement_date: new Date().toISOString().split('T')[0],
       quantity: '',
       unit_cost: '',
-      supplier: ''
+      supplier: '',
+      weight: '',
+      num_boxes: '1',
+      box_dimensions: [{ length: '', width: '', height: '' }],
+      reorder_level: ''
     });
   };
-
-  const filteredSKUs = masterSKUs.filter(sku =>
-    searchTerm === '' ||
-    sku.master_sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sku.product_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   if (loading) {
     return (
@@ -219,7 +262,7 @@ export const InventoryNew = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold font-[Manrope] text-foreground">Inventory & Master SKU</h1>
-          <p className="text-muted-foreground mt-1">Manage Master SKUs, Platform Listings & Procurement</p>
+          <p className="text-muted-foreground mt-1">Manage Master SKUs, Platform Listings & Stock</p>
         </div>
         <Button onClick={() => setShowMasterSKUForm(true)}>
           <Plus className="w-4 h-4 mr-2" />
@@ -243,7 +286,10 @@ export const InventoryNew = () => {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <Card className="w-full max-w-2xl">
             <CardHeader>
-              <CardTitle className="font-[Manrope]">Create Master SKU</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle className="font-[Manrope]">Create Master SKU</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setShowMasterSKUForm(false)}>×</Button>
+              </div>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreateMasterSKU} className="space-y-4">
@@ -282,24 +328,6 @@ export const InventoryNew = () => {
                       placeholder="Furniture / Chairs"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Dimensions</label>
-                    <Input
-                      value={masterSKUForm.dimensions}
-                      onChange={(e) => setMasterSKUForm({...masterSKUForm, dimensions: e.target.value})}
-                      placeholder="120x80x75 cm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Weight (kg)</label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={masterSKUForm.weight}
-                      onChange={(e) => setMasterSKUForm({...masterSKUForm, weight: e.target.value})}
-                      placeholder="25.5"
-                    />
-                  </div>
                 </div>
                 <div className="flex space-x-4">
                   <Button type="button" variant="outline" onClick={() => setShowMasterSKUForm(false)} className="flex-1">
@@ -313,4 +341,7 @@ export const InventoryNew = () => {
         </div>
       )}
 
-      {/* Listings Modal - CONTINUED IN NEXT MESSAGE DUE TO LENGTH */}
+      {/* CONTINUED IN NEXT FILE DUE TO LENGTH... */}
+    </div>
+  );
+};
