@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Package, User, Calendar, Truck,
   CheckCircle, RefreshCcw, DollarSign, X, FileText, AlertTriangle,
-  XCircle, AlertCircle, Phone, MapPin
+  XCircle, AlertCircle, Phone, MapPin, Edit
 } from 'lucide-react';
 import { format } from 'date-fns';
 
