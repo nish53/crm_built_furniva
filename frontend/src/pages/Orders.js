@@ -236,6 +236,18 @@ export const Orders = () => {
                     <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select onValueChange={(channel) => handleBulkUpdateChannel(channel)}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Update Channel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="amazon">Amazon</SelectItem>
+                    <SelectItem value="flipkart">Flipkart</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="website">Website</SelectItem>
+                    <SelectItem value="phone">Phone</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Button
                   variant="destructive"
                   size="sm"
