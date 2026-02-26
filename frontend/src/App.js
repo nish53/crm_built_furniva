@@ -77,6 +77,7 @@ function App() {
             <Route path="master-sku" element={<MasterSKU />} />
             <Route path="returns" element={<Returns />} />
             <Route path="channels" element={<Channels />} />
+            <Route path="costing" element={<Costing />} />
             <Route path="whatsapp" element={<WhatsAppCRM />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="inventory" element={<Inventory />} />
