@@ -144,12 +144,12 @@ export const Inventory = () => {
       await Promise.all(valid.map(r => api.post('/platform-listings/', {
         master_sku: selectedSKU.master_sku, platform: listingForm.platform,
         platform_sku: r.platform_sku, platform_product_id: r.platform_product_id,
-        platform_fnsku: r.platform_fnsku, is_active: true
+        is_active: true
       })));
       toast.success(`${valid.length} listing(s) added`);
       const res = await api.get(`/platform-listings/by-master-sku/${selectedSKU.master_sku}`);
       setListings(res.data);
-      setListingForm({ platform: 'amazon', rows: [{ platform_sku: '', platform_product_id: '', platform_fnsku: '' }] });
+      setListingForm({ platform: 'amazon', rows: [{ platform_sku: '', platform_product_id: '' }] });
       fetchMasterSKUs();
     } catch { toast.error('Failed to create listings'); }
   };
