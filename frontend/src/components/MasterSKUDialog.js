@@ -12,7 +12,6 @@ export const MasterSKUDialog = ({ isOpen, onClose, prefilledSKU = '', onSuccess 
     master_sku: '',
     amazon_sku: '',
     amazon_asin: '',
-    amazon_fnsku: '',
     flipkart_sku: '',
     flipkart_fsn: '',
     website_sku: '',
