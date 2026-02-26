@@ -371,7 +371,7 @@ export const ImportWizard = () => {
                   <Button variant="outline" onClick={() => setStep(1)}>
                     Back
                   </Button>
-                  <Button onClick={() => setStep(3)} className="flex-1">
+                  <Button onClick={handleContinueToImport} className="flex-1">
                     Continue to Import
                   </Button>
                 </div>
