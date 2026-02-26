@@ -132,8 +132,6 @@ export const Tasks = () => {
     }
   };
 
-  };
-
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'high':
