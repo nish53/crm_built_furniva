@@ -163,7 +163,6 @@ class Order(OrderBase):
     payment_method: Optional[str] = None
     is_business_order: bool = False
     is_prime: bool = False
-    gift_message: Optional[str] = None
     last_updated: Optional[datetime] = None
 
 class OrderUpdate(BaseModel):
