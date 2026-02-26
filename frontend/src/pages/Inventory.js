@@ -458,12 +458,6 @@ export const Inventory = () => {
                         <label className="text-xs font-medium text-muted-foreground">{platformIdLabel(listingForm.platform)}</label>
                         <Input value={row.platform_product_id} onChange={e => updateListingRow(idx, 'platform_product_id', e.target.value)} placeholder={platformIdLabel(listingForm.platform)} />
                       </div>
-                      {listingForm.platform === 'amazon' && (
-                        <div className="flex-1">
-                          <label className="text-xs font-medium text-muted-foreground">FNSKU</label>
-                          <Input value={row.platform_fnsku} onChange={e => updateListingRow(idx, 'platform_fnsku', e.target.value)} placeholder="FNSKU" />
-                        </div>
-                      )}
                       <Button type="button" variant="ghost" size="sm" onClick={() => removeListingRow(idx)} disabled={listingForm.rows.length <= 1}><X className="w-3.5 h-3.5" /></Button>
                     </div>
                   ))}
