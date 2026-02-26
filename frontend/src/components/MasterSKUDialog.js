@@ -99,15 +99,6 @@ export const MasterSKUDialog = ({ isOpen, onClose, prefilledSKU = '', onSuccess 
                   />
                 </div>
               </div>
-              <div className="mt-2">
-                <Label htmlFor="amazon_fnsku">FNSKU (Optional)</Label>
-                <Input
-                  id="amazon_fnsku"
-                  placeholder="Amazon FNSKU"
-                  value={formData.amazon_fnsku}
-                  onChange={(e) => setFormData({ ...formData, amazon_fnsku: e.target.value })}
-                />
-              </div>
             </div>
 
             <div className="col-span-2 border-t pt-4">
