@@ -197,6 +197,8 @@ class TaskBase(BaseModel):
     assigned_to: Optional[str] = None
     order_id: Optional[str] = None
     due_date: Optional[datetime] = None
+    photos: Optional[List[str]] = []  # URLs to task photos
+    order_details: Optional[str] = None  # Order number or details for reference
 
 class TaskCreate(TaskBase):
     pass
