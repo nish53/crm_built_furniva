@@ -65,24 +65,71 @@ export const MasterSKUDialog = ({ isOpen, onClose, prefilledSKU = '', onSuccess 
               />
             </div>
 
-            <div>
-              <Label htmlFor="amazon_sku">Amazon SKU</Label>
+            <div className="col-span-2">
+              <Label htmlFor="product_name">Product Name</Label>
               <Input
-                id="amazon_sku"
-                placeholder="Amazon SKU code"
-                value={formData.amazon_sku}
-                onChange={(e) => setFormData({ ...formData, amazon_sku: e.target.value })}
+                id="product_name"
+                placeholder="Product name"
+                value={formData.product_name}
+                onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
               />
             </div>
 
-            <div>
-              <Label htmlFor="flipkart_sku">Flipkart SKU</Label>
-              <Input
-                id="flipkart_sku"
-                placeholder="Flipkart SKU code"
-                value={formData.flipkart_sku}
-                onChange={(e) => setFormData({ ...formData, flipkart_sku: e.target.value })}
-              />
+            <div className="col-span-2 border-t pt-4">
+              <h4 className="text-sm font-medium mb-3">Amazon - SKU & ASIN (Paired)</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="amazon_sku">Amazon SKU</Label>
+                  <Input
+                    id="amazon_sku"
+                    placeholder="Amazon SKU code"
+                    value={formData.amazon_sku}
+                    onChange={(e) => setFormData({ ...formData, amazon_sku: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="amazon_asin">ASIN</Label>
+                  <Input
+                    id="amazon_asin"
+                    placeholder="Amazon ASIN"
+                    value={formData.amazon_asin}
+                    onChange={(e) => setFormData({ ...formData, amazon_asin: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="mt-2">
+                <Label htmlFor="amazon_fnsku">FNSKU (Optional)</Label>
+                <Input
+                  id="amazon_fnsku"
+                  placeholder="Amazon FNSKU"
+                  value={formData.amazon_fnsku}
+                  onChange={(e) => setFormData({ ...formData, amazon_fnsku: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="col-span-2 border-t pt-4">
+              <h4 className="text-sm font-medium mb-3">Flipkart - SKU & FSN (Paired)</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="flipkart_sku">Flipkart SKU</Label>
+                  <Input
+                    id="flipkart_sku"
+                    placeholder="Flipkart SKU code"
+                    value={formData.flipkart_sku}
+                    onChange={(e) => setFormData({ ...formData, flipkart_sku: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="flipkart_fsn">FSN ID</Label>
+                  <Input
+                    id="flipkart_fsn"
+                    placeholder="Flipkart FSN"
+                    value={formData.flipkart_fsn}
+                    onChange={(e) => setFormData({ ...formData, flipkart_fsn: e.target.value })}
+                  />
+                </div>
+              </div>
             </div>
 
             <div>
@@ -96,16 +143,6 @@ export const MasterSKUDialog = ({ isOpen, onClose, prefilledSKU = '', onSuccess 
             </div>
 
             <div>
-              <Label htmlFor="product_name">Product Name</Label>
-              <Input
-                id="product_name"
-                placeholder="Product name"
-                value={formData.product_name}
-                onChange={(e) => setFormData({ ...formData, product_name: e.target.value })}
-              />
-            </div>
-
-            <div className="col-span-2">
               <Label htmlFor="category">Category</Label>
               <Input
                 id="category"
