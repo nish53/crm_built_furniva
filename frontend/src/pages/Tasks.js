@@ -270,6 +270,15 @@ export const Tasks = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="order_details">Order Number (Optional)</Label>
+                  <Input
+                    id="order_details"
+                    placeholder="Link to order"
+                    value={formData.order_details}
+                    onChange={(e) => setFormData({ ...formData, order_details: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="due_date">Due Date</Label>
                   <Input
                     id="due_date"
