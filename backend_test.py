@@ -47,10 +47,10 @@ class FurnivaAPITester:
         
         # Login
         login_data = {
-            "username": self.test_user["email"],
+            "email": self.test_user["email"],
             "password": self.test_user["password"]
         }
-        response = self.session.post(f"{BASE_URL}/auth/token", data=login_data)
+        response = self.session.post(f"{BASE_URL}/auth/login", json=login_data)
         
         if response.status_code == 200:
             token_data = response.json()
