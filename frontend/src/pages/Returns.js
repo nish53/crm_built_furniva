@@ -1,217 +1,198 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { RefreshCcw, Search, Package, CheckCircle, XCircle, Truck, Eye } from 'lucide-react';
+import {
+  RefreshCcw, Search, X, Undo2, ChevronRight, Clock, AlertTriangle
+} from 'lucide-react';
 import { format } from 'date-fns';
+
+const STATUS_FLOW = [
+  'requested', 'approved', 'pickup_scheduled', 'in_transit',
+  'received', 'inspected', 'refunded', 'replaced', 'rejected', 'cancelled'
+];
+
+const STATUS_LABELS = {
+  requested: 'Requested', approved: 'Approved', pickup_scheduled: 'Pickup Scheduled',
+  in_transit: 'In Transit', received: 'Received', inspected: 'Inspected',
+  refunded: 'Refunded', replaced: 'Replaced', rejected: 'Rejected', cancelled: 'Cancelled'
+};
+
+const STATUS_COLORS = {
+  requested: 'bg-yellow-100 text-yellow-800', approved: 'bg-blue-100 text-blue-800',
+  pickup_scheduled: 'bg-indigo-100 text-indigo-800', in_transit: 'bg-purple-100 text-purple-800',
+  received: 'bg-teal-100 text-teal-800', inspected: 'bg-cyan-100 text-cyan-800',
+  refunded: 'bg-green-100 text-green-800', replaced: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800', cancelled: 'bg-gray-100 text-gray-800'
+};
 
 export const Returns = () => {
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [selectedReturn, setSelectedReturn] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  useEffect(() => {
-    fetchReturns();
-  }, [statusFilter]);
+  // Status update form (for mandatory fields)
+  const [pendingStatus, setPendingStatus] = useState(null);
+  const [statusFields, setStatusFields] = useState({ pickup_date: '', tracking_number: '', courier_partner: '', notes: '', refund_amount: '' });
 
-  const fetchReturns = async () => {
+  const fetchReturns = useCallback(async () => {
     try {
       const params = {};
       if (statusFilter !== 'all') params.status = statusFilter;
-      
-      const response = await api.get('/returns/', { params });
-      setReturns(response.data);
-    } catch (error) {
-      toast.error('Failed to fetch returns');
-    } finally {
-      setLoading(false);
+      const res = await api.get('/returns/', { params });
+      setReturns(res.data);
+    } catch { toast.error('Failed to fetch returns'); }
+    finally { setLoading(false); }
+  }, [statusFilter]);
+
+  useEffect(() => { fetchReturns(); }, [fetchReturns]);
+
+  const getNextStatuses = (current) => {
+    const idx = STATUS_FLOW.indexOf(current);
+    if (idx === -1) return [];
+    const next = [];
+    // Allow forward transitions
+    if (current === 'requested') next.push('approved', 'rejected');
+    else if (current === 'approved') next.push('pickup_scheduled', 'cancelled');
+    else if (current === 'pickup_scheduled') next.push('in_transit', 'cancelled');
+    else if (current === 'in_transit') next.push('received');
+    else if (current === 'received') next.push('inspected');
+    else if (current === 'inspected') next.push('refunded', 'replaced', 'rejected');
+    return next;
+  };
+
+  const initiateStatusChange = (ret, newStatus) => {
+    // Check if mandatory fields needed
+    if (newStatus === 'pickup_scheduled' || newStatus === 'in_transit') {
+      setPendingStatus({ returnId: ret.id, status: newStatus });
+      setStatusFields({ pickup_date: '', tracking_number: '', courier_partner: '', notes: '', refund_amount: '' });
+    } else if (newStatus === 'refunded') {
+      setPendingStatus({ returnId: ret.id, status: newStatus });
+      setStatusFields({ pickup_date: '', tracking_number: '', courier_partner: '', notes: '', refund_amount: '' });
+    } else {
+      executeStatusChange(ret.id, newStatus, {});
     }
   };
 
-  const handleStatusUpdate = async (returnId, newStatus, notes = '', refundAmount = null) => {
-    setUpdatingStatus(true);
+  const executeStatusChange = async (returnId, status, fields) => {
     try {
-      const params = new URLSearchParams();
-      params.append('status', newStatus);
-      if (notes) params.append('notes', notes);
-      if (refundAmount) params.append('refund_amount', refundAmount);
+      const params = new URLSearchParams({ status });
+      if (fields.pickup_date) params.append('pickup_date', new Date(fields.pickup_date).toISOString());
+      if (fields.tracking_number) params.append('tracking_number', fields.tracking_number);
+      if (fields.courier_partner) params.append('courier_partner', fields.courier_partner);
+      if (fields.notes) params.append('notes', fields.notes);
+      if (fields.refund_amount) params.append('refund_amount', fields.refund_amount);
 
-      await api.patch(`/returns/${returnId}/status?${params.toString()}`);
-      toast.success('Return status updated');
+      const res = await api.patch(`/returns/${returnId}/status?${params.toString()}`);
+      toast.success(`Status updated to ${STATUS_LABELS[status]}`);
+      setSelectedReturn(res.data);
+      setPendingStatus(null);
       fetchReturns();
-      setShowDetailModal(false);
-    } catch (error) {
-      toast.error('Failed to update status');
-    } finally {
-      setUpdatingStatus(false);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update status');
     }
   };
 
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      requested: { color: 'bg-yellow-100 text-yellow-800', label: 'Requested' },
-      approved: { color: 'bg-blue-100 text-blue-800', label: 'Approved' },
-      rejected: { color: 'bg-red-100 text-red-800', label: 'Rejected' },
-      pickup_scheduled: { color: 'bg-purple-100 text-purple-800', label: 'Pickup Scheduled' },
-      in_transit: { color: 'bg-indigo-100 text-indigo-800', label: 'In Transit' },
-      received: { color: 'bg-teal-100 text-teal-800', label: 'Received' },
-      inspected: { color: 'bg-cyan-100 text-cyan-800', label: 'Inspected' },
-      refunded: { color: 'bg-green-100 text-green-800', label: 'Refunded' },
-      replaced: { color: 'bg-emerald-100 text-emerald-800', label: 'Replaced' }
-    };
+  const handleMandatorySubmit = (e) => {
+    e.preventDefault();
+    if (!pendingStatus) return;
 
-    const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800', label: status };
-    return <Badge className={config.color}>{config.label}</Badge>;
+    if (pendingStatus.status === 'pickup_scheduled' && !statusFields.pickup_date) {
+      toast.error('Pickup date is required'); return;
+    }
+    if (pendingStatus.status === 'in_transit' && !statusFields.tracking_number) {
+      toast.error('Tracking number is required'); return;
+    }
+
+    executeStatusChange(pendingStatus.returnId, pendingStatus.status, statusFields);
   };
 
-  const getReasonLabel = (reason) => {
-    const labels = {
-      defective: 'Defective Product',
-      damaged: 'Damaged in Transit',
-      wrong_item: 'Wrong Item Delivered',
-      not_as_described: 'Not as Described',
-      size_issue: 'Size Issue',
-      quality_issue: 'Quality Issue',
-      customer_changed_mind: 'Customer Changed Mind',
-      delivery_delay: 'Delivery Delay',
-      other: 'Other'
-    };
-    return labels[reason] || reason;
+  const handleUndo = async (ret) => {
+    if (!ret.previous_status) {
+      toast.error('No previous status to revert to');
+      return;
+    }
+    if (!confirm(`Undo status change? Will revert from "${STATUS_LABELS[ret.return_status]}" to "${STATUS_LABELS[ret.previous_status]}"`)) return;
+    try {
+      const res = await api.patch(`/returns/${ret.id}/undo`);
+      toast.success(`Reverted to ${STATUS_LABELS[res.data.return_status]}`);
+      setSelectedReturn(res.data);
+      fetchReturns();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to undo');
+    }
   };
 
-  const filteredReturns = returns.filter(ret =>
-    searchTerm === '' ||
-    ret.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ret.customer_name.toLowerCase().includes(searchTerm.toLowerCase())
+  const safeDateShort = (d) => { if (!d) return '-'; try { return format(new Date(d), 'MMM dd, yyyy'); } catch { return '-'; } };
+
+  const filtered = returns.filter(r =>
+    !searchTerm ||
+    r.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  if (loading) return (
+    <div className="flex items-center justify-center h-[60vh]">
+      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold font-[Manrope] text-foreground">Returns Management</h1>
-          <p className="text-muted-foreground mt-1">Track and manage product returns</p>
-        </div>
+    <div className="space-y-6" data-testid="returns-page">
+      <div>
+        <h1 className="text-3xl font-bold font-[Manrope]">Returns Management</h1>
+        <p className="text-muted-foreground mt-1">Track and manage return requests</p>
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input
-                placeholder="Search by order number or customer..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Returns</SelectItem>
-                <SelectItem value="requested">Requested</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="pickup_scheduled">Pickup Scheduled</SelectItem>
-                <SelectItem value="in_transit">In Transit</SelectItem>
-                <SelectItem value="received">Received</SelectItem>
-                <SelectItem value="inspected">Inspected</SelectItem>
-                <SelectItem value="refunded">Refunded</SelectItem>
-                <SelectItem value="replaced">Replaced</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder="Search by order or customer..." value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)} className="pl-10" data-testid="returns-search" />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-48" data-testid="returns-status-filter"><SelectValue placeholder="Filter by status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            {STATUS_FLOW.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
 
-      {/* Returns List */}
-      {filteredReturns.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <RefreshCcw className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">No returns found</p>
-          </CardContent>
-        </Card>
+      {filtered.length === 0 ? (
+        <Card><CardContent className="py-12 text-center">
+          <RefreshCcw className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+          <p className="text-muted-foreground">No return requests found</p>
+          <p className="text-sm text-muted-foreground mt-1">Create returns from the Order Detail page</p>
+        </CardContent></Card>
       ) : (
-        <div className="grid gap-4">
-          {filteredReturns.map(returnReq => (
-            <Card key={returnReq.id} className="hover:border-primary/50 transition-colors">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-3 flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-bold font-[Manrope]">
-                        Order #{returnReq.order_number}
-                      </h3>
-                      {getStatusBadge(returnReq.return_status)}
-                      {returnReq.is_installation_related && (
-                        <Badge className="bg-orange-100 text-orange-800">Installation Related</Badge>
-                      )}
+        <div className="space-y-3">
+          {filtered.map(ret => (
+            <Card key={ret.id} className="hover:border-primary/40 transition-colors cursor-pointer"
+              onClick={() => setSelectedReturn(ret)} data-testid={`return-card-${ret.id}`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold font-[JetBrains_Mono] text-sm">{ret.order_number}</p>
+                        <Badge className={STATUS_COLORS[ret.return_status]}>{STATUS_LABELS[ret.return_status]}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-0.5">{ret.customer_name} - {ret.phone}</p>
                     </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground text-xs">Customer</p>
-                        <p className="font-medium">{returnReq.customer_name}</p>
-                        <p className="text-xs text-muted-foreground">{returnReq.phone}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Return Reason</p>
-                        <p className="font-medium">{getReasonLabel(returnReq.return_reason)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground text-xs">Requested Date</p>
-                        <p className="font-medium">
-                          {returnReq.requested_date ? format(new Date(returnReq.requested_date), 'MMM dd, yyyy') : 'N/A'}
-                        </p>
-                      </div>
-                      {returnReq.damage_category && (
-                        <div>
-                          <p className="text-muted-foreground text-xs">Damage Type</p>
-                          <p className="font-medium capitalize">{returnReq.damage_category.replace('_', ' ')}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {returnReq.return_reason_details && (
-                      <div className="p-3 bg-muted rounded-lg">
-                        <p className="text-xs text-muted-foreground mb-1">Details:</p>
-                        <p className="text-sm">{returnReq.return_reason_details}</p>
-                      </div>
-                    )}
                   </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setSelectedReturn(returnReq);
-                      setShowDetailModal(true);
-                    }}
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    Manage
-                  </Button>
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <span>{safeDateShort(ret.requested_date)}</span>
+                    <Badge variant="outline" className="text-xs capitalize">{ret.return_reason?.replace(/_/g, ' ')}</Badge>
+                    <ChevronRight className="w-4 h-4" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -219,181 +200,186 @@ export const Returns = () => {
         </div>
       )}
 
-      {/* Return Detail Modal */}
-      {showDetailModal && selectedReturn && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle className="font-[Manrope]">Return Details</CardTitle>
-                <Button variant="ghost" size="sm" onClick={() => setShowDetailModal(false)}>×</Button>
+      {/* ===== RETURN DETAIL MODAL ===== */}
+      {selectedReturn && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="return-detail-modal">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="font-[Manrope]">Return: {selectedReturn.order_number}</CardTitle>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge className={STATUS_COLORS[selectedReturn.return_status]}>{STATUS_LABELS[selectedReturn.return_status]}</Badge>
+                  {selectedReturn.previous_status && (
+                    <span className="text-xs text-muted-foreground">
+                      (prev: {STATUS_LABELS[selectedReturn.previous_status]})
+                    </span>
+                  )}
+                </div>
               </div>
+              <Button variant="ghost" size="sm" onClick={() => { setSelectedReturn(null); setPendingStatus(null); }}><X className="w-4 h-4" /></Button>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Current Status */}
-              <div>
-                <h3 className="text-sm font-semibold mb-3">Current Status</h3>
-                <div className="flex items-center gap-4">
-                  {getStatusBadge(selectedReturn.return_status)}
-                  <p className="text-sm text-muted-foreground">
-                    Requested on {format(new Date(selectedReturn.requested_date), 'MMM dd, yyyy')}
-                  </p>
-                </div>
+              {/* Return Info */}
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div><p className="text-xs text-muted-foreground">Customer</p><p className="font-medium">{selectedReturn.customer_name}</p></div>
+                <div><p className="text-xs text-muted-foreground">Phone</p><p className="font-medium font-[JetBrains_Mono]">{selectedReturn.phone}</p></div>
+                <div><p className="text-xs text-muted-foreground">Reason</p><p className="font-medium capitalize">{selectedReturn.return_reason?.replace(/_/g, ' ')}</p></div>
+                <div><p className="text-xs text-muted-foreground">Damage Category</p><p className="font-medium capitalize">{selectedReturn.damage_category?.replace(/_/g, ' ') || '-'}</p></div>
+                {selectedReturn.return_reason_details && (
+                  <div className="col-span-2"><p className="text-xs text-muted-foreground">Details</p><p className="text-sm">{selectedReturn.return_reason_details}</p></div>
+                )}
+                {selectedReturn.is_installation_related && <Badge variant="outline" className="text-xs col-span-2 w-fit">Installation Related</Badge>}
               </div>
 
-              {/* Order & Customer Info */}
-              <div>
-                <h3 className="text-sm font-semibold mb-3">Order Information</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Order Number:</span>
-                    <p className="font-medium">{selectedReturn.order_number}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Customer:</span>
-                    <p className="font-medium">{selectedReturn.customer_name}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Phone:</span>
-                    <p className="font-medium">{selectedReturn.phone}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Return Reason:</span>
-                    <p className="font-medium">{getReasonLabel(selectedReturn.return_reason)}</p>
-                  </div>
-                </div>
+              {/* Timeline dates */}
+              <div className="grid grid-cols-2 gap-3">
+                <TimelineDate label="Requested" date={selectedReturn.requested_date} />
+                <TimelineDate label="Approved" date={selectedReturn.approved_date} />
+                <TimelineDate label="Pickup" date={selectedReturn.pickup_date} />
+                <TimelineDate label="Received" date={selectedReturn.received_date} />
+                <TimelineDate label="Inspected" date={selectedReturn.inspection_date} />
+                <TimelineDate label="Refund" date={selectedReturn.refund_date} />
               </div>
-
-              {/* Return Details */}
-              {selectedReturn.return_reason_details && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">Return Details</h3>
-                  <p className="text-sm p-3 bg-muted rounded-lg">{selectedReturn.return_reason_details}</p>
-                </div>
-              )}
 
               {/* Tracking Info */}
-              {selectedReturn.return_tracking_number && (
+              {(selectedReturn.return_tracking_number || selectedReturn.courier_partner) && (
+                <div className="p-3 bg-primary/5 rounded-lg">
+                  <p className="text-xs text-muted-foreground mb-1">Return Tracking</p>
+                  <p className="font-[JetBrains_Mono] font-medium">{selectedReturn.return_tracking_number || '-'}</p>
+                  {selectedReturn.courier_partner && <p className="text-xs text-muted-foreground mt-1">via {selectedReturn.courier_partner}</p>}
+                </div>
+              )}
+
+              {selectedReturn.refund_amount && (
+                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-xs text-muted-foreground">Refund Amount</p>
+                  <p className="text-lg font-bold font-[JetBrains_Mono] text-green-700">₹{selectedReturn.refund_amount}</p>
+                </div>
+              )}
+
+              {/* Status History */}
+              {selectedReturn.status_history?.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold mb-2">Tracking Information</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Tracking Number:</span>
-                      <p className="font-medium">{selectedReturn.return_tracking_number}</p>
-                    </div>
-                    {selectedReturn.courier_partner && (
-                      <div>
-                        <span className="text-muted-foreground">Courier:</span>
-                        <p className="font-medium">{selectedReturn.courier_partner}</p>
+                  <h4 className="text-sm font-semibold mb-2">Status History</h4>
+                  <div className="space-y-1.5">
+                    {selectedReturn.status_history.map((h, i) => (
+                      <div key={i} className={`flex items-center justify-between text-xs p-2 rounded ${h.is_undo ? 'bg-orange-50' : 'bg-secondary/30'}`}>
+                        <div className="flex items-center gap-2">
+                          {h.is_undo && <Undo2 className="w-3 h-3 text-orange-500" />}
+                          <span>{STATUS_LABELS[h.from_status]}</span>
+                          <ChevronRight className="w-3 h-3" />
+                          <span className="font-medium">{STATUS_LABELS[h.to_status]}</span>
+                        </div>
+                        <span className="text-muted-foreground">{safeDateShort(h.changed_at)}</span>
                       </div>
-                    )}
+                    ))}
                   </div>
                 </div>
               )}
 
-              {/* QC Notes */}
-              {selectedReturn.qc_notes && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-2">QC Notes</h3>
-                  <p className="text-sm p-3 bg-muted rounded-lg">{selectedReturn.qc_notes}</p>
+              {/* Status Actions */}
+              {!['refunded', 'replaced', 'rejected', 'cancelled'].includes(selectedReturn.return_status) && (
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-semibold mb-3">Update Status</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {getNextStatuses(selectedReturn.return_status).map(s => (
+                      <Button key={s} size="sm" variant={['rejected', 'cancelled'].includes(s) ? 'destructive' : 'outline'}
+                        onClick={() => initiateStatusChange(selectedReturn, s)} data-testid={`status-btn-${s}`}>
+                        {STATUS_LABELS[s]}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {/* Update Status Actions */}
-              <div>
-                <h3 className="text-sm font-semibold mb-3">Update Status</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {selectedReturn.return_status === 'requested' && (
-                    <>
-                      <Button
-                        onClick={() => handleStatusUpdate(selectedReturn.id, 'approved')}
-                        disabled={updatingStatus}
-                        className="w-full"
-                      >
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Approve Return
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() => handleStatusUpdate(selectedReturn.id, 'rejected')}
-                        disabled={updatingStatus}
-                        className="w-full"
-                      >
-                        <XCircle className="w-4 h-4 mr-2" />
-                        Reject Return
-                      </Button>
-                    </>
-                  )}
-                  {selectedReturn.return_status === 'approved' && (
-                    <Button
-                      onClick={() => handleStatusUpdate(selectedReturn.id, 'pickup_scheduled')}
-                      disabled={updatingStatus}
-                      className="w-full"
-                    >
-                      <Package className="w-4 h-4 mr-2" />
-                      Schedule Pickup
-                    </Button>
-                  )}
-                  {selectedReturn.return_status === 'pickup_scheduled' && (
-                    <Button
-                      onClick={() => handleStatusUpdate(selectedReturn.id, 'in_transit')}
-                      disabled={updatingStatus}
-                      className="w-full"
-                    >
-                      <Truck className="w-4 h-4 mr-2" />
-                      Mark In Transit
-                    </Button>
-                  )}
-                  {selectedReturn.return_status === 'in_transit' && (
-                    <Button
-                      onClick={() => handleStatusUpdate(selectedReturn.id, 'received')}
-                      disabled={updatingStatus}
-                      className="w-full"
-                    >
-                      <Package className="w-4 h-4 mr-2" />
-                      Mark Received
-                    </Button>
-                  )}
-                  {selectedReturn.return_status === 'received' && (
-                    <Button
-                      onClick={() => handleStatusUpdate(selectedReturn.id, 'inspected')}
-                      disabled={updatingStatus}
-                      className="w-full"
-                    >
-                      <Eye className="w-4 h-4 mr-2" />
-                      Mark Inspected
-                    </Button>
-                  )}
-                  {selectedReturn.return_status === 'inspected' && (
-                    <>
-                      <Button
-                        onClick={() => {
-                          const amount = prompt('Enter refund amount:');
-                          if (amount) handleStatusUpdate(selectedReturn.id, 'refunded', '', parseFloat(amount));
-                        }}
-                        disabled={updatingStatus}
-                        className="w-full"
-                      >
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Process Refund
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleStatusUpdate(selectedReturn.id, 'replaced')}
-                        disabled={updatingStatus}
-                        className="w-full"
-                      >
-                        <RefreshCcw className="w-4 h-4 mr-2" />
-                        Mark Replaced
-                      </Button>
-                    </>
-                  )}
+              {/* Undo Button */}
+              {selectedReturn.previous_status && (
+                <div className="border-t pt-4">
+                  <Button variant="outline" className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                    onClick={() => handleUndo(selectedReturn)} data-testid="undo-status-btn">
+                    <Undo2 className="w-4 h-4 mr-2" />Undo (Revert to {STATUS_LABELS[selectedReturn.previous_status]})
+                  </Button>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>
       )}
+
+      {/* ===== MANDATORY FIELDS MODAL ===== */}
+      {pendingStatus && (
+        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" data-testid="mandatory-fields-modal">
+          <Card className="w-full max-w-md">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="font-[Manrope] text-base">
+                  {STATUS_LABELS[pendingStatus.status]} - Required Info
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <AlertTriangle className="w-3 h-3 inline mr-1" />
+                  Mandatory fields must be filled
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setPendingStatus(null)}><X className="w-4 h-4" /></Button>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleMandatorySubmit} className="space-y-4">
+                {pendingStatus.status === 'pickup_scheduled' && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Pickup Date *</label>
+                    <Input type="date" required value={statusFields.pickup_date}
+                      onChange={e => setStatusFields({ ...statusFields, pickup_date: e.target.value })} data-testid="input-pickup-date" />
+                  </div>
+                )}
+                {pendingStatus.status === 'in_transit' && (
+                  <>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Tracking Number *</label>
+                      <Input required value={statusFields.tracking_number}
+                        onChange={e => setStatusFields({ ...statusFields, tracking_number: e.target.value })}
+                        placeholder="Enter tracking number" data-testid="input-return-tracking" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Courier Partner</label>
+                      <Input value={statusFields.courier_partner}
+                        onChange={e => setStatusFields({ ...statusFields, courier_partner: e.target.value })}
+                        placeholder="Courier name" />
+                    </div>
+                  </>
+                )}
+                {pendingStatus.status === 'refunded' && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Refund Amount</label>
+                    <Input type="number" step="0.01" value={statusFields.refund_amount}
+                      onChange={e => setStatusFields({ ...statusFields, refund_amount: e.target.value })}
+                      placeholder="0.00" />
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Notes</label>
+                  <Input value={statusFields.notes}
+                    onChange={e => setStatusFields({ ...statusFields, notes: e.target.value })}
+                    placeholder="Optional notes" />
+                </div>
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setPendingStatus(null)} className="flex-1">Cancel</Button>
+                  <Button type="submit" className="flex-1" data-testid="submit-mandatory-btn">Confirm</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TimelineDate = ({ label, date }) => {
+  const d = date ? format(new Date(date), 'MMM dd, yyyy') : null;
+  return (
+    <div className={`p-2 rounded-lg border text-center ${d ? 'border-primary/20 bg-primary/5' : 'border-border/40 bg-muted/30 opacity-50'}`}>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium">{d || '-'}</p>
     </div>
   );
 };
