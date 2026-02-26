@@ -10,7 +10,8 @@ import { AutomationPanel } from '../components/AutomationPanel';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Package, User, Calendar, Truck,
-  CheckCircle, RefreshCcw, DollarSign, X, FileText, AlertTriangle
+  CheckCircle, RefreshCcw, DollarSign, X, FileText, AlertTriangle,
+  XCircle, AlertCircle, Phone, MapPin
 } from 'lucide-react';
 import { format } from 'date-fns';
 
