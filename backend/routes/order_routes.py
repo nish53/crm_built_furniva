@@ -608,7 +608,8 @@ async def import_historical_orders(
             "imported": imported_count,
             "skipped": skipped_count,
             "errors": error_count,
-            "error_details": errors[:10] if errors else []
+            "error_details": errors,  # Return ALL errors, not just first 10
+            "message": f"Import completed: {imported_count} imported, {skipped_count} skipped, {error_count} errors"
         }
         
     except Exception as e:
