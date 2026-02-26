@@ -666,7 +666,11 @@ metadata:
   last_updated: "2025-02-26"
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Priority Dashboard Endpoints"
+    - "Fake Shipping Functionality" 
+    - "Historical Orders Import"
+    - "Task Enhancement Features"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
