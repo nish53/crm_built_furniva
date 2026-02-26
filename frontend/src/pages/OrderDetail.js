@@ -23,7 +23,9 @@ export const OrderDetail = () => {
   const [updating, setUpdating] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showFinancialModal, setShowFinancialModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [financials, setFinancials] = useState(null);
+  const [editForm, setEditForm] = useState({});
 
   const [returnForm, setReturnForm] = useState({
     return_reason: '', return_reason_details: '',
