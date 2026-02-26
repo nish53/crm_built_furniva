@@ -339,11 +339,11 @@ backend:
 
   - task: "Bulk Operations - Tasks"
     implemented: true
-    working: "NA"
+    working: true
     file: "/app/backend/routes/task_routes.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
@@ -354,6 +354,39 @@ backend:
           - Auto-completion timestamp when status is "completed"
           - Returns count of affected tasks
           Needs backend testing to verify endpoints work correctly.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ BULK OPERATIONS - TASKS FULLY FUNCTIONAL
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          1. ✅ Bulk Update Tasks (POST /api/tasks/bulk-update)
+             - Successfully updated 2 tasks from various statuses to 'completed'
+             - Returned correct counts: modified_count: 2, matched_count: 2
+             - ✅ CRITICAL FEATURE: Auto-completion timestamp correctly set
+             - Verified completion timestamps: 2026-02-26T13:21:57.580692Z
+          
+          2. ✅ Bulk Delete Tasks (POST /api/tasks/bulk-delete)
+             - Successfully deleted 2 tasks by their IDs
+             - Returned correct count: deleted_count: 2
+             - Proper cleanup without errors
+          
+          3. ✅ Task Creation for Testing
+             - Created 4 test tasks with realistic data: ✅ All successful
+             - Various statuses (pending, in_progress): ✅ Working
+             - Due dates and priorities: ✅ Properly stored
+          
+          VALIDATION RESULTS:
+          - Task status bulk updates: ✅ Working perfectly
+          - Auto-completion timestamp feature: ✅ CONFIRMED WORKING
+          - Bulk deletions: ✅ Working perfectly  
+          - Error handling: ✅ Proper validation messages
+          - Database consistency: ✅ No data corruption
+          
+          The auto-completion timestamp feature (lines 109-110 in task_routes.py) is working correctly - 
+          when tasks are bulk-updated to 'completed' status, completed_at is automatically set to current UTC time.
+          
+          Both bulk operations endpoints are production-ready and fully functional.
 
         comment: |
           ✅ Dashboard Stats API working correctly:
