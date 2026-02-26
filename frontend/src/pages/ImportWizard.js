@@ -141,8 +141,11 @@ export const ImportWizard = () => {
     formData.append('file', file);
 
     try {
+      // Ensure delimiter is properly encoded as single character
+      const delimiterChar = delimiter === '\t' ? '%09' : encodeURIComponent(delimiter);
+      
       const response = await api.post(
-        `/import/with-mapping?channel=${channel}&column_mappings=${encodeURIComponent(JSON.stringify(columnMappings))}&delimiter=${encodeURIComponent(delimiter)}&has_header=${hasHeader}&auto_lookup_master_sku=true`,
+        `/import/with-mapping?channel=${channel}&column_mappings=${encodeURIComponent(JSON.stringify(columnMappings))}&delimiter=${delimiterChar}&has_header=${hasHeader}&auto_lookup_master_sku=true`,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } }
       );
