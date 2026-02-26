@@ -115,6 +115,45 @@ async def bulk_update_tasks(
     )
     
     return {
+
+
+@router.post("/{task_id}/upload-photo")
+async def upload_task_photo(
+    task_id: str,
+    photo_url: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Add a photo URL to a task"""
+    result = await db.tasks.update_one(
+        {"id": task_id},
+        {"$push": {"photos": photo_url}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    return {"message": "Photo added successfully", "photo_url": photo_url}
+
+@router.get("/{task_id}/with-order")
+async def get_task_with_order(
+    task_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get task with linked order details"""
+    task = await db.tasks.find_one({"id": task_id}, {"_id": 0})
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # If task has order_id, fetch order details
+    if task.get("order_id"):
+        order = await db.orders.find_one({"id": task["order_id"]}, {"_id": 0})
+        task["order"] = order
+    
+    return task
+
         "message": f"Successfully updated {result.modified_count} tasks",
         "modified_count": result.modified_count,
         "matched_count": result.matched_count
