@@ -4,6 +4,7 @@ import api from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Package, Clock, TrendingUp, AlertCircle, Phone, Archive, FileText } from 'lucide-react';
 import { format } from 'date-fns';
+import { PriorityCards } from '../components/PriorityCards';
 
 export const Dashboard = () => {
   const { user } = useAuth();
