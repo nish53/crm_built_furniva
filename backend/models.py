@@ -25,6 +25,7 @@ class OrderChannel(str, Enum):
     WHATSAPP = "whatsapp"
     WEBSITE = "website"
     PHONE = "phone"
+    HISTORICAL = "historical"
 
 class TaskStatus(str, Enum):
     PENDING = "pending"
