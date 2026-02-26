@@ -156,8 +156,3 @@ async def get_task_with_order(
         task["order"] = order
     
     return task
-
-        "message": f"Successfully updated {result.modified_count} tasks",
-        "modified_count": result.modified_count,
-        "matched_count": result.matched_count
-    }
