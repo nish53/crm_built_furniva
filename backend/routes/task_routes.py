@@ -115,7 +115,10 @@ async def bulk_update_tasks(
     )
     
     return {
-
+        "message": f"Successfully updated {result.modified_count} tasks",
+        "modified_count": result.modified_count,
+        "matched_count": result.matched_count
+    }
 
 @router.post("/{task_id}/upload-photo")
 async def upload_task_photo(
