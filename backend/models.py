@@ -283,6 +283,28 @@ class MasterSKUMappingCreate(BaseModel):
 
 # Import Mapping Template Models
 class ImportMappingTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    channel: str
+    description: Optional[str] = None
+    column_mappings: Dict[str, str]
+    date_format: Optional[str] = None
+    delimiter: Optional[str] = ","
+    has_header: bool = True
+    is_default: bool = False
+    created_at: datetime
+    created_by: str
+
+class ImportMappingTemplateCreate(BaseModel):
+    name: str
+    channel: str
+    description: Optional[str] = None
+    column_mappings: Dict[str, str]
+    date_format: Optional[str] = None
+    delimiter: Optional[str] = ","
+    has_header: bool = True
+    is_default: bool = False
 
 
 # Platform Listings (One Master SKU can have MULTIPLE listings per platform)
