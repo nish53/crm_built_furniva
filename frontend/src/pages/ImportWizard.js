@@ -135,6 +135,16 @@ export const ImportWizard = () => {
     }
   };
 
+  const handleContinueToImport = () => {
+    // Check if at least required fields are mapped
+    const mappedFields = Object.values(columnMappings).filter(v => v);
+    if (mappedFields.length === 0) {
+      toast.error('Please map at least one column');
+      return;
+    }
+    setStep(3);
+  };
+
   const handleImport = async () => {
     setImporting(true);
     const formData = new FormData();

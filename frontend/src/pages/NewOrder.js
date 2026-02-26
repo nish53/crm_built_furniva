@@ -17,8 +17,10 @@ export const NewOrder = () => {
     order_number: '',
     order_date: new Date().toISOString().split('T')[0],
     dispatch_by: '',
+    delivery_by: '',
     customer_name: '',
     phone: '',
+    phone_secondary: '',
     shipping_address: '',
     city: '',
     state: '',
@@ -46,7 +48,8 @@ export const NewOrder = () => {
         ...formData,
         customer_id: crypto.randomUUID(),
         order_date: new Date(formData.order_date).toISOString(),
-        dispatch_by: new Date(formData.dispatch_by).toISOString(),
+        dispatch_by: formData.dispatch_by ? new Date(formData.dispatch_by).toISOString() : null,
+        delivery_by: formData.delivery_by ? new Date(formData.delivery_by).toISOString() : null,
         quantity: parseInt(formData.quantity),
         price: parseFloat(formData.price),
       };
@@ -133,6 +136,17 @@ export const NewOrder = () => {
                   required
                 />
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="delivery_by">Delivery By</Label>
+                <Input
+                  data-testid="delivery-by-input"
+                  id="delivery_by"
+                  type="date"
+                  value={formData.delivery_by}
+                  onChange={(e) => handleChange('delivery_by', e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="border-t border-border pt-6">
@@ -157,6 +171,16 @@ export const NewOrder = () => {
                     value={formData.phone}
                     onChange={(e) => handleChange('phone', e.target.value)}
                     required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="phone_secondary">Alternate Number</Label>
+                  <Input
+                    data-testid="phone-secondary-input"
+                    id="phone_secondary"
+                    value={formData.phone_secondary}
+                    onChange={(e) => handleChange('phone_secondary', e.target.value)}
                   />
                 </div>
 
