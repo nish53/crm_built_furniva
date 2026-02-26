@@ -403,6 +403,151 @@ async def import_csv(
             if order_data.get("order_date"):
                 try:
                     order_data["order_date"] = date_parser.parse(order_data["order_date"]).isoformat()
+
+
+@router.post("/import-historical")
+async def import_historical_orders(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Import historical orders with comprehensive status data
+    
+    Expected headers:
+    Order ID, Order Date, Dispatch By, Delivery By, Actual Dispatch Date,
+    Order Conf Calling, Assembly Type, Dispatch Confirmation Sent,
+    Did Not Pick Day 1, Confirmed on Day 1?, Did Not Pick Day 2, Confirmed on Day 2?,
+    Did Not Pick Day 3, Confirmed on Day 3?, Deliver Conf, Review Conf,
+    Delivery Date, Customer Name, Billing No., Shipping No., Place, State,
+    Pincode, SKU, Qty, Tracking, Actual Shipping Company, Instructions,
+    Live Status, Price, Pickup Status, Reason for Cancellation/Replacement
+    """
+    filename = file.filename.lower()
+    if not filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="File must be a CSV file")
+    
+    try:
+        content = await file.read()
+        
+        # Try multiple encodings
+        content_str = None
+        for encoding in ['utf-8', 'utf-8-sig', 'latin-1', 'iso-8859-1']:
+            try:
+                content_str = content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        
+        if not content_str:
+            raise HTTPException(status_code=400, detail="Unable to decode file")
+        
+        # Parse CSV
+        reader = csv.DictReader(io.StringIO(content_str))
+        imported_count = 0
+        skipped_count = 0
+        error_count = 0
+        errors = []
+        
+        for row_num, row in enumerate(reader, start=2):
+            try:
+                # Skip empty rows
+                if not row or not any(row.values()):
+                    skipped_count += 1
+                    continue
+                
+                # Parse order data
+                order_id = row.get("Order ID", "").strip()
+                if not order_id:
+                    skipped_count += 1
+                    continue
+                
+                # Check if order already exists
+                existing = await db.orders.find_one({"order_number": order_id})
+                if existing:
+                    skipped_count += 1
+                    continue
+                
+                # Parse dates
+                def parse_date(date_str):
+                    if not date_str or date_str.strip() == "":
+                        return None
+                    try:
+                        return date_parser.parse(date_str).isoformat()
+                    except:
+                        return None
+                
+                # Map status
+                live_status = row.get("Live Status", "").lower()
+                status_mapping = {
+                    "delivered": "delivered",
+                    "in transit": "dispatched",
+                    "returned": "returned",
+                    "cancelled": "cancelled",
+                    "damaged": "returned",
+                    "lost": "cancelled",
+                    "replaced": "replacement"
+                }
+                status = status_mapping.get(live_status, "delivered")
+                
+                # Build order object
+                order = {
+                    "id": str(uuid.uuid4()),
+                    "channel": "historical",
+                    "order_number": order_id,
+                    "order_date": parse_date(row.get("Order Date")) or datetime.now(timezone.utc).isoformat(),
+                    "dispatch_by": parse_date(row.get("Dispatch By")),
+                    "delivery_by": parse_date(row.get("Delivery By")),
+                    "dispatch_date": parse_date(row.get("Actual Dispatch Date")),
+                    "delivery_date": parse_date(row.get("Delivery Date")),
+                    "customer_id": str(uuid.uuid4()),
+                    "customer_name": row.get("Customer Name", "Unknown"),
+                    "phone": row.get("Billing No.", row.get("Shipping No.", "")),
+                    "phone_secondary": row.get("Shipping No.") if row.get("Shipping No.") != row.get("Billing No.") else None,
+                    "city": row.get("Place", ""),
+                    "state": row.get("State", ""),
+                    "pincode": row.get("Pincode", ""),
+                    "sku": row.get("SKU", ""),
+                    "product_name": row.get("SKU", "Product"),
+                    "quantity": int(float(row.get("Qty", "1") or "1")),
+                    "price": float(row.get("Price", "0") or "0"),
+                    "status": status,
+                    "tracking_number": row.get("Tracking", ""),
+                    "courier_partner": row.get("Actual Shipping Company", ""),
+                    "instructions": row.get("Instructions", ""),
+                    "assembly_type": row.get("Assembly Type", ""),
+                    "dc1_called": row.get("Order Conf Calling", "").lower() in ["yes", "done", "completed"],
+                    "cp_sent": row.get("Dispatch Confirmation Sent", "").lower() in ["yes", "done", "sent"],
+                    "dnp1_conf": row.get("Did Not Pick Day 1", "").lower() in ["yes", "true"],
+                    "dnp2_conf": row.get("Did Not Pick Day 2", "").lower() in ["yes", "true"],
+                    "dnp3_conf": row.get("Did Not Pick Day 3", "").lower() in ["yes", "true"],
+                    "deliver_conf": row.get("Deliver Conf", "").lower() in ["yes", "done", "sent"],
+                    "review_conf": row.get("Review Conf", "").lower() in ["yes", "done", "sent"],
+                    "pickup_status": row.get("Pickup Status", ""),
+                    "cancellation_reason": row.get("Reason for Cancellation/Replacement", ""),
+                    "internal_notes": f"Imported from historical data. Original status: {live_status}",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "is_historical": True
+                }
+                
+                await db.orders.insert_one(order)
+                imported_count += 1
+                
+            except Exception as e:
+                error_count += 1
+                errors.append(f"Row {row_num}: {str(e)}")
+                if len(errors) <= 10:  # Only store first 10 errors
+                    continue
+        
+        return {
+            "imported": imported_count,
+            "skipped": skipped_count,
+            "errors": error_count,
+            "error_details": errors[:10] if errors else []
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+
                 except Exception:
                     order_data["order_date"] = datetime.now(timezone.utc).isoformat()
             else:
