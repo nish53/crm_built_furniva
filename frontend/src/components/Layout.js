@@ -28,13 +28,13 @@ export const Layout = () => {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Orders', href: '/orders', icon: Package },
-    { name: 'Returns', href: '/returns', icon: RefreshCcw },
-    { name: 'Master SKU', href: '/master-sku', icon: Archive },
-    { name: 'Channels', href: '/channels', icon: Package },
-    { name: 'WhatsApp', href: '/whatsapp', icon: MessageSquare },
-    { name: 'Tasks', href: '/tasks', icon: CheckSquare },
     { name: 'Inventory', href: '/inventory', icon: Archive },
+    { name: 'Returns', href: '/returns', icon: RefreshCcw },
+    { name: 'Costing', href: '/costing', icon: DollarSign },
+    { name: 'Channels', href: '/channels', icon: Layers },
+    { name: 'Tasks', href: '/tasks', icon: CheckSquare },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+    { name: 'WhatsApp', href: '/whatsapp', icon: MessageSquare },
     { name: 'Team', href: '/team', icon: Users },
   ];
 
