@@ -37,7 +37,6 @@ export const Orders = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState('all');
-  const [showImportModal, setShowImportModal] = useState(false);
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const navigate = useNavigate();
