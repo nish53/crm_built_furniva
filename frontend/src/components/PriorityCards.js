@@ -194,7 +194,7 @@ export const PriorityCards = () => {
                   </div>
                   <Button
                     size="sm"
-                    onClick={() => navigate('/master-sku')}
+                    onClick={() => handleMapSKU(item.sku)}
                   >
                     Map SKU
                   </Button>
