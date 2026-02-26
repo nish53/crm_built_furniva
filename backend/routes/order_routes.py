@@ -144,12 +144,14 @@ async def bulk_delete_orders(
 
 @router.post("/bulk-update")
 async def bulk_update_orders(
-    order_ids: List[str],
-    status: Optional[str] = None,
+    request_data: dict,
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
     """Update multiple orders with the same status"""
+    order_ids = request_data.get("order_ids", [])
+    status = request_data.get("status")
+    
     if not order_ids:
         raise HTTPException(status_code=400, detail="No order IDs provided")
     
