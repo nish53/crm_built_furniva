@@ -12,6 +12,7 @@ import { Tasks } from './pages/Tasks';
 import { Inventory } from './pages/Inventory';
 import { Analytics } from './pages/Analytics';
 import { ImportWizard } from './pages/ImportWizard';
+import { HistoricalImport } from './pages/HistoricalImport';
 import { MasterSKU } from './pages/MasterSKU';
 import { Returns } from './pages/Returns';
 import { Channels } from './pages/Channels';
