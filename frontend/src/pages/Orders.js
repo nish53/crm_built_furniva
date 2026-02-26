@@ -122,6 +122,8 @@ export const Orders = () => {
     }
   };
 
+  const handleSearch = (e) => {
+    e.preventDefault();
     fetchOrders();
   };
 
