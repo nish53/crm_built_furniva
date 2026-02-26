@@ -87,26 +87,48 @@ async def get_return_request(
 async def update_return_status(
     return_id: str,
     status: ReturnStatus,
+    pickup_date: Optional[str] = None,
+    tracking_number: Optional[str] = None,
+    courier_partner: Optional[str] = None,
     notes: Optional[str] = None,
     refund_amount: Optional[float] = None,
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """Update return request status"""
+    """Update return request status with mandatory field validation"""
     return_req = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
     if not return_req:
         raise HTTPException(status_code=404, detail="Return request not found")
-    
+
+    # Mandatory field validation
+    if status == ReturnStatus.PICKUP_SCHEDULED and not pickup_date:
+        raise HTTPException(status_code=400, detail="Pickup date is mandatory for Pickup Scheduled status")
+    if status == ReturnStatus.IN_TRANSIT and not tracking_number:
+        raise HTTPException(status_code=400, detail="Tracking number is mandatory for In Transit status")
+
+    # Record status history
+    history_entry = {
+        "from_status": return_req.get("return_status"),
+        "to_status": status,
+        "changed_at": datetime.now(timezone.utc).isoformat(),
+        "changed_by": current_user.email
+    }
+
     update_data = {
         "return_status": status,
+        "previous_status": return_req.get("return_status"),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
-    
-    # Update date fields based on status
+
+    # Update date/tracking fields based on status
     if status == ReturnStatus.APPROVED:
         update_data["approved_date"] = datetime.now(timezone.utc).isoformat()
     elif status == ReturnStatus.PICKUP_SCHEDULED:
-        update_data["pickup_date"] = datetime.now(timezone.utc).isoformat()
+        update_data["pickup_date"] = pickup_date
+    elif status == ReturnStatus.IN_TRANSIT:
+        update_data["return_tracking_number"] = tracking_number
+        if courier_partner:
+            update_data["courier_partner"] = courier_partner
     elif status == ReturnStatus.RECEIVED:
         update_data["received_date"] = datetime.now(timezone.utc).isoformat()
     elif status == ReturnStatus.INSPECTED:
@@ -115,21 +137,66 @@ async def update_return_status(
         update_data["refund_date"] = datetime.now(timezone.utc).isoformat()
         if refund_amount:
             update_data["refund_amount"] = refund_amount
-    
+
     if notes:
         update_data["qc_notes"] = notes
-    
+
     await db.return_requests.update_one(
         {"id": return_id},
-        {"$set": update_data}
+        {"$set": update_data, "$push": {"status_history": history_entry}}
     )
-    
+
     # Update order status
     await db.orders.update_one(
         {"id": return_req["order_id"]},
         {"$set": {"return_status": status}}
     )
-    
+
+    updated_return = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
+    return ReturnRequest(**updated_return)
+
+
+@router.patch("/{return_id}/undo")
+async def undo_return_status(
+    return_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Undo the last status change on a return request"""
+    return_req = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
+    if not return_req:
+        raise HTTPException(status_code=404, detail="Return request not found")
+
+    previous = return_req.get("previous_status")
+    if not previous:
+        raise HTTPException(status_code=400, detail="No previous status to revert to")
+
+    # Record undo in history
+    history_entry = {
+        "from_status": return_req.get("return_status"),
+        "to_status": previous,
+        "changed_at": datetime.now(timezone.utc).isoformat(),
+        "changed_by": current_user.email,
+        "is_undo": True
+    }
+
+    update_data = {
+        "return_status": previous,
+        "previous_status": None,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    await db.return_requests.update_one(
+        {"id": return_id},
+        {"$set": update_data, "$push": {"status_history": history_entry}}
+    )
+
+    # Also revert order status
+    await db.orders.update_one(
+        {"id": return_req["order_id"]},
+        {"$set": {"return_status": previous}}
+    )
+
     updated_return = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
     return ReturnRequest(**updated_return)
 
