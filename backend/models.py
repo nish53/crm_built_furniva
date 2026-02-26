@@ -98,7 +98,7 @@ class OrderBase(BaseModel):
     state: Optional[str] = None
     pincode: str
     country: Optional[str] = "IN"
-    sku: str
+    sku: Optional[str] = None
     master_sku: Optional[str] = None
     fnsku: Optional[str] = None
     asin: Optional[str] = None
