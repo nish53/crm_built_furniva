@@ -147,7 +147,7 @@ export const MasterSKU = () => {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {unmappedSkus.slice(0, 6).map((item, idx) => (
+              {(showAllUnmapped ? unmappedSkus : unmappedSkus.slice(0, 6)).map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border">
                   <div>
                     <p className="font-medium text-sm">{item.sku}</p>
@@ -167,9 +167,13 @@ export const MasterSKU = () => {
               ))}
             </div>
             {unmappedSkus.length > 6 && (
-              <p className="text-sm text-muted-foreground mt-3">
-                And {unmappedSkus.length - 6} more unmapped SKUs...
-              </p>
+              <Button 
+                variant="link" 
+                className="mt-3" 
+                onClick={() => setShowAllUnmapped(!showAllUnmapped)}
+              >
+                {showAllUnmapped ? 'Show Less' : `Show All ${unmappedSkus.length} SKUs`}
+              </Button>
             )}
           </CardContent>
         </Card>
