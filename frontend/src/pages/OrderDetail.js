@@ -109,6 +109,38 @@ export const OrderDetail = () => {
     } catch { toast.error('Failed to calculate financials'); }
   };
 
+  const handleEditOrder = () => {
+    setEditForm({
+      status: order.status || '',
+      tracking_number: order.tracking_number || '',
+      courier_partner: order.courier_partner || '',
+      customer_name: order.customer_name || '',
+      phone: order.phone || '',
+      phone_secondary: order.phone_secondary || '',
+      city: order.city || '',
+      state: order.state || '',
+      pincode: order.pincode || '',
+      shipping_address: order.shipping_address || '',
+      instructions: order.instructions || '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    setUpdating(true);
+    try {
+      await api.patch(`/orders/${id}`, editForm);
+      toast.success('Order updated successfully');
+      setShowEditModal(false);
+      fetchOrder();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update order');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const safeDate = (d) => { if (!d) return null; try { return format(new Date(d), 'MMM dd, yyyy HH:mm'); } catch { return '-'; } };
   const safeDateShort = (d) => { if (!d) return '-'; try { return format(new Date(d), 'MMM dd, yyyy'); } catch { return '-'; } };
 
