@@ -74,6 +74,7 @@ class FurnivaAPITester:
         test_orders = [
             {
                 "order_number": f"TEST-DISPATCH-{uuid.uuid4().hex[:8]}",
+                "customer_id": str(uuid.uuid4()),
                 "customer_name": "John Smith",
                 "phone": "9876543210",
                 "city": "Mumbai",
@@ -85,12 +86,13 @@ class FurnivaAPITester:
                 "price": 25000.0,
                 "channel": "website",
                 "status": "confirmed",
-                "order_date": today,
-                "dispatch_by": today,  # Needs dispatch today
-                "delivery_by": tomorrow
+                "order_date": today + "T10:00:00Z",
+                "dispatch_by": today + "T18:00:00Z",  # Needs dispatch today
+                "delivery_by": tomorrow + "T18:00:00Z"
             },
             {
                 "order_number": f"TEST-DELAYED-{uuid.uuid4().hex[:8]}",
+                "customer_id": str(uuid.uuid4()),
                 "customer_name": "Jane Doe",
                 "phone": "8765432109",
                 "city": "Bangalore",
@@ -102,12 +104,13 @@ class FurnivaAPITester:
                 "price": 15000.0,
                 "channel": "amazon",
                 "status": "dispatched",
-                "order_date": yesterday,
-                "dispatch_by": yesterday,
-                "delivery_by": yesterday  # Delayed order (past delivery date)
+                "order_date": yesterday + "T10:00:00Z",
+                "dispatch_by": yesterday + "T18:00:00Z",
+                "delivery_by": yesterday + "T18:00:00Z"  # Delayed order (past delivery date)
             },
             {
                 "order_number": f"TEST-UNMAPPED-{uuid.uuid4().hex[:8]}",
+                "customer_id": str(uuid.uuid4()),
                 "customer_name": "Bob Wilson",
                 "phone": "7654321098",
                 "city": "Delhi",
@@ -119,7 +122,7 @@ class FurnivaAPITester:
                 "price": 10000.0,
                 "channel": "flipkart",
                 "status": "pending",
-                "order_date": today
+                "order_date": today + "T10:00:00Z"
             }
         ]
         
