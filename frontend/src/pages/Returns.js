@@ -337,26 +337,65 @@ export const Returns = () => {
       </Card>
 
       {/* Top Problematic Products */}
-      {analytics && analytics.top_problematic_products.length > 0 && (
+      {analytics && analytics.top_products_by_loss && analytics.top_products_by_loss.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="font-[Manrope] flex items-center gap-2">
               <TrendingUp className="w-5 h-5" />
-              Top Problematic Products
+              Top Problematic Products (by Loss)
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {analytics.top_problematic_products.map((product, idx) => (
+              {analytics.top_products_by_loss.map((product, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 bg-secondary/20 rounded">
                   <span className="font-[JetBrains_Mono] text-sm">{product.sku}</span>
-                  <Badge variant="destructive">{product.count} returns</Badge>
+                  <Badge variant="destructive">₹{product.loss.toLocaleString()} loss</Badge>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Pincode Analysis */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {analytics && analytics.top_problematic_pincodes && analytics.top_problematic_pincodes.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-[Manrope] text-lg">Top Return Pincodes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {analytics.top_problematic_pincodes.slice(0, 5).map((pincode, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 bg-secondary/20 rounded">
+                    <span className="font-medium">{pincode.pincode}</span>
+                    <Badge>{pincode.count} returns</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {analytics && analytics.top_damage_pincodes && analytics.top_damage_pincodes.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-[Manrope] text-lg">Top Damage Pincodes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {analytics.top_damage_pincodes.slice(0, 5).map((pincode, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 bg-secondary/20 rounded">
+                    <span className="font-medium">{pincode.pincode}</span>
+                    <Badge variant="destructive">{pincode.damage_count} damaged</Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 };
