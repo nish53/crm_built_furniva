@@ -188,6 +188,19 @@ class Order(OrderBase):
     payment_method: Optional[str] = None
     is_business_order: bool = False
     is_prime: bool = False
+    
+    # Loss Calculation Fields
+    logistics_cost_outbound: Optional[float] = 0.0  # Cost to ship to customer
+    logistics_cost_return: Optional[float] = 0.0  # Cost for return shipping
+    product_cost: Optional[float] = 0.0  # Actual product cost (from master SKU or manual)
+    replacement_parts_cost: Optional[float] = 0.0  # Cost of replacement parts
+    total_loss: Optional[float] = 0.0  # Calculated total loss
+    loss_category: Optional[str] = None  # pfc, resolved, refunded, fraud
+    loss_calculation_method: Optional[str] = "auto"  # auto or manual
+    loss_edited_by: Optional[str] = None  # User who edited loss
+    loss_edited_at: Optional[datetime] = None  # When loss was edited
+    loss_notes: Optional[str] = None  # Notes about loss calculation
+    
     last_updated: Optional[datetime] = None
 
 class OrderUpdate(BaseModel):
@@ -573,6 +586,44 @@ class Claim(ClaimBase):
     id: str
     created_at: datetime
     filed_by: str
+
+
+# Loss Calculation Configuration
+class LossConfiguration(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = "loss_config"  # Single document
+    
+    # Configurable percentages and variables
+    pfc_loss_percentage: float = 0.0  # PFC has 0% loss
+    resolved_cost_percentage: float = 15.0  # Resolved costs 15% of price (user configurable)
+    
+    # Default logistics costs (can be overridden per order)
+    default_outbound_logistics: float = 100.0  # Default shipping cost
+    default_return_logistics: float = 100.0  # Default return cost
+    
+    # Calculation rules
+    refunded_includes_product_cost_if_damage: bool = True  # Add product cost if damage-related
+    fraud_includes_product_and_logistics: bool = True  # Fraud = product + both logistics
+    
+    updated_at: datetime
+    updated_by: str
+
+class LossConfigurationUpdate(BaseModel):
+    pfc_loss_percentage: Optional[float] = None
+    resolved_cost_percentage: Optional[float] = None
+    default_outbound_logistics: Optional[float] = None
+    default_return_logistics: Optional[float] = None
+    refunded_includes_product_cost_if_damage: Optional[bool] = None
+    fraud_includes_product_and_logistics: Optional[bool] = None
+
+class OrderLossUpdate(BaseModel):
+    logistics_cost_outbound: Optional[float] = None
+    logistics_cost_return: Optional[float] = None
+    product_cost: Optional[float] = None
+    replacement_parts_cost: Optional[float] = None
+    total_loss: Optional[float] = None
+    loss_notes: Optional[str] = None
+
     resolved_at: Optional[datetime] = None
     resolution_notes: Optional[str] = None
 

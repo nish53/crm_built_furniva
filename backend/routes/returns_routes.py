@@ -141,22 +141,22 @@ async def get_returns_analytics(
         pincode = order.get("pincode", "Unknown")
         courier = order.get("courier_partner", "Unknown")
         
-        # Categorize
+        # Categorize and calculate actual loss
         if category == "pfc":
             pfc_count += 1
-            pfc_loss += price * 0.1  # Minimal loss (10% of order value as operational cost)
+            pfc_loss += order.get("total_loss", price * 0.1)  # Use actual or fallback
         
         elif category == "resolved":
             resolved_count += 1
-            resolved_cost += price * 0.2  # Operational cost (20% - replacement/carpenter)
+            resolved_cost += order.get("total_loss", price * 0.15)  # Use actual or fallback
         
         elif category == "refunded":
             refunded_count += 1
-            refunded_loss += price  # Full refund = full loss
+            refunded_loss += order.get("total_loss", price)  # Use actual or fallback
         
         elif category == "fraud":
             fraud_count += 1
-            fraud_loss += price * 2  # Double loss (product + refund)
+            fraud_loss += order.get("total_loss", price * 2)  # Use actual or fallback
         
         # By reason
         reason_breakdown[reason] = reason_breakdown.get(reason, 0) + 1
