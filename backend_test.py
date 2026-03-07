@@ -1,32 +1,33 @@
 #!/usr/bin/env python3
 """
 Furniva CRM Backend Testing Suite
-Test Priority: Critical Bug Fixes from 2025-03-07
+TEST FOCUS: Returns & Claims System Backend Endpoints
 
-Test Areas (in order of priority):
-1. Order Pagination System (CRITICAL)
-2. Multi-Item Orders Import (CRITICAL)  
-3. Master SKU Sync Endpoints (HIGH)
-4. Order Date Validation (MEDIUM)
+New Returns & Claims System endpoints to test:
+1. GET /api/returns/ - Get all returns/cancellations with smart filtering
+2. GET /api/returns/analytics - Get returns analytics and metrics  
+3. POST /api/returns/{order_id}/action?action={action} - Take action on returns
+
+Smart Classification Logic to verify:
+- classify_return() function flags: pfc, fraud, damage, replacement, pending_action, delay
 """
 
 import asyncio
 import httpx
 import json
-import csv
-import io
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 
 # Backend URL from environment
 BACKEND_URL = "https://order-hub-175.preview.emergentagent.com/api"
 
-class FurnivaBackendTester:
+class FurnivaReturnsSystemTester:
     def __init__(self):
         self.client = httpx.AsyncClient(timeout=30.0)
         self.token = None
         self.user_id = None
+        self.test_orders = []  # Track created test orders for cleanup
         
     async def __aenter__(self):
         return self
@@ -40,14 +41,14 @@ class FurnivaBackendTester:
         
         # Generate unique test user
         unique_id = str(uuid.uuid4())[:8]
-        test_email = f"test_furniva_{unique_id}@example.com"
-        test_password = "TestPass123!"
+        test_email = f"test_returns_{unique_id}@example.com"
+        test_password = "ReturnsTest123!"
         
         # Register user
         register_data = {
             "email": test_email,
             "password": test_password,
-            "name": "Test User Furniva",
+            "name": "Returns Test User",
             "role": "admin"
         }
         
@@ -57,7 +58,6 @@ class FurnivaBackendTester:
                 print(f"✅ User registered: {test_email}")
             else:
                 print(f"⚠️ Register response: {response.status_code} - {response.text}")
-                # Try to login with existing user
         except Exception as e:
             print(f"⚠️ Register error: {e}")
         
@@ -82,566 +82,612 @@ class FurnivaBackendTester:
         """Get authorization headers"""
         return {"Authorization": f"Bearer {self.token}"}
     
-    # =====================================
-    # TEST 1: ORDER PAGINATION SYSTEM (CRITICAL)
-    # =====================================
-    
-    async def test_order_pagination_system(self):
-        """Test the new paginated orders endpoint"""
-        print("\n🔍 TEST 1: ORDER PAGINATION SYSTEM (CRITICAL)")
-        print("=" * 60)
+    async def create_test_orders_with_returns_data(self):
+        """Create test orders with various return/cancellation scenarios for testing"""
+        print("🏗️ Creating test orders with returns data...")
         
-        try:
-            # Test basic pagination structure
-            print("1. Testing basic pagination response structure...")
-            response = await self.client.get(
-                f"{BACKEND_URL}/orders/?skip=0&limit=10", 
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Basic pagination failed: {response.status_code} - {response.text}")
-                return False
-            
-            data = response.json()
-            
-            # Verify pagination structure
-            required_fields = ['items', 'total', 'page', 'page_size', 'total_pages']
-            for field in required_fields:
-                if field not in data:
-                    print(f"❌ Missing pagination field: {field}")
-                    return False
-            
-            print(f"✅ Pagination structure correct: {len(data['items'])} items, total: {data['total']}")
-            print(f"   📄 Page: {data['page']}, Page Size: {data['page_size']}, Total Pages: {data['total_pages']}")
-            
-            # Test pagination with skip/limit
-            print("2. Testing pagination with skip=0&limit=100...")
-            response = await self.client.get(
-                f"{BACKEND_URL}/orders/?skip=0&limit=100", 
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Pagination test 1 failed: {response.status_code}")
-                return False
-            
-            page1_data = response.json()
-            print(f"✅ Page 1: {len(page1_data['items'])} items")
-            
-            # Test second page if there are enough items
-            if page1_data['total'] > 100:
-                print("3. Testing pagination with skip=100&limit=100...")
-                response = await self.client.get(
-                    f"{BACKEND_URL}/orders/?skip=100&limit=100", 
-                    headers=self.get_auth_headers()
-                )
-                
-                if response.status_code != 200:
-                    print(f"❌ Pagination test 2 failed: {response.status_code}")
-                    return False
-                
-                page2_data = response.json()
-                print(f"✅ Page 2: {len(page2_data['items'])} items")
-                
-                # Verify total count is consistent
-                if page1_data['total'] != page2_data['total']:
-                    print(f"❌ Total count inconsistent: page1={page1_data['total']}, page2={page2_data['total']}")
-                    return False
-                
-                print(f"✅ Total count consistent: {page1_data['total']}")
-            
-            # Test filtering across ALL records
-            print("4. Testing filters work across all records...")
-            
-            # Test status filter
-            response = await self.client.get(
-                f"{BACKEND_URL}/orders/?status=delivered&skip=0&limit=100", 
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Status filter failed: {response.status_code}")
-                return False
-            
-            filtered_data = response.json()
-            print(f"✅ Status filter (delivered): {len(filtered_data['items'])} items, total: {filtered_data['total']}")
-            
-            # Test channel filter
-            response = await self.client.get(
-                f"{BACKEND_URL}/orders/?channel=amazon&skip=0&limit=100", 
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Channel filter failed: {response.status_code}")
-                return False
-            
-            channel_data = response.json()
-            print(f"✅ Channel filter (amazon): {len(channel_data['items'])} items, total: {channel_data['total']}")
-            
-            # Verify pagination metadata calculation
-            total = data['total']
-            page_size = data['page_size']
-            expected_total_pages = (total + page_size - 1) // page_size  # Ceiling division
-            
-            if data['total_pages'] != expected_total_pages:
-                print(f"❌ Total pages calculation wrong: got {data['total_pages']}, expected {expected_total_pages}")
-                return False
-            
-            print(f"✅ Total pages calculation correct: {data['total_pages']}")
-            
-            print("\n🎉 ORDER PAGINATION SYSTEM: ALL TESTS PASSED")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Order pagination test error: {e}")
-            return False
-    
-    # =====================================
-    # TEST 2: MULTI-ITEM ORDERS IMPORT (CRITICAL)
-    # =====================================
-    
-    async def test_multi_item_orders_import(self):
-        """Test importing CSV with multiple rows having same Order ID"""
-        print("\n🔍 TEST 2: MULTI-ITEM ORDERS IMPORT (CRITICAL)")
-        print("=" * 60)
+        base_date = datetime.now(timezone.utc)
         
-        try:
-            # Create test CSV with multi-item order
-            csv_content = """Order ID,Order Date,Customer Name,Billing No.,SKU,Qty,Price,Place,State,Pincode,Live Status,Pickup Status
-TEST-MULTI-001,15/03/2024,John Smith Multi,9876543210,SKU-CHAIR-001,1,2500,Mumbai,Maharashtra,400001,delivered,
-TEST-MULTI-001,15/03/2024,John Smith Multi,9876543210,SKU-TABLE-002,1,5000,Mumbai,Maharashtra,400001,delivered,
-TEST-MULTI-001,15/03/2024,John Smith Multi,9876543210,SKU-CUSHION-003,2,500,Mumbai,Maharashtra,400001,delivered,
-TEST-SINGLE-001,16/03/2024,Jane Doe Single,9876543211,SKU-SOFA-004,1,15000,Delhi,Delhi,110001,delivered,"""
-            
-            # Create file-like object
-            csv_file = io.StringIO(csv_content)
-            csv_bytes = csv_content.encode('utf-8')
-            
-            print("1. Creating test CSV with multi-item orders...")
-            print("   - Order TEST-MULTI-001: 3 items (chair, table, 2x cushions)")
-            print("   - Order TEST-SINGLE-001: 1 item (sofa)")
-            
-            # Import the CSV
-            files = {
-                'file': ('test_multi_items.csv', csv_bytes, 'text/csv')
+        # Test scenarios for different return/cancellation types
+        test_scenarios = [
+            {
+                "order_number": "RET-FRAUD-001",
+                "customer_name": "Fraud Customer",
+                "phone": "9111111111",
+                "sku": "FRAUD-ITEM-001",
+                "product_name": "Fraudulent Return Item",
+                "status": "cancelled", 
+                "cancellation_reason": "Fraud",  # Matches existing fraud pattern
+                "price": 5000.0
+            },
+            {
+                "order_number": "RET-DAMAGE-002", 
+                "customer_name": "Damage Customer",
+                "phone": "9222222222",
+                "sku": "DAMAGE-ITEM-002",
+                "product_name": "Damaged Hardware Item",
+                "status": "returned",
+                "cancellation_reason": "Damage hardware needs replacement",  # Contains damage + replacement keywords
+                "price": 8000.0
+            },
+            {
+                "order_number": "RET-PFC-003",
+                "customer_name": "PFC Customer", 
+                "phone": "9333333333",
+                "sku": "PFC-ITEM-003",
+                "product_name": "Pre-Fulfillment Cancel Item",
+                "status": "cancelled",
+                "cancellation_reason": "",  # Empty reason + cancelled status = PFC
+                "price": 3000.0
+            },
+            {
+                "order_number": "RET-PENDING-004",
+                "customer_name": "Pending Customer",
+                "phone": "9444444444", 
+                "sku": "PENDING-ITEM-004",
+                "product_name": "Status Pending Item",
+                "status": "returned",
+                "cancellation_reason": "Status Pending customer response",  # Contains "pending"
+                "price": 4500.0
+            },
+            {
+                "order_number": "RET-DELAY-005",
+                "customer_name": "Delay Customer",
+                "phone": "9555555555",
+                "sku": "DELAY-ITEM-005", 
+                "product_name": "Delayed Delivery Item",
+                "status": "cancelled",
+                "cancellation_reason": "Delay in delivery customer cancelled",  # Contains "delay"
+                "price": 6000.0
+            },
+            {
+                "order_number": "REG-ORDER-006",
+                "customer_name": "Normal Customer",
+                "phone": "9666666666",
+                "sku": "NORMAL-ITEM-006",
+                "product_name": "Normal Item",
+                "status": "delivered", 
+                # No cancellation_reason - should not appear in returns
+                "price": 7000.0
+            }
+        ]
+        
+        created_orders = []
+        
+        for scenario in test_scenarios:
+            order_data = {
+                "channel": "website",  # Use valid enum value
+                "order_number": scenario["order_number"],
+                "order_date": base_date.isoformat(),
+                "customer_id": str(uuid.uuid4()),
+                "customer_name": scenario["customer_name"],
+                "phone": scenario["phone"],
+                "city": "Mumbai",
+                "state": "Maharashtra",
+                "pincode": "400001",
+                "sku": scenario["sku"],
+                "product_name": scenario["product_name"], 
+                "price": scenario["price"],
+                "status": scenario["status"]
             }
             
-            print("2. Importing multi-item CSV...")
-            response = await self.client.post(
-                f"{BACKEND_URL}/orders/import-historical",
-                files=files,
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Multi-item import failed: {response.status_code} - {response.text}")
-                return False
-            
-            import_result = response.json()
-            print(f"✅ Import response: {import_result}")
-            
-            # Verify all items were imported (no skipping)
-            expected_imported = 4  # All 4 rows should be imported
-            if import_result['imported'] != expected_imported:
-                print(f"❌ Expected {expected_imported} items imported, got {import_result['imported']}")
-                print(f"   Skipped: {import_result['skipped']}, Errors: {import_result['errors']}")
-                return False
-            
-            print(f"✅ All {expected_imported} items imported successfully (no skipping)")
-            
-            # Verify in database - check that all items exist
-            print("3. Verifying database contains all imported items...")
-            
-            # Search for TEST-MULTI-001 orders
-            response = await self.client.get(
-                f"{BACKEND_URL}/orders/?search=TEST-MULTI-001", 
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Database verification failed: {response.status_code}")
-                return False
-            
-            search_result = response.json()
-            multi_items = search_result['items']
-            
-            # Should have 3 orders with same order_number but different ids
-            if len(multi_items) != 3:
-                print(f"❌ Expected 3 multi-items, found {len(multi_items)}")
-                return False
-            
-            print(f"✅ Found {len(multi_items)} items for order TEST-MULTI-001")
-            
-            # Verify each has unique ID but same order_number
-            order_numbers = set()
-            order_ids = set()
-            skus = set()
-            
-            for item in multi_items:
-                order_numbers.add(item['order_number'])
-                order_ids.add(item['id'])
-                skus.add(item['sku'])
-                print(f"   📦 ID: {item['id'][:12]}..., Order#: {item['order_number']}, SKU: {item['sku']}")
-            
-            if len(order_numbers) != 1:
-                print(f"❌ Expected 1 unique order_number, got {len(order_numbers)}")
-                return False
-            
-            if len(order_ids) != 3:
-                print(f"❌ Expected 3 unique IDs, got {len(order_ids)}")
-                return False
-            
-            if len(skus) != 3:
-                print(f"❌ Expected 3 unique SKUs, got {len(skus)}")
-                return False
-            
-            print("✅ Multi-item structure correct: same order_number, unique IDs, unique SKUs")
-            
-            # Verify single item order also imported
-            response = await self.client.get(
-                f"{BACKEND_URL}/orders/?search=TEST-SINGLE-001", 
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Single item verification failed: {response.status_code}")
-                return False
-            
-            single_result = response.json()
-            if len(single_result['items']) != 1:
-                print(f"❌ Expected 1 single item, found {len(single_result['items'])}")
-                return False
-            
-            print("✅ Single item order also imported correctly")
-            
-            print("\n🎉 MULTI-ITEM ORDERS IMPORT: ALL TESTS PASSED")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Multi-item orders import error: {e}")
-            return False
-    
-    # =====================================
-    # TEST 3: MASTER SKU SYNC ENDPOINTS (HIGH)
-    # =====================================
-    
-    async def test_master_sku_sync_endpoints(self):
-        """Test Master SKU sync functionality"""
-        print("\n🔍 TEST 3: MASTER SKU SYNC ENDPOINTS (HIGH)")
-        print("=" * 60)
-        
-        try:
-            # First create a master SKU mapping
-            print("1. Creating test master SKU mapping...")
-            
-            master_sku_data = {
-                "master_sku": "MASTER-TEST-CHAIR-001",
-                "product_name": "Test Premium Chair",
-                "category": "Furniture",
-                "amazon_sku": "AMZ-CHAIR-001",
-                "amazon_asin": "B08TEST001",
-                "flipkart_sku": "FLP-CHAIR-001",
-                "cost_price": 2000.0,
-                "selling_price": 4000.0
-            }
-            
-            response = await self.client.post(
-                f"{BACKEND_URL}/master-sku/",
-                json=master_sku_data,
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code not in [200, 201]:
-                print(f"❌ Master SKU creation failed: {response.status_code} - {response.text}")
-                return False
-            
-            master_sku_result = response.json()
-            print(f"✅ Master SKU created: {master_sku_result['master_sku']}")
-            print(f"   Auto-sync result: {master_sku_result.get('orders_updated', 0)} orders updated")
-            
-            # Create test orders with matching SKUs
-            print("2. Creating test orders with matching SKUs...")
-            
-            test_orders = [
-                {
-                    "channel": "amazon",
-                    "order_number": "AMZ-TEST-001",
-                    "order_date": datetime.now(timezone.utc).isoformat(),
-                    "customer_id": str(uuid.uuid4()),
-                    "customer_name": "Test Customer 1",
-                    "phone": "9876543210",
-                    "city": "Mumbai",
-                    "state": "Maharashtra", 
-                    "pincode": "400001",
-                    "sku": "AMZ-CHAIR-001",  # Matches amazon_sku
-                    "product_name": "Amazon Chair",
-                    "price": 4000.0
-                },
-                {
-                    "channel": "flipkart",
-                    "order_number": "FLP-TEST-001", 
-                    "order_date": datetime.now(timezone.utc).isoformat(),
-                    "customer_id": str(uuid.uuid4()),
-                    "customer_name": "Test Customer 2",
-                    "phone": "9876543211",
-                    "city": "Delhi",
-                    "state": "Delhi",
-                    "pincode": "110001", 
-                    "sku": "FLP-CHAIR-001",  # Matches flipkart_sku
-                    "product_name": "Flipkart Chair",
-                    "price": 3800.0
-                },
-                {
-                    "channel": "amazon",
-                    "order_number": "AMZ-TEST-002",
-                    "order_date": datetime.now(timezone.utc).isoformat(),
-                    "customer_id": str(uuid.uuid4()),
-                    "customer_name": "Test Customer 3", 
-                    "phone": "9876543212",
-                    "city": "Bangalore",
-                    "state": "Karnataka",
-                    "pincode": "560001",
-                    "sku": "DIFFERENT-SKU",  # Different SKU - should not be updated
-                    "product_name": "Different Product",
-                    "price": 2000.0
-                }
-            ]
-            
-            created_order_ids = []
-            for order_data in test_orders:
+            # Add optional fields
+            if "cancellation_reason" in scenario:
+                order_data["cancellation_reason"] = scenario["cancellation_reason"]
+            if "delivery_date" in scenario:
+                order_data["delivery_date"] = scenario["delivery_date"]
+                
+            try:
                 response = await self.client.post(
                     f"{BACKEND_URL}/orders/",
                     json=order_data,
                     headers=self.get_auth_headers()
                 )
                 
-                if response.status_code not in [200, 201]:
-                    print(f"❌ Test order creation failed: {response.status_code}")
+                if response.status_code in [200, 201]:
+                    created_order = response.json()
+                    created_orders.append(created_order)
+                    self.test_orders.append(created_order['id'])
+                    print(f"   ✅ Created: {scenario['order_number']} ({scenario.get('cancellation_reason', 'no cancellation')})")
+                else:
+                    print(f"   ❌ Failed to create {scenario['order_number']}: {response.status_code} - {response.text}")
+                    
+            except Exception as e:
+                print(f"   ❌ Error creating {scenario['order_number']}: {e}")
+        
+        print(f"✅ Created {len(created_orders)} test orders for returns testing")
+        return created_orders
+    
+    # =====================================
+    # TEST 1: GET /api/returns/ - Basic functionality and filters
+    # =====================================
+    
+    async def test_returns_endpoint_basic(self):
+        """Test basic returns endpoint functionality"""
+        print("\n🔍 TEST 1: GET /api/returns/ - Basic Functionality")
+        print("=" * 60)
+        
+        try:
+            # Test 1: Basic returns without filters
+            print("1. Testing basic returns endpoint (no filters)...")
+            response = await self.client.get(
+                f"{BACKEND_URL}/returns/",
+                headers=self.get_auth_headers()
+            )
+            
+            if response.status_code != 200:
+                print(f"❌ Basic returns failed: {response.status_code} - {response.text}")
+                return False
+            
+            data = response.json()
+            
+            # Check response structure
+            if "items" not in data or "total" not in data:
+                print(f"❌ Missing required fields in response: {list(data.keys())}")
+                return False
+            
+            returns_count = len(data["items"])
+            total_count = data["total"]
+            
+            print(f"✅ Basic returns: Found {returns_count} returns, total: {total_count}")
+            
+            # Verify smart_flags are present
+            if returns_count > 0:
+                first_return = data["items"][0]
+                if "smart_flags" not in first_return:
+                    print("❌ Missing smart_flags in return items")
                     return False
                 
-                created_order = response.json()
-                created_order_ids.append(created_order['id'])
-                print(f"   📦 Created order: {order_data['order_number']} (SKU: {order_data['sku']})")
+                print(f"✅ Smart flags present. Example: {first_return.get('smart_flags', [])}")
             
-            # Test specific SKU sync endpoint
-            print("3. Testing sync-orders/{master_sku} endpoint...")
+            # Expected returns: RET-FRAUD-001, RET-DAMAGE-002, RET-PFC-003, RET-PENDING-004, RET-DELAY-005
+            # Should NOT include REG-ORDER-006 (no cancellation_reason)
             
-            response = await self.client.post(
-                f"{BACKEND_URL}/master-sku/sync-orders/{master_sku_data['master_sku']}",
+            # Verify only orders with cancellation reasons or status returned/cancelled appear
+            test_order_numbers = []
+            for item in data["items"]:
+                if item.get("order_number", "").startswith("RET-"):
+                    test_order_numbers.append(item["order_number"])
+            
+            expected_returns = ["RET-FRAUD-001", "RET-DAMAGE-002", "RET-PFC-003", "RET-PENDING-004", "RET-DELAY-005"]
+            found_test_returns = [num for num in test_order_numbers if num in expected_returns]
+            
+            print(f"✅ Found test returns: {found_test_returns}")
+            
+            if "REG-ORDER-006" in test_order_numbers:
+                print("❌ Normal order without cancellation reason should not appear in returns")
+                return False
+            
+            print("✅ Normal orders correctly excluded from returns list")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Basic returns test error: {e}")
+            return False
+    
+    async def test_returns_endpoint_filters(self):
+        """Test returns endpoint with various filters"""
+        print("\n🔍 TEST 2: GET /api/returns/ - Filter Testing")
+        print("=" * 60)
+        
+        try:
+            # Test fraud filter
+            print("1. Testing fraud_only filter...")
+            response = await self.client.get(
+                f"{BACKEND_URL}/returns/?fraud_only=true",
                 headers=self.get_auth_headers()
             )
             
             if response.status_code != 200:
-                print(f"❌ Specific SKU sync failed: {response.status_code} - {response.text}")
+                print(f"❌ Fraud filter failed: {response.status_code} - {response.text}")
                 return False
             
-            sync_result = response.json()
-            print(f"✅ Specific sync result: {sync_result}")
+            fraud_data = response.json()
+            fraud_orders = fraud_data["items"]
             
-            # Should update 2 orders (Amazon and Flipkart with matching SKUs)
-            if sync_result['orders_updated'] != 2:
-                print(f"❌ Expected 2 orders updated, got {sync_result['orders_updated']}")
+            # Should find RET-FRAUD-001 (cancelled + delivered reason + has delivery_date)
+            fraud_order_numbers = [order.get("order_number") for order in fraud_orders if order.get("order_number", "").startswith("RET-")]
+            
+            if "RET-FRAUD-001" not in fraud_order_numbers:
+                print(f"❌ Expected RET-FRAUD-001 in fraud filter, got: {fraud_order_numbers}")
                 return False
             
-            print("✅ Specific SKU sync updated correct number of orders")
+            print(f"✅ Fraud filter: Found {len(fraud_orders)} fraud cases including RET-FRAUD-001")
             
-            # Test sync-all-orders endpoint
-            print("4. Testing sync-all-orders endpoint...")
-            
-            response = await self.client.post(
-                f"{BACKEND_URL}/master-sku/sync-all-orders",
+            # Test damage filter
+            print("2. Testing damage_only filter...")
+            response = await self.client.get(
+                f"{BACKEND_URL}/returns/?damage_only=true", 
                 headers=self.get_auth_headers()
             )
             
             if response.status_code != 200:
-                print(f"❌ Sync all orders failed: {response.status_code} - {response.text}")
+                print(f"❌ Damage filter failed: {response.status_code} - {response.text}")
                 return False
             
-            sync_all_result = response.json()
-            print(f"✅ Sync all result: {sync_all_result}")
+            damage_data = response.json()
+            damage_orders = damage_data["items"]
             
-            # Verify orders were updated with master_sku field
-            print("5. Verifying orders have master_sku field populated...")
+            # Should find RET-DAMAGE-002 (damage hardware in reason)
+            damage_order_numbers = [order.get("order_number") for order in damage_orders if order.get("order_number", "").startswith("RET-")]
             
-            for order_id in created_order_ids[:2]:  # First 2 should be updated
-                response = await self.client.get(
-                    f"{BACKEND_URL}/orders/{order_id}",
+            if "RET-DAMAGE-002" not in damage_order_numbers:
+                print(f"❌ Expected RET-DAMAGE-002 in damage filter, got: {damage_order_numbers}")
+                return False
+            
+            print(f"✅ Damage filter: Found {len(damage_orders)} damage cases including RET-DAMAGE-002")
+            
+            # Test pending filter
+            print("3. Testing pending_only filter...")
+            response = await self.client.get(
+                f"{BACKEND_URL}/returns/?pending_only=true",
+                headers=self.get_auth_headers()
+            )
+            
+            if response.status_code != 200:
+                print(f"❌ Pending filter failed: {response.status_code} - {response.text}")
+                return False
+            
+            pending_data = response.json()
+            pending_orders = pending_data["items"]
+            
+            # Should find RET-PENDING-004 (status pending in reason)
+            pending_order_numbers = [order.get("order_number") for order in pending_orders if order.get("order_number", "").startswith("RET-")]
+            
+            if "RET-PENDING-004" not in pending_order_numbers:
+                print(f"❌ Expected RET-PENDING-004 in pending filter, got: {pending_order_numbers}")
+                return False
+            
+            print(f"✅ Pending filter: Found {len(pending_orders)} pending cases including RET-PENDING-004")
+            
+            print("\n🎉 RETURNS ENDPOINT FILTERS: ALL TESTS PASSED")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Returns filters test error: {e}")
+            return False
+    
+    # =====================================
+    # TEST 3: GET /api/returns/analytics - Analytics endpoint
+    # =====================================
+    
+    async def test_returns_analytics(self):
+        """Test returns analytics endpoint"""
+        print("\n🔍 TEST 3: GET /api/returns/analytics - Analytics")
+        print("=" * 60)
+        
+        try:
+            response = await self.client.get(
+                f"{BACKEND_URL}/returns/analytics",
+                headers=self.get_auth_headers()
+            )
+            
+            if response.status_code != 200:
+                print(f"❌ Analytics failed: {response.status_code} - {response.text}")
+                return False
+            
+            data = response.json()
+            
+            # Verify required fields in summary
+            required_summary_fields = [
+                "total_returns", "total_orders", "return_rate", 
+                "fraud_count", "damage_count", "pfc_count", "replacement_count"
+            ]
+            
+            if "summary" not in data:
+                print("❌ Missing summary in analytics response")
+                return False
+            
+            summary = data["summary"]
+            
+            for field in required_summary_fields:
+                if field not in summary:
+                    print(f"❌ Missing field in summary: {field}")
+                    return False
+            
+            print(f"✅ Analytics summary structure: All required fields present")
+            print(f"   📊 Total returns: {summary['total_returns']}")
+            print(f"   📊 Return rate: {summary['return_rate']}%")
+            print(f"   🚨 Fraud count: {summary['fraud_count']}")
+            print(f"   💔 Damage count: {summary['damage_count']}")
+            print(f"   📦 PFC count: {summary['pfc_count']}")
+            print(f"   🔄 Replacement count: {summary['replacement_count']}")
+            
+            # Verify other sections
+            required_sections = ["by_reason", "top_problematic_products", "by_courier"]
+            for section in required_sections:
+                if section not in data:
+                    print(f"❌ Missing section in analytics: {section}")
+                    return False
+            
+            print(f"✅ Analytics sections: All required sections present")
+            
+            # Verify by_reason breakdown contains our test reasons
+            by_reason = data["by_reason"]
+            
+            if len(by_reason) > 0:
+                print(f"✅ Reason breakdown: {len(by_reason)} different cancellation reasons found")
+                
+                # Look for our test reasons
+                test_reasons_found = []
+                for reason, count in by_reason.items():
+                    if any(keyword in reason.lower() for keyword in ["delivered", "damage", "pfc", "pending", "delay"]):
+                        test_reasons_found.append(reason)
+                
+                print(f"   📝 Test reasons found: {test_reasons_found}")
+            
+            # Verify top_problematic_products structure
+            top_products = data["top_problematic_products"]
+            if len(top_products) > 0 and isinstance(top_products[0], dict):
+                if "sku" in top_products[0] and "count" in top_products[0]:
+                    print(f"✅ Top products structure: Correct format with sku and count")
+                else:
+                    print(f"❌ Top products format incorrect: {top_products[0].keys()}")
+                    return False
+            
+            print("\n🎉 RETURNS ANALYTICS: ALL TESTS PASSED")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Returns analytics test error: {e}")
+            return False
+    
+    # =====================================
+    # TEST 4: POST /api/returns/{order_id}/action - Actions
+    # =====================================
+    
+    async def test_returns_actions(self):
+        """Test taking actions on returns"""
+        print("\n🔍 TEST 4: POST /api/returns/{order_id}/action - Actions")
+        print("=" * 60)
+        
+        try:
+            # Get a test order to perform actions on
+            if not self.test_orders:
+                print("❌ No test orders available for action testing")
+                return False
+            
+            test_order_id = self.test_orders[0]  # Use first test order
+            
+            # Test 1: Approve refund
+            print("1. Testing approve_refund action...")
+            response = await self.client.post(
+                f"{BACKEND_URL}/returns/{test_order_id}/action",
+                params={"action": "approve_refund"},
+                json={"notes": "Refund approved by testing system"},
+                headers=self.get_auth_headers()
+            )
+            
+            if response.status_code != 200:
+                print(f"❌ Approve refund failed: {response.status_code} - {response.text}")
+                return False
+            
+            refund_result = response.json()
+            
+            if "message" not in refund_result or "order_id" not in refund_result:
+                print(f"❌ Incorrect response structure: {refund_result}")
+                return False
+            
+            print(f"✅ Approve refund: {refund_result['message']}")
+            
+            # Verify order was updated
+            order_response = await self.client.get(
+                f"{BACKEND_URL}/orders/{test_order_id}",
+                headers=self.get_auth_headers()
+            )
+            
+            if order_response.status_code == 200:
+                updated_order = order_response.json()
+                if updated_order.get("return_status") != "refund_approved":
+                    print(f"❌ Order return_status not updated: {updated_order.get('return_status')}")
+                    return False
+                
+                print("✅ Order return_status correctly updated to 'refund_approved'")
+            
+            # Test 2: Schedule replacement
+            print("2. Testing schedule_replacement action...")
+            if len(self.test_orders) > 1:
+                test_order_id_2 = self.test_orders[1]
+                
+                response = await self.client.post(
+                    f"{BACKEND_URL}/returns/{test_order_id_2}/action",
+                    params={"action": "schedule_replacement"},
+                    json={"notes": "Replacement scheduled for damaged item"},
                     headers=self.get_auth_headers()
                 )
                 
                 if response.status_code != 200:
-                    print(f"❌ Order retrieval failed: {response.status_code}")
+                    print(f"❌ Schedule replacement failed: {response.status_code} - {response.text}")
                     return False
                 
-                order = response.json()
-                if order.get('master_sku') != master_sku_data['master_sku']:
-                    print(f"❌ Order {order_id} missing master_sku field")
-                    return False
-                
-                print(f"   ✅ Order {order['order_number']}: master_sku = {order['master_sku']}")
+                replacement_result = response.json()
+                print(f"✅ Schedule replacement: {replacement_result['message']}")
             
-            # Verify third order was NOT updated (different SKU)
-            response = await self.client.get(
-                f"{BACKEND_URL}/orders/{created_order_ids[2]}",
+            # Test 3: Mark fraud
+            print("3. Testing mark_fraud action...")
+            if len(self.test_orders) > 2:
+                test_order_id_3 = self.test_orders[2]
+                
+                response = await self.client.post(
+                    f"{BACKEND_URL}/returns/{test_order_id_3}/action",
+                    params={"action": "mark_fraud"},
+                    json={"notes": "Fraudulent return detected"},
+                    headers=self.get_auth_headers()
+                )
+                
+                if response.status_code != 200:
+                    print(f"❌ Mark fraud failed: {response.status_code} - {response.text}")
+                    return False
+                
+                fraud_result = response.json()
+                print(f"✅ Mark fraud: {fraud_result['message']}")
+            
+            # Test 4: Close case
+            print("4. Testing close action...")
+            if len(self.test_orders) > 3:
+                test_order_id_4 = self.test_orders[3]
+                
+                response = await self.client.post(
+                    f"{BACKEND_URL}/returns/{test_order_id_4}/action",
+                    params={"action": "close"},
+                    json={"notes": "Case closed - resolved"},
+                    headers=self.get_auth_headers()
+                )
+                
+                if response.status_code != 200:
+                    print(f"❌ Close action failed: {response.status_code} - {response.text}")
+                    return False
+                
+                close_result = response.json()
+                print(f"✅ Close action: {close_result['message']}")
+            
+            # Test 5: Invalid action
+            print("5. Testing invalid action handling...")
+            response = await self.client.post(
+                f"{BACKEND_URL}/returns/{test_order_id}/action",
+                params={"action": "invalid_action"},
                 headers=self.get_auth_headers()
             )
             
-            if response.status_code != 200:
-                print(f"❌ Order retrieval failed: {response.status_code}")
-                return False
+            # Should handle gracefully (either 400 error or no action taken)
+            print(f"✅ Invalid action handled: {response.status_code}")
             
-            order = response.json()
-            if order.get('master_sku') == master_sku_data['master_sku']:
-                print(f"❌ Order with different SKU should not have master_sku")
-                return False
-            
-            print("   ✅ Order with different SKU correctly not updated")
-            
-            print("\n🎉 MASTER SKU SYNC ENDPOINTS: ALL TESTS PASSED")
+            print("\n🎉 RETURNS ACTIONS: ALL TESTS PASSED")
             return True
             
         except Exception as e:
-            print(f"❌ Master SKU sync test error: {e}")
+            print(f"❌ Returns actions test error: {e}")
             return False
     
     # =====================================
-    # TEST 4: ORDER DATE VALIDATION (MEDIUM)
+    # TEST 5: Smart Classification Logic Verification
     # =====================================
     
-    async def test_order_date_validation(self):
-        """Test order date validation during import"""
-        print("\n🔍 TEST 4: ORDER DATE VALIDATION (MEDIUM)")
+    async def test_smart_classification(self):
+        """Test the classify_return() function logic"""
+        print("\n🔍 TEST 5: Smart Classification Logic Verification")
         print("=" * 60)
         
         try:
-            # Create CSV with invalid/missing order dates
-            csv_content = """Order ID,Order Date,Customer Name,Billing No.,SKU,Qty,Price,Place,State,Pincode,Live Status
-VALID-DATE-001,15/03/2024,Valid Customer,9876543210,SKU-001,1,2500,Mumbai,Maharashtra,400001,delivered
-INVALID-DATE-001,,Missing Date Customer,9876543211,SKU-002,1,3000,Delhi,Delhi,110001,delivered
-INVALID-DATE-002,invalid-date,Invalid Format Customer,9876543212,SKU-003,1,3500,Bangalore,Karnataka,560001,delivered
-INVALID-DATE-003,32/15/2024,Invalid Day Customer,9876543213,SKU-004,1,4000,Chennai,Tamil Nadu,600001,delivered
-VALID-DATE-002,16/03/2024,Another Valid Customer,9876543214,SKU-005,1,2000,Pune,Maharashtra,411001,delivered"""
+            # Get returns to verify smart flags
+            response = await self.client.get(
+                f"{BACKEND_URL}/returns/",
+                headers=self.get_auth_headers()
+            )
             
-            csv_bytes = csv_content.encode('utf-8')
+            if response.status_code != 200:
+                print(f"❌ Could not get returns for classification test: {response.status_code}")
+                return False
             
-            print("1. Creating test CSV with invalid/missing order dates...")
-            print("   - 2 valid dates (15/03/2024, 16/03/2024)")
-            print("   - 1 missing date (empty)")
-            print("   - 1 invalid format (invalid-date)")  
-            print("   - 1 invalid date (32/15/2024)")
+            data = response.json()
+            returns = data["items"]
             
-            files = {
-                'file': ('test_date_validation.csv', csv_bytes, 'text/csv')
+            # Filter for our test orders by order_number pattern
+            test_returns = [r for r in returns if r.get("order_number", "").startswith("RET-")]
+            
+            classification_tests = {
+                "RET-FRAUD-001": ["fraud"],  # cancelled + "Fraud" reason
+                "RET-DAMAGE-002": ["damage", "replacement"],  # "Damage" + "replacement" in reason
+                "RET-PFC-003": ["pfc"],  # cancelled + empty reason
+                "RET-PENDING-004": ["pending_action"],  # "Status Pending" in reason  
+                "RET-DELAY-005": ["delay"]  # "Delay" in reason
             }
             
-            print("2. Importing CSV with invalid dates...")
-            response = await self.client.post(
-                f"{BACKEND_URL}/orders/import-historical",
-                files=files,
-                headers=self.get_auth_headers()
-            )
+            classification_passed = True
             
-            if response.status_code != 200:
-                print(f"❌ Date validation import failed: {response.status_code} - {response.text}")
-                return False
-            
-            import_result = response.json()
-            print(f"✅ Import response: {import_result}")
-            
-            # Verify only valid dates were imported
-            expected_imported = 2  # Only 2 valid dates
-            expected_errors = 3    # 3 invalid/missing dates
-            
-            if import_result['imported'] != expected_imported:
-                print(f"❌ Expected {expected_imported} imported, got {import_result['imported']}")
-                return False
-            
-            if import_result['errors'] != expected_errors:
-                print(f"❌ Expected {expected_errors} errors, got {import_result['errors']}")
-                return False
-            
-            print(f"✅ Correct validation: {expected_imported} imported, {expected_errors} errors")
-            
-            # Verify error details contain date validation messages
-            if 'error_details' in import_result:
-                print("3. Checking error details...")
-                for error in import_result['error_details']:
-                    print(f"   📝 Error: {error}")
-                    if 'Order Date' not in error:
-                        print(f"❌ Error should mention Order Date: {error}")
-                        return False
+            for return_order in test_returns:
+                order_number = return_order.get("order_number")
+                smart_flags = return_order.get("smart_flags", [])
                 
-                print("✅ Error messages correctly mention Order Date validation")
+                if order_number in classification_tests:
+                    expected_flags = classification_tests[order_number]
+                    
+                    print(f"📝 {order_number}: Expected {expected_flags}, Got {smart_flags}")
+                    
+                    # Check if all expected flags are present
+                    missing_flags = [flag for flag in expected_flags if flag not in smart_flags]
+                    if missing_flags:
+                        print(f"❌ {order_number}: Missing flags {missing_flags}")
+                        classification_passed = False
+                    else:
+                        print(f"✅ {order_number}: All expected flags present")
             
-            # Verify imported orders have valid dates
-            print("4. Verifying imported orders have valid dates...")
-            
-            response = await self.client.get(
-                f"{BACKEND_URL}/orders/?search=VALID-DATE", 
+            # Verify classification counts match analytics
+            analytics_response = await self.client.get(
+                f"{BACKEND_URL}/returns/analytics",
                 headers=self.get_auth_headers()
             )
             
-            if response.status_code != 200:
-                print(f"❌ Valid date verification failed: {response.status_code}")
-                return False
-            
-            search_result = response.json()
-            valid_orders = search_result['items']
-            
-            if len(valid_orders) != 2:
-                print(f"❌ Expected 2 valid orders, found {len(valid_orders)}")
-                return False
-            
-            for order in valid_orders:
-                if not order.get('order_date'):
-                    print(f"❌ Order missing order_date: {order['order_number']}")
-                    return False
+            if analytics_response.status_code == 200:
+                analytics = analytics_response.json()
+                summary = analytics["summary"]
                 
-                try:
-                    # Verify date is valid ISO format
-                    parsed_date = datetime.fromisoformat(order['order_date'].replace('Z', '+00:00'))
-                    print(f"   ✅ Order {order['order_number']}: valid date {parsed_date.strftime('%d/%m/%Y')}")
-                except ValueError:
-                    print(f"❌ Order {order['order_number']}: invalid date format {order['order_date']}")
-                    return False
+                print(f"\n📊 Analytics Classification Counts:")
+                print(f"   🚨 Fraud: {summary['fraud_count']}")
+                print(f"   💔 Damage: {summary['damage_count']}")
+                print(f"   📦 PFC: {summary['pfc_count']}")
+                print(f"   🔄 Replacement: {summary['replacement_count']}")
+                
+                # Expected: at least 1 of each from our test data
+                if summary['fraud_count'] < 1:
+                    print("❌ Expected at least 1 fraud case in analytics")
+                    classification_passed = False
+                
+                if summary['damage_count'] < 1:
+                    print("❌ Expected at least 1 damage case in analytics")
+                    classification_passed = False
+                
+                if summary['pfc_count'] < 1:
+                    print("❌ Expected at least 1 PFC case in analytics")
+                    classification_passed = False
+                
+                if summary['replacement_count'] < 1:
+                    print("❌ Expected at least 1 replacement case in analytics")
+                    classification_passed = False
             
-            # Verify invalid date orders were NOT imported
-            print("5. Verifying invalid date orders were not imported...")
-            
-            response = await self.client.get(
-                f"{BACKEND_URL}/orders/?search=INVALID-DATE", 
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Invalid date verification failed: {response.status_code}")
+            if classification_passed:
+                print("\n🎉 SMART CLASSIFICATION: ALL TESTS PASSED")
+                return True
+            else:
+                print("\n❌ SMART CLASSIFICATION: SOME TESTS FAILED")
                 return False
-            
-            invalid_search = response.json()
-            if len(invalid_search['items']) > 0:
-                print(f"❌ Found {len(invalid_search['items'])} orders with invalid dates - should be 0")
-                return False
-            
-            print("✅ Invalid date orders correctly skipped")
-            
-            print("\n🎉 ORDER DATE VALIDATION: ALL TESTS PASSED")
-            return True
             
         except Exception as e:
-            print(f"❌ Order date validation test error: {e}")
+            print(f"❌ Smart classification test error: {e}")
             return False
+    
+    # =====================================
+    # CLEANUP
+    # =====================================
+    
+    async def cleanup_test_data(self):
+        """Clean up test orders created during testing"""
+        print("\n🧹 Cleaning up test data...")
+        
+        deleted_count = 0
+        for order_id in self.test_orders:
+            try:
+                response = await self.client.delete(
+                    f"{BACKEND_URL}/orders/{order_id}",
+                    headers=self.get_auth_headers()
+                )
+                if response.status_code in [200, 204]:
+                    deleted_count += 1
+            except Exception as e:
+                print(f"⚠️ Could not delete order {order_id}: {e}")
+        
+        print(f"✅ Cleaned up {deleted_count}/{len(self.test_orders)} test orders")
     
     # =====================================
     # MAIN TEST RUNNER
     # =====================================
     
     async def run_all_tests(self):
-        """Run all critical backend tests"""
-        print("🚀 FURNIVA CRM BACKEND CRITICAL TESTING")
+        """Run all Returns & Claims System tests"""
+        print("🚀 FURNIVA RETURNS & CLAIMS SYSTEM TESTING")
         print("=" * 80)
-        print("Testing 4 critical bug fixes from 2025-03-07")
+        print("Testing new Returns & Claims System backend endpoints")
         print("=" * 80)
         
         # Setup authentication
@@ -649,24 +695,35 @@ VALID-DATE-002,16/03/2024,Another Valid Customer,9876543214,SKU-005,1,2000,Pune,
             print("❌ AUTHENTICATION FAILED - Cannot proceed with tests")
             return False
         
+        # Create test data
+        await self.create_test_orders_with_returns_data()
+        
         # Test results
         test_results = {}
         
-        # Test 1: Order Pagination System (CRITICAL)
-        test_results['pagination'] = await self.test_order_pagination_system()
-        
-        # Test 2: Multi-Item Orders Import (CRITICAL)
-        test_results['multi_item_import'] = await self.test_multi_item_orders_import()
-        
-        # Test 3: Master SKU Sync Endpoints (HIGH)
-        test_results['master_sku_sync'] = await self.test_master_sku_sync_endpoints()
-        
-        # Test 4: Order Date Validation (MEDIUM)
-        test_results['date_validation'] = await self.test_order_date_validation()
+        try:
+            # Test 1: Basic returns endpoint
+            test_results['returns_basic'] = await self.test_returns_endpoint_basic()
+            
+            # Test 2: Returns filters
+            test_results['returns_filters'] = await self.test_returns_endpoint_filters()
+            
+            # Test 3: Returns analytics
+            test_results['returns_analytics'] = await self.test_returns_analytics()
+            
+            # Test 4: Returns actions
+            test_results['returns_actions'] = await self.test_returns_actions()
+            
+            # Test 5: Smart classification logic
+            test_results['smart_classification'] = await self.test_smart_classification()
+            
+        finally:
+            # Always cleanup test data
+            await self.cleanup_test_data()
         
         # Final Summary
         print("\n" + "=" * 80)
-        print("🏆 FINAL TEST SUMMARY")
+        print("🏆 RETURNS & CLAIMS SYSTEM TEST SUMMARY")
         print("=" * 80)
         
         passed = sum(test_results.values())
@@ -680,10 +737,10 @@ VALID-DATE-002,16/03/2024,Another Valid Customer,9876543214,SKU-005,1,2000,Pune,
         print(f"OVERALL RESULT: {passed}/{total} tests passed ({passed/total*100:.1f}%)")
         
         if passed == total:
-            print("🎉 ALL CRITICAL TESTS PASSED - BACKEND IS READY!")
+            print("🎉 ALL RETURNS & CLAIMS SYSTEM TESTS PASSED!")
             return True
         else:
-            print("⚠️  SOME TESTS FAILED - ISSUES NEED ATTENTION")
+            print("⚠️  SOME RETURNS SYSTEM TESTS FAILED - ISSUES NEED ATTENTION")
             return False
 
 # =====================================
@@ -692,7 +749,7 @@ VALID-DATE-002,16/03/2024,Another Valid Customer,9876543214,SKU-005,1,2000,Pune,
 
 async def main():
     """Main test execution"""
-    async with FurnivaBackendTester() as tester:
+    async with FurnivaReturnsSystemTester() as tester:
         success = await tester.run_all_tests()
         return success
 

@@ -1,385 +1,336 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import api from '../lib/api';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { toast } from 'sonner';
-import {
-  RefreshCcw, Search, X, Undo2, ChevronRight, Clock, AlertTriangle
+import api from '../services/api';
+import { toast } from 'react-hot-toast';
+import { 
+  RefreshCcw, 
+  AlertTriangle, 
+  Package, 
+  TrendingUp, 
+  Filter,
+  Eye,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
-
-const STATUS_FLOW = [
-  'requested', 'approved', 'pickup_scheduled', 'in_transit',
-  'received', 'inspected', 'refunded', 'replaced', 'rejected', 'cancelled'
-];
-
-const STATUS_LABELS = {
-  requested: 'Requested', approved: 'Approved', pickup_scheduled: 'Pickup Scheduled',
-  in_transit: 'In Transit', received: 'Received', inspected: 'Inspected',
-  refunded: 'Refunded', replaced: 'Replaced', rejected: 'Rejected', cancelled: 'Cancelled'
-};
-
-const STATUS_COLORS = {
-  requested: 'bg-yellow-100 text-yellow-800', approved: 'bg-blue-100 text-blue-800',
-  pickup_scheduled: 'bg-indigo-100 text-indigo-800', in_transit: 'bg-purple-100 text-purple-800',
-  received: 'bg-teal-100 text-teal-800', inspected: 'bg-cyan-100 text-cyan-800',
-  refunded: 'bg-green-100 text-green-800', replaced: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800', cancelled: 'bg-gray-100 text-gray-800'
-};
+import { useNavigate } from 'react-router-dom';
 
 export const Returns = () => {
   const [returns, setReturns] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedReturn, setSelectedReturn] = useState(null);
+  const navigate = useNavigate();
 
-  // Status update form (for mandatory fields)
-  const [pendingStatus, setPendingStatus] = useState(null);
-  const [statusFields, setStatusFields] = useState({ pickup_date: '', tracking_number: '', courier_partner: '', notes: '', refund_amount: '' });
+  useEffect(() => {
+    fetchReturns();
+    fetchAnalytics();
+  }, [activeTab]);
 
-  const fetchReturns = useCallback(async () => {
+  const fetchReturns = async () => {
     try {
       const params = {};
-      if (statusFilter !== 'all') params.status = statusFilter;
-      const res = await api.get('/returns/', { params });
-      setReturns(res.data);
-    } catch { toast.error('Failed to fetch returns'); }
-    finally { setLoading(false); }
-  }, [statusFilter]);
+      if (activeTab === 'fraud') params.fraud_only = true;
+      if (activeTab === 'damage') params.damage_only = true;
+      if (activeTab === 'pending') params.pending_only = true;
+      if (searchTerm) params.reason_filter = searchTerm;
 
-  useEffect(() => { fetchReturns(); }, [fetchReturns]);
-
-  const getNextStatuses = (current) => {
-    const idx = STATUS_FLOW.indexOf(current);
-    if (idx === -1) return [];
-    const next = [];
-    // Allow forward transitions
-    if (current === 'requested') next.push('approved', 'rejected');
-    else if (current === 'approved') next.push('pickup_scheduled', 'cancelled');
-    else if (current === 'pickup_scheduled') next.push('in_transit', 'cancelled');
-    else if (current === 'in_transit') next.push('received');
-    else if (current === 'received') next.push('inspected');
-    else if (current === 'inspected') next.push('refunded', 'replaced', 'rejected');
-    return next;
-  };
-
-  const initiateStatusChange = (ret, newStatus) => {
-    // Check if mandatory fields needed
-    if (newStatus === 'pickup_scheduled' || newStatus === 'in_transit') {
-      setPendingStatus({ returnId: ret.id, status: newStatus });
-      setStatusFields({ pickup_date: '', tracking_number: '', courier_partner: '', notes: '', refund_amount: '' });
-    } else if (newStatus === 'refunded') {
-      setPendingStatus({ returnId: ret.id, status: newStatus });
-      setStatusFields({ pickup_date: '', tracking_number: '', courier_partner: '', notes: '', refund_amount: '' });
-    } else {
-      executeStatusChange(ret.id, newStatus, {});
+      const response = await api.get('/returns/', { params });
+      setReturns(response.data.items || []);
+    } catch (error) {
+      toast.error('Failed to fetch returns');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const executeStatusChange = async (returnId, status, fields) => {
+  const fetchAnalytics = async () => {
     try {
-      const params = new URLSearchParams({ status });
-      if (fields.pickup_date) params.append('pickup_date', new Date(fields.pickup_date).toISOString());
-      if (fields.tracking_number) params.append('tracking_number', fields.tracking_number);
-      if (fields.courier_partner) params.append('courier_partner', fields.courier_partner);
-      if (fields.notes) params.append('notes', fields.notes);
-      if (fields.refund_amount) params.append('refund_amount', fields.refund_amount);
-
-      const res = await api.patch(`/returns/${returnId}/status?${params.toString()}`);
-      toast.success(`Status updated to ${STATUS_LABELS[status]}`);
-      setSelectedReturn(res.data);
-      setPendingStatus(null);
-      fetchReturns();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to update status');
+      const response = await api.get('/returns/analytics');
+      setAnalytics(response.data);
+    } catch (error) {
+      console.error('Failed to fetch analytics');
     }
   };
 
-  const handleMandatorySubmit = (e) => {
-    e.preventDefault();
-    if (!pendingStatus) return;
-
-    if (pendingStatus.status === 'pickup_scheduled' && !statusFields.pickup_date) {
-      toast.error('Pickup date is required'); return;
-    }
-    if (pendingStatus.status === 'in_transit' && !statusFields.tracking_number) {
-      toast.error('Tracking number is required'); return;
-    }
-
-    executeStatusChange(pendingStatus.returnId, pendingStatus.status, statusFields);
-  };
-
-  const handleUndo = async (ret) => {
-    if (!ret.previous_status) {
-      toast.error('No previous status to revert to');
-      return;
-    }
-    if (!confirm(`Undo status change? Will revert from "${STATUS_LABELS[ret.return_status]}" to "${STATUS_LABELS[ret.previous_status]}"`)) return;
+  const takeAction = async (orderId, action) => {
     try {
-      const res = await api.patch(`/returns/${ret.id}/undo`);
-      toast.success(`Reverted to ${STATUS_LABELS[res.data.return_status]}`);
-      setSelectedReturn(res.data);
+      await api.post(`/returns/${orderId}/action?action=${action}`);
+      toast.success(`Action completed: ${action}`);
       fetchReturns();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to undo');
+    } catch (error) {
+      toast.error('Failed to complete action');
     }
   };
 
-  const safeDateShort = (d) => { if (!d) return '-'; try { return format(new Date(d), 'MMM dd, yyyy'); } catch { return '-'; } };
+  const getStatusBadge = (flags) => {
+    if (!flags || flags.length === 0) return <Badge variant="outline">Unknown</Badge>;
+    
+    if (flags.includes('fraud')) {
+      return <Badge className="bg-red-500">Fraud Alert</Badge>;
+    }
+    if (flags.includes('pfc')) {
+      return <Badge className="bg-orange-500">Pre-Cancel</Badge>;
+    }
+    if (flags.includes('replacement')) {
+      return <Badge className="bg-blue-500">Replacement</Badge>;
+    }
+    if (flags.includes('damage')) {
+      return <Badge className="bg-yellow-500">Damaged</Badge>;
+    }
+    if (flags.includes('pending_action')) {
+      return <Badge className="bg-purple-500">Pending Action</Badge>;
+    }
+    return <Badge variant="outline">{flags[0]}</Badge>;
+  };
 
-  const filtered = returns.filter(r =>
-    !searchTerm ||
+  const filteredReturns = returns.filter(r => 
     r.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  if (loading) return (
-    <div className="flex items-center justify-center h-[60vh]">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
-    </div>
+    r.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    r.cancellation_reason?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="space-y-6" data-testid="returns-page">
-      <div>
-        <h1 className="text-3xl font-bold font-[Manrope]">Returns Management</h1>
-        <p className="text-muted-foreground mt-1">Track and manage return requests</p>
-      </div>
-
-      {/* Filters */}
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Search by order or customer..." value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)} className="pl-10" data-testid="returns-search" />
+    <div className="space-y-6 p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold font-[Manrope]">Returns & Claims</h1>
+          <p className="text-muted-foreground mt-1">Manage cancellations, returns, and fraudulent orders</p>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48" data-testid="returns-status-filter"><SelectValue placeholder="Filter by status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {STATUS_FLOW.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <Button onClick={() => { fetchReturns(); fetchAnalytics(); }}>
+          <RefreshCcw className="w-4 h-4 mr-2" />
+          Refresh
+        </Button>
       </div>
 
-      {filtered.length === 0 ? (
-        <Card><CardContent className="py-12 text-center">
-          <RefreshCcw className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-          <p className="text-muted-foreground">No return requests found</p>
-          <p className="text-sm text-muted-foreground mt-1">Create returns from the Order Detail page</p>
-        </CardContent></Card>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map(ret => (
-            <Card key={ret.id} className="hover:border-primary/40 transition-colors cursor-pointer"
-              onClick={() => setSelectedReturn(ret)} data-testid={`return-card-${ret.id}`}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold font-[JetBrains_Mono] text-sm">{ret.order_number}</p>
-                        <Badge className={STATUS_COLORS[ret.return_status]}>{STATUS_LABELS[ret.return_status]}</Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-0.5">{ret.customer_name} - {ret.phone}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <span>{safeDateShort(ret.requested_date)}</span>
-                    <Badge variant="outline" className="text-xs capitalize">{ret.return_reason?.replace(/_/g, ' ')}</Badge>
-                    <ChevronRight className="w-4 h-4" />
-                  </div>
+      {/* Analytics Cards */}
+      {analytics && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Returns</p>
+                  <p className="text-2xl font-bold">{analytics.summary.total_returns}</p>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+                <RefreshCcw className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {analytics.summary.return_rate}% of all orders
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Fraud Cases</p>
+                  <p className="text-2xl font-bold text-red-500">{analytics.summary.fraud_count}</p>
+                </div>
+                <AlertTriangle className="w-8 h-8 text-red-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Damaged</p>
+                  <p className="text-2xl font-bold text-yellow-600">{analytics.summary.damage_count}</p>
+                </div>
+                <Package className="w-8 h-8 text-yellow-600" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Replacements</p>
+                  <p className="text-2xl font-bold text-blue-500">{analytics.summary.replacement_count}</p>
+                </div>
+                <RefreshCcw className="w-8 h-8 text-blue-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Pre-Cancel</p>
+                  <p className="text-2xl font-bold text-orange-500">{analytics.summary.pfc_count}</p>
+                </div>
+                <XCircle className="w-8 h-8 text-orange-500" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      {/* ===== RETURN DETAIL MODAL ===== */}
-      {selectedReturn && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="return-detail-modal">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="font-[Manrope]">Return: {selectedReturn.order_number}</CardTitle>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge className={STATUS_COLORS[selectedReturn.return_status]}>{STATUS_LABELS[selectedReturn.return_status]}</Badge>
-                  {selectedReturn.previous_status && (
-                    <span className="text-xs text-muted-foreground">
-                      (prev: {STATUS_LABELS[selectedReturn.previous_status]})
-                    </span>
-                  )}
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => { setSelectedReturn(null); setPendingStatus(null); }}><X className="w-4 h-4" /></Button>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Return Info */}
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div><p className="text-xs text-muted-foreground">Customer</p><p className="font-medium">{selectedReturn.customer_name}</p></div>
-                <div><p className="text-xs text-muted-foreground">Phone</p><p className="font-medium font-[JetBrains_Mono]">{selectedReturn.phone}</p></div>
-                <div><p className="text-xs text-muted-foreground">Reason</p><p className="font-medium capitalize">{selectedReturn.return_reason?.replace(/_/g, ' ')}</p></div>
-                <div><p className="text-xs text-muted-foreground">Damage Category</p><p className="font-medium capitalize">{selectedReturn.damage_category?.replace(/_/g, ' ') || '-'}</p></div>
-                {selectedReturn.return_reason_details && (
-                  <div className="col-span-2"><p className="text-xs text-muted-foreground">Details</p><p className="text-sm">{selectedReturn.return_reason_details}</p></div>
-                )}
-                {selectedReturn.is_installation_related && <Badge variant="outline" className="text-xs col-span-2 w-fit">Installation Related</Badge>}
-              </div>
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b">
+        <Button
+          variant={activeTab === 'all' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('all')}
+        >
+          All Returns
+        </Button>
+        <Button
+          variant={activeTab === 'fraud' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('fraud')}
+        >
+          Fraudulent
+        </Button>
+        <Button
+          variant={activeTab === 'damage' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('damage')}
+        >
+          Damaged
+        </Button>
+        <Button
+          variant={activeTab === 'pending' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('pending')}
+        >
+          Pending Action
+        </Button>
+      </div>
 
-              {/* Timeline dates */}
-              <div className="grid grid-cols-2 gap-3">
-                <TimelineDate label="Requested" date={selectedReturn.requested_date} />
-                <TimelineDate label="Approved" date={selectedReturn.approved_date} />
-                <TimelineDate label="Pickup" date={selectedReturn.pickup_date} />
-                <TimelineDate label="Received" date={selectedReturn.received_date} />
-                <TimelineDate label="Inspected" date={selectedReturn.inspection_date} />
-                <TimelineDate label="Refund" date={selectedReturn.refund_date} />
-              </div>
+      {/* Search */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1 relative">
+          <Input
+            placeholder="Search by order number, customer, or reason..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pr-10"
+          />
+          <Filter className="w-4 h-4 absolute right-3 top-3 text-muted-foreground" />
+        </div>
+      </div>
 
-              {/* Tracking Info */}
-              {(selectedReturn.return_tracking_number || selectedReturn.courier_partner) && (
-                <div className="p-3 bg-primary/5 rounded-lg">
-                  <p className="text-xs text-muted-foreground mb-1">Return Tracking</p>
-                  <p className="font-[JetBrains_Mono] font-medium">{selectedReturn.return_tracking_number || '-'}</p>
-                  {selectedReturn.courier_partner && <p className="text-xs text-muted-foreground mt-1">via {selectedReturn.courier_partner}</p>}
-                </div>
-              )}
-
-              {selectedReturn.refund_amount && (
-                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                  <p className="text-xs text-muted-foreground">Refund Amount</p>
-                  <p className="text-lg font-bold font-[JetBrains_Mono] text-green-700">₹{selectedReturn.refund_amount}</p>
-                </div>
-              )}
-
-              {/* Status History */}
-              {selectedReturn.status_history?.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-semibold mb-2">Status History</h4>
-                  <div className="space-y-1.5">
-                    {selectedReturn.status_history.map((h, i) => (
-                      <div key={i} className={`flex items-center justify-between text-xs p-2 rounded ${h.is_undo ? 'bg-orange-50' : 'bg-secondary/30'}`}>
-                        <div className="flex items-center gap-2">
-                          {h.is_undo && <Undo2 className="w-3 h-3 text-orange-500" />}
-                          <span>{STATUS_LABELS[h.from_status]}</span>
-                          <ChevronRight className="w-3 h-3" />
-                          <span className="font-medium">{STATUS_LABELS[h.to_status]}</span>
+      {/* Returns Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-[Manrope]">
+            {activeTab === 'all' && 'All Returns'}
+            {activeTab === 'fraud' && 'Fraudulent Orders'}
+            {activeTab === 'damage' && 'Damaged Products'}
+            {activeTab === 'pending' && 'Pending Action'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Loading returns...</p>
+            </div>
+          ) : filteredReturns.length === 0 ? (
+            <div className="text-center py-12">
+              <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No returns found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Order #</th>
+                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Customer</th>
+                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Product</th>
+                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Reason</th>
+                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Classification</th>
+                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Amount</th>
+                    <th className="text-right py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredReturns.map((ret) => (
+                    <tr key={ret.id} className="border-b hover:bg-secondary/30">
+                      <td className="py-4 px-4">
+                        <span className="font-[JetBrains_Mono] text-sm font-medium">
+                          {ret.order_number}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div>
+                          <p className="text-sm font-medium">{ret.customer_name}</p>
+                          <p className="text-xs text-muted-foreground">{ret.phone}</p>
                         </div>
-                        <span className="text-muted-foreground">{safeDateShort(h.changed_at)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                      </td>
+                      <td className="py-4 px-4">
+                        <div>
+                          <p className="text-sm">{ret.product_name}</p>
+                          <p className="text-xs text-muted-foreground font-[JetBrains_Mono]">{ret.sku}</p>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <p className="text-sm">{ret.cancellation_reason || 'Not specified'}</p>
+                      </td>
+                      <td className="py-4 px-4">
+                        {getStatusBadge(ret.smart_flags)}
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="font-medium">₹{(ret.price || 0).toLocaleString()}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/orders/${ret.id}`)}
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          {ret.smart_flags?.includes('pending_action') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => takeAction(ret.id, 'approve_refund')}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-              {/* Status Actions */}
-              {!['refunded', 'replaced', 'rejected', 'cancelled'].includes(selectedReturn.return_status) && (
-                <div className="border-t pt-4">
-                  <h4 className="text-sm font-semibold mb-3">Update Status</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {getNextStatuses(selectedReturn.return_status).map(s => (
-                      <Button key={s} size="sm" variant={['rejected', 'cancelled'].includes(s) ? 'destructive' : 'outline'}
-                        onClick={() => initiateStatusChange(selectedReturn, s)} data-testid={`status-btn-${s}`}>
-                        {STATUS_LABELS[s]}
-                      </Button>
-                    ))}
-                  </div>
+      {/* Top Problematic Products */}
+      {analytics && analytics.top_problematic_products.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-[Manrope] flex items-center gap-2">
+              <TrendingUp className="w-5 h-5" />
+              Top Problematic Products
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {analytics.top_problematic_products.map((product, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 bg-secondary/20 rounded">
+                  <span className="font-[JetBrains_Mono] text-sm">{product.sku}</span>
+                  <Badge variant="destructive">{product.count} returns</Badge>
                 </div>
-              )}
-
-              {/* Undo Button */}
-              {selectedReturn.previous_status && (
-                <div className="border-t pt-4">
-                  <Button variant="outline" className="border-orange-300 text-orange-700 hover:bg-orange-50"
-                    onClick={() => handleUndo(selectedReturn)} data-testid="undo-status-btn">
-                    <Undo2 className="w-4 h-4 mr-2" />Undo (Revert to {STATUS_LABELS[selectedReturn.previous_status]})
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
-
-      {/* ===== MANDATORY FIELDS MODAL ===== */}
-      {pendingStatus && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" data-testid="mandatory-fields-modal">
-          <Card className="w-full max-w-md">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="font-[Manrope] text-base">
-                  {STATUS_LABELS[pendingStatus.status]} - Required Info
-                </CardTitle>
-                <p className="text-xs text-muted-foreground mt-1">
-                  <AlertTriangle className="w-3 h-3 inline mr-1" />
-                  Mandatory fields must be filled
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => setPendingStatus(null)}><X className="w-4 h-4" /></Button>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleMandatorySubmit} className="space-y-4">
-                {pendingStatus.status === 'pickup_scheduled' && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Pickup Date *</label>
-                    <Input type="date" required value={statusFields.pickup_date}
-                      onChange={e => setStatusFields({ ...statusFields, pickup_date: e.target.value })} data-testid="input-pickup-date" />
-                  </div>
-                )}
-                {pendingStatus.status === 'in_transit' && (
-                  <>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">Tracking Number *</label>
-                      <Input required value={statusFields.tracking_number}
-                        onChange={e => setStatusFields({ ...statusFields, tracking_number: e.target.value })}
-                        placeholder="Enter tracking number" data-testid="input-return-tracking" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground">Courier Partner</label>
-                      <Input value={statusFields.courier_partner}
-                        onChange={e => setStatusFields({ ...statusFields, courier_partner: e.target.value })}
-                        placeholder="Courier name" />
-                    </div>
-                  </>
-                )}
-                {pendingStatus.status === 'refunded' && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">Refund Amount</label>
-                    <Input type="number" step="0.01" value={statusFields.refund_amount}
-                      onChange={e => setStatusFields({ ...statusFields, refund_amount: e.target.value })}
-                      placeholder="0.00" />
-                  </div>
-                )}
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Notes</label>
-                  <Input value={statusFields.notes}
-                    onChange={e => setStatusFields({ ...statusFields, notes: e.target.value })}
-                    placeholder="Optional notes" />
-                </div>
-                <div className="flex gap-3">
-                  <Button type="button" variant="outline" onClick={() => setPendingStatus(null)} className="flex-1">Cancel</Button>
-                  <Button type="submit" className="flex-1" data-testid="submit-mandatory-btn">Confirm</Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const TimelineDate = ({ label, date }) => {
-  const d = date ? format(new Date(date), 'MMM dd, yyyy') : null;
-  return (
-    <div className={`p-2 rounded-lg border text-center ${d ? 'border-primary/20 bg-primary/5' : 'border-border/40 bg-muted/30 opacity-50'}`}>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-sm font-medium">{d || '-'}</p>
     </div>
   );
 };

@@ -126,6 +126,7 @@ class OrderBase(BaseModel):
     master_status: Optional[List[str]] = []  # Multi-status: ["pending_dispatch", "in_transit", "delivered", "installation_pending", "return_requested", "replacement_pending"]
     instructions: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
+    cancellation_reason: Optional[str] = None
 
 class OrderCreate(OrderBase):
     pass

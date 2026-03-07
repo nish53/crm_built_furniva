@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 import uuid
 
-router = APIRouter(prefix="/returns", tags=["returns"])
+router = APIRouter(prefix="/return-requests", tags=["return-requests"])
 
 @router.post("/", response_model=ReturnRequest)
 async def create_return_request(
