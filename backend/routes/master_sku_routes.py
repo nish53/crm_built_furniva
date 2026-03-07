@@ -36,13 +36,11 @@ async def create_master_sku_mapping(
             "master_sku": mapping.master_sku,
             "platform": "amazon",
             "platform_sku": mapping.amazon_sku or "",
-            "asin": mapping.amazon_asin or "",
-            "fnsku": mapping.amazon_fnsku or "",
-            "product_name": mapping.product_name or "",
-            "status": "active",
+            "platform_product_id": mapping.amazon_asin or "",
+            "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        await db.listings.insert_one(amazon_listing)
+        await db.platform_listings.insert_one(amazon_listing)
         listings_created.append("amazon")
     
     # Flipkart listing
@@ -52,12 +50,11 @@ async def create_master_sku_mapping(
             "master_sku": mapping.master_sku,
             "platform": "flipkart",
             "platform_sku": mapping.flipkart_sku or "",
-            "fsn": mapping.flipkart_fsn or "",
-            "product_name": mapping.product_name or "",
-            "status": "active",
+            "platform_product_id": mapping.flipkart_fsn or "",
+            "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        await db.listings.insert_one(flipkart_listing)
+        await db.platform_listings.insert_one(flipkart_listing)
         listings_created.append("flipkart")
     
     # Website listing
@@ -67,11 +64,10 @@ async def create_master_sku_mapping(
             "master_sku": mapping.master_sku,
             "platform": "website",
             "platform_sku": mapping.website_sku or "",
-            "product_name": mapping.product_name or "",
-            "status": "active",
+            "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        await db.listings.insert_one(website_listing)
+        await db.platform_listings.insert_one(website_listing)
         listings_created.append("website")
     
     # Update all orders with matching SKUs to include master_sku

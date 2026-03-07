@@ -248,133 +248,6 @@ export const OrderDetail = () => {
           </Card>
 
 
-          {/* Communication Status - for all orders */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-[Manrope] text-xl">Communication Status</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                {order.is_historical ? "Historical Record" : "Automated via WhatsApp CRM"}
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {/* Order Confirmation Call */}
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${order.order_conf_calling ? 'bg-green-500' : 'bg-red-400'}`} />
-                    <span className="text-sm">Order Confirmation Call</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {order.order_conf_calling ? 'Done' : 'Pending'}
-                  </span>
-                </div>
-
-                {/* Order Confirmation Message Sent */}
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${order.dispatch_conf_sent ? 'bg-green-500' : 'bg-red-400'}`} />
-                    <span className="text-sm">Order Confirmation Message Sent</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {order.dispatch_conf_sent ? 'Done' : 'Pending'}
-                  </span>
-                </div>
-
-                {/* DNP Day 1 */}
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${order.dnp_day1 ? 'bg-red-400' : order.confirmed_day1 ? 'bg-green-500' : 'bg-red-400'}`} />
-                    <span className="text-sm">DNP Day 1 (Did Not Pick)</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {order.confirmed_day1 ? 'Confirmed' : order.dnp_day1 ? 'Did Not Pick' : 'Pending'}
-                  </span>
-                </div>
-
-                {/* DNP Day 2 */}
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${order.dnp_day2 ? 'bg-red-400' : order.confirmed_day2 ? 'bg-green-500' : 'bg-red-400'}`} />
-                    <span className="text-sm">DNP Day 2</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {order.confirmed_day2 ? 'Confirmed' : order.dnp_day2 ? 'Did Not Pick' : 'Pending'}
-                  </span>
-                </div>
-
-                {/* DNP Day 3 */}
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${order.dnp_day3 ? 'bg-red-400' : order.confirmed_day3 ? 'bg-green-500' : 'bg-red-400'}`} />
-                    <span className="text-sm">DNP Day 3</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {order.confirmed_day3 ? 'Confirmed' : order.dnp_day3 ? 'Did Not Pick' : 'Pending'}
-                  </span>
-                </div>
-
-                {/* Dispatch Confirmation */}
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${order.dispatch_conf_sent ? 'bg-green-500' : 'bg-red-400'}`} />
-                    <span className="text-sm">Dispatch Confirmation</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {order.dispatch_conf_sent ? 'Done' : 'Pending'}
-                  </span>
-                </div>
-
-                {/* Delivery Confirmation */}
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${order.deliver_conf ? 'bg-green-500' : 'bg-red-400'}`} />
-                    <span className="text-sm">Delivery Confirmation</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {order.deliver_conf ? 'Done' : 'Pending'}
-                  </span>
-                </div>
-
-                {/* Installation Confirmation */}
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full bg-red-400" />
-                    <span className="text-sm">Installation Confirmation</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">Pending</span>
-                </div>
-
-                {/* Review Request */}
-                <div className="flex items-center justify-between py-2 border-b">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-3 h-3 rounded-full ${order.review_conf ? 'bg-green-500' : 'bg-red-400'}`} />
-                    <span className="text-sm">Review Request</span>
-                  </div>
-                  <span className="text-sm font-medium text-muted-foreground">
-                    {order.review_conf ? 'Done' : 'Pending'}
-                  </span>
-                </div>
-
-                {/* Assembly Type */}
-                <div className="flex items-center justify-between py-3 mt-4">
-                  <span className="text-sm font-medium">Assembly Type</span>
-                  <span className="text-sm font-medium">
-                    {order.assembly_type || 'Not set'}
-                  </span>
-                </div>
-
-                {/* Paid Assembly */}
-                <div className="flex items-center justify-between py-3">
-                  <span className="text-sm font-medium">Paid Assembly</span>
-                  <span className="text-sm font-medium">
-                    {order.installation_cost && order.installation_cost > 0 ? 'Yes' : 'No'}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-
           {/* Timeline */}
           <Card data-testid="timeline-card">
             <CardHeader><CardTitle className="font-[Manrope] flex items-center gap-2"><Calendar className="w-5 h-5" />Timeline</CardTitle></CardHeader>
@@ -385,7 +258,7 @@ export const OrderDetail = () => {
                 <TimelineItem label="Pickup Date" date={safeDateShort(order.pickup_date)} active={!!order.pickup_date} />
                 <TimelineItem label="In Transit" date={safeDateShort(order.in_transit_date)} active={!!order.in_transit_date} />
                 <TimelineItem label="Out for Delivery" date={safeDateShort(order.out_for_delivery_date)} active={!!order.out_for_delivery_date} />
-                <TimelineItem label="Delivered" date={safeDateShort(order.delivered_date)} active={!!order.delivered_date} />
+                <TimelineItem label="Delivered" date={safeDateShort(order.delivery_date || order.delivered_date)} active={!!(order.delivery_date || order.delivered_date)} />
                 {order.return_requested && <>
                   <TimelineItem label="Return Requested" date={safeDateShort(order.return_date)} active warn />
                   <TimelineItem label="RTO Initiated" date={safeDateShort(order.rto_initiated_date)} active={!!order.rto_initiated_date} warn />
