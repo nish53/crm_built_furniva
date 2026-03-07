@@ -35,9 +35,10 @@ export const Returns = () => {
   const fetchReturns = async () => {
     try {
       const params = {};
-      if (activeTab === 'fraud') params.fraud_only = true;
-      if (activeTab === 'damage') params.damage_only = true;
-      if (activeTab === 'pending') params.pending_only = true;
+      if (activeTab === 'pfc') params.category = 'pfc';
+      if (activeTab === 'resolved') params.category = 'resolved';
+      if (activeTab === 'refunded') params.category = 'refunded';
+      if (activeTab === 'fraud') params.category = 'fraud';
       if (searchTerm) params.reason_filter = searchTerm;
 
       const response = await api.get('/returns/', { params });
@@ -68,25 +69,22 @@ export const Returns = () => {
     }
   };
 
-  const getStatusBadge = (flags) => {
-    if (!flags || flags.length === 0) return <Badge variant="outline">Unknown</Badge>;
+  const getStatusBadge = (category) => {
+    if (!category) return <Badge variant="outline">Unknown</Badge>;
     
-    if (flags.includes('fraud')) {
-      return <Badge className="bg-red-500">Fraud Alert</Badge>;
+    if (category === 'fraud') {
+      return <Badge className="bg-red-600 text-white">🔴 Fraud/Logistics</Badge>;
     }
-    if (flags.includes('pfc')) {
-      return <Badge className="bg-orange-500">Pre-Cancel</Badge>;
+    if (category === 'pfc') {
+      return <Badge className="bg-green-600 text-white">🟢 PFC</Badge>;
     }
-    if (flags.includes('replacement')) {
-      return <Badge className="bg-blue-500">Replacement</Badge>;
+    if (category === 'resolved') {
+      return <Badge className="bg-yellow-600 text-white">🟡 Resolved</Badge>;
     }
-    if (flags.includes('damage')) {
-      return <Badge className="bg-yellow-500">Damaged</Badge>;
+    if (category === 'refunded') {
+      return <Badge className="bg-orange-600 text-white">🔴 Refunded</Badge>;
     }
-    if (flags.includes('pending_action')) {
-      return <Badge className="bg-purple-500">Pending Action</Badge>;
-    }
-    return <Badge variant="outline">{flags[0]}</Badge>;
+    return <Badge variant="outline">{category}</Badge>;
   };
 
   const filteredReturns = returns.filter(r => 
@@ -131,11 +129,14 @@ export const Returns = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Fraud Cases</p>
-                  <p className="text-2xl font-bold text-red-500">{analytics.summary.fraud_count}</p>
+                  <p className="text-sm text-muted-foreground">PFC (Pre-Cancel)</p>
+                  <p className="text-2xl font-bold text-green-600">{analytics.summary.pfc_count}</p>
                 </div>
-                <AlertTriangle className="w-8 h-8 text-red-500" />
+                <XCircle className="w-8 h-8 text-green-600" />
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                ₹{analytics.summary.pfc_loss?.toLocaleString()} loss
+              </p>
             </CardContent>
           </Card>
 
@@ -143,11 +144,14 @@ export const Returns = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Damaged</p>
-                  <p className="text-2xl font-bold text-yellow-600">{analytics.summary.damage_count}</p>
+                  <p className="text-sm text-muted-foreground">Resolved (No Refund)</p>
+                  <p className="text-2xl font-bold text-yellow-600">{analytics.summary.resolved_count}</p>
                 </div>
-                <Package className="w-8 h-8 text-yellow-600" />
+                <CheckCircle2 className="w-8 h-8 text-yellow-600" />
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                ₹{analytics.summary.resolved_cost?.toLocaleString()} cost
+              </p>
             </CardContent>
           </Card>
 
@@ -155,11 +159,14 @@ export const Returns = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Replacements</p>
-                  <p className="text-2xl font-bold text-blue-500">{analytics.summary.replacement_count}</p>
+                  <p className="text-sm text-muted-foreground">Refunded</p>
+                  <p className="text-2xl font-bold text-orange-600">{analytics.summary.refunded_count}</p>
                 </div>
-                <RefreshCcw className="w-8 h-8 text-blue-500" />
+                <AlertTriangle className="w-8 h-8 text-orange-600" />
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                ₹{analytics.summary.refunded_loss?.toLocaleString()} loss
+              </p>
             </CardContent>
           </Card>
 
@@ -167,11 +174,14 @@ export const Returns = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Pre-Cancel</p>
-                  <p className="text-2xl font-bold text-orange-500">{analytics.summary.pfc_count}</p>
+                  <p className="text-sm text-muted-foreground">Fraud/Logistics</p>
+                  <p className="text-2xl font-bold text-red-600">{analytics.summary.fraud_count}</p>
                 </div>
-                <XCircle className="w-8 h-8 text-orange-500" />
+                <AlertTriangle className="w-8 h-8 text-red-600" />
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                ₹{analytics.summary.fraud_loss?.toLocaleString()} loss
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -186,22 +196,32 @@ export const Returns = () => {
           All Returns
         </Button>
         <Button
+          variant={activeTab === 'pfc' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('pfc')}
+          className="text-green-600"
+        >
+          🟢 PFC (Minimal Loss)
+        </Button>
+        <Button
+          variant={activeTab === 'resolved' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('resolved')}
+          className="text-yellow-600"
+        >
+          🟡 Resolved (No Refund)
+        </Button>
+        <Button
+          variant={activeTab === 'refunded' ? 'default' : 'ghost'}
+          onClick={() => setActiveTab('refunded')}
+          className="text-orange-600"
+        >
+          🔴 Refunded (Full Loss)
+        </Button>
+        <Button
           variant={activeTab === 'fraud' ? 'default' : 'ghost'}
           onClick={() => setActiveTab('fraud')}
+          className="text-red-600"
         >
-          Fraudulent
-        </Button>
-        <Button
-          variant={activeTab === 'damage' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('damage')}
-        >
-          Damaged
-        </Button>
-        <Button
-          variant={activeTab === 'pending' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('pending')}
-        >
-          Pending Action
+          ⚫ Fraud/Logistics
         </Button>
       </div>
 
@@ -223,9 +243,10 @@ export const Returns = () => {
         <CardHeader>
           <CardTitle className="font-[Manrope]">
             {activeTab === 'all' && 'All Returns'}
-            {activeTab === 'fraud' && 'Fraudulent Orders'}
-            {activeTab === 'damage' && 'Damaged Products'}
-            {activeTab === 'pending' && 'Pending Action'}
+            {activeTab === 'pfc' && '🟢 PFC - Pre-Fulfillment Cancellations'}
+            {activeTab === 'resolved' && '🟡 Resolved - No Refund Issued'}
+            {activeTab === 'refunded' && '🔴 Refunded - Full Loss'}
+            {activeTab === 'fraud' && '⚫ Fraud/Logistics Errors'}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -276,10 +297,15 @@ export const Returns = () => {
                         <p className="text-sm">{ret.cancellation_reason || 'Not specified'}</p>
                       </td>
                       <td className="py-4 px-4">
-                        {getStatusBadge(ret.smart_flags)}
+                        {getStatusBadge(ret.category)}
                       </td>
                       <td className="py-4 px-4">
-                        <span className="font-medium">₹{(ret.price || 0).toLocaleString()}</span>
+                        <div>
+                          <span className="font-medium">₹{(ret.price || 0).toLocaleString()}</span>
+                          <p className="text-xs text-muted-foreground">
+                            Loss: ₹{(ret.refund_loss || 0).toLocaleString()}
+                          </p>
+                        </div>
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex items-center justify-end gap-2">
