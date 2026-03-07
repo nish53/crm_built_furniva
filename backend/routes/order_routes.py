@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
-from models import Order, OrderCreate, OrderUpdate, User, OrderStatus, OrderChannel
+from models import Order, OrderCreate, OrderUpdate, User, OrderStatus, OrderChannel, PaginatedResponse
 from auth import get_current_active_user
 from database import get_database
 from typing import List, Optional
@@ -7,13 +7,14 @@ from datetime import datetime, timezone
 import uuid
 import csv
 import io
+import math
 from dateutil import parser as date_parser
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 # ===== ORDER CRUD ENDPOINTS =====
 
-@router.get("/", response_model=List[Order])
+@router.get("/", response_model=PaginatedResponse[Order])
 async def get_orders(
     status: Optional[str] = None,
     channel: Optional[str] = None,
@@ -28,7 +29,7 @@ async def get_orders(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """Get orders with optional filters"""
+    """Get orders with optional filters and pagination"""
     query = {}
     
     if status:
@@ -59,8 +60,23 @@ async def get_orders(
             price_query["$lte"] = max_price
         query["price"] = price_query
     
+    # Get total count for pagination
+    total = await db.orders.count_documents(query)
+    
+    # Get paginated results
     orders = await db.orders.find(query, {"_id": 0}).sort("order_date", -1).skip(skip).limit(limit).to_list(limit)
-    return orders
+    
+    # Calculate pagination metadata
+    page = (skip // limit) + 1 if limit > 0 else 1
+    total_pages = math.ceil(total / limit) if limit > 0 else 1
+    
+    return {
+        "items": orders,
+        "total": total,
+        "page": page,
+        "page_size": limit,
+        "total_pages": total_pages
+    }
 
 @router.get("/{order_id}", response_model=Order)
 async def get_order(
@@ -245,11 +261,9 @@ async def import_historical_orders(
                     skipped_count += 1
                     continue
                 
-                # Check if order already exists
-                existing = await db.orders.find_one({"order_number": order_id})
-                if existing:
-                    skipped_count += 1
-                    continue
+                # For multi-item orders: Don't skip, create separate records per item
+                # Each item gets unique id but same order_number
+                # This allows multiple items under same order while maintaining current schema
                 
                 # Parse dates with dd/mm/yyyy format
                 def parse_date(date_str):
@@ -265,7 +279,7 @@ async def import_historical_orders(
                             return datetime(int(year), int(month), int(day), tzinfo=timezone.utc).isoformat()
                         # Fallback to dateparser
                         return date_parser.parse(date_str).replace(tzinfo=timezone.utc).isoformat()
-                    except:
+                    except Exception:
                         return None
                 
                 # Map status - handle "Pickup Pending" correctly
@@ -300,12 +314,20 @@ async def import_historical_orders(
                 qty_value = row.get("Qty", "1")
                 price_value = row.get("Price", "0")
                 
+                # Parse order date - skip row if invalid
+                order_date = parse_date(row.get("Order Date"))
+                if not order_date:
+                    error_msg = f"Row {row_num}: Invalid or missing Order Date"
+                    errors.append(error_msg)
+                    error_count += 1
+                    continue
+                
                 # Build order object
                 order = {
                     "id": str(uuid.uuid4()),
                     "channel": "historical",
                     "order_number": order_id,
-                    "order_date": parse_date(row.get("Order Date")) or datetime.now(timezone.utc).isoformat(),
+                    "order_date": order_date,
                     "dispatch_by": parse_date(row.get("Dispatch By")),
                     "delivery_by": parse_date(row.get("Delivery By")),
                     "dispatch_date": parse_date(row.get("Actual Dispatch Date")),

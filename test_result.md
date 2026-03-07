@@ -514,6 +514,147 @@ backend:
           
           Both bulk operations endpoints are production-ready and fully functional.
 
+  - task: "Multi-Item Orders Import Fix"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/order_routes.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          CRITICAL BUG FIX: Removed duplicate order_id check that was skipping multi-item orders.
+          - Removed lines 248-252 that checked for existing order_number
+          - Each CSV row now creates a unique order record with unique id
+          - Multi-item orders use same order_number but different ids
+          - This maintains current schema (no items array needed)
+          Needs testing with CSV containing multiple items with same order ID.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ MULTI-ITEM ORDERS IMPORT FIX CONFIRMED WORKING
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          - Created test CSV with Order TEST-MULTI-001 containing 3 items (chair, table, cushions)
+          - ✅ ALL 4 ROWS IMPORTED SUCCESSFULLY (no skipping of duplicate order IDs)
+          - ✅ Database verification: Found 3 items for TEST-MULTI-001 order
+          - ✅ Multi-item structure correct: same order_number, unique IDs, unique SKUs
+          - ✅ Single item orders also import correctly
+          
+          CRITICAL BUG FIXED: Previously duplicate order_id check was skipping rows, causing data loss.
+          Now each row creates unique order record while maintaining same order_number for grouping.
+          Multi-item orders are properly supported without schema changes.
+
+  - task: "Order Pagination System"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/order_routes.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          CRITICAL BUG FIX: Implemented proper pagination with total count.
+          - Added PaginatedResponse[T] generic model in models.py
+          - GET /api/orders/ now returns {items, total, page, page_size, total_pages}
+          - Uses count_documents() to get accurate total before fetching
+          - Proper skip/limit calculation for pagination
+          - Filtering now works across ALL records, not just first 100
+          Needs testing with large datasets and various filters.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ ORDER PAGINATION SYSTEM FULLY FUNCTIONAL
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          - ✅ Pagination structure correct: {items, total, page, page_size, total_pages}
+          - ✅ Page metadata calculation working correctly
+          - ✅ skip=0&limit=100 and skip=100&limit=100 testing successful
+          - ✅ Total count consistent across pages
+          - ✅ Status filtering (delivered) works across ALL records
+          - ✅ Channel filtering (amazon) works across ALL records
+          - ✅ Proper mathematical pagination: total_pages = ceil(total / page_size)
+          
+          CRITICAL BUG FIXED: Filtering now works on entire dataset, not just first 100 records.
+          Pagination response structure matches expected format for frontend integration.
+
+  - task: "Master SKU Sync Endpoints"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/master_sku_routes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          ENHANCEMENT: Added manual sync endpoints for Master SKU mappings.
+          Note: Auto-sync already exists in create endpoint (lines 77-99)
+          New endpoints:
+          - POST /api/master-sku/sync-orders/{master_sku} - Sync specific SKU to orders
+          - POST /api/master-sku/sync-all-orders - Sync all mappings to all orders
+          These allow re-syncing historical data after bulk imports.
+          Needs testing to verify orders get master_sku field populated correctly.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ MASTER SKU SYNC ENDPOINTS FULLY FUNCTIONAL
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          1. ✅ Master SKU Creation with Auto-sync:
+             - Created Master SKU with amazon_sku mapping
+             - Auto-listings creation working (amazon listing created)
+             - Fixed Pydantic model to include listings_created and orders_updated fields
+          
+          2. ✅ Manual Sync Endpoints:
+             - POST /api/master-sku/sync-orders/{master_sku}: Successfully synced 1 order
+             - POST /api/master-sku/sync-all-orders: Successfully synced across all mappings
+             - Orders updated with master_sku field populated correctly
+          
+          3. ✅ Database Verification:
+             - Order retrieved with master_sku field correctly set
+             - Matching logic working: amazon_sku matches order SKU → master_sku populated
+             
+          ENHANCEMENT CONFIRMED: Manual sync endpoints allow re-syncing historical orders after bulk imports.
+
+  - task: "Order Date Validation Fix"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/order_routes.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: false
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          BUG FIX: Improved order date validation during import.
+          - Removed fallback to datetime.now() for invalid dates
+          - Now validates order_date first before creating order
+          - Skips row and logs error if order_date is invalid/missing
+          - Prevents data corruption from incorrect dates
+          Needs testing with CSV containing invalid/missing order dates.
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ ORDER DATE VALIDATION FIX CONFIRMED WORKING
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          - Created test CSV with 2 valid dates and 3 invalid/missing dates
+          - ✅ ONLY VALID DATES IMPORTED: 2 imported, 3 errors (as expected)
+          - ✅ Error details correctly mention "Invalid or missing Order Date"
+          - ✅ Valid date orders (15/03/2024, 16/03/2024) imported successfully
+          - ✅ Invalid date orders (empty, "invalid-date", "32/15/2024") correctly skipped
+          - ✅ No data corruption: invalid dates don't default to current date
+          
+          BUG FIXED: Previously invalid dates would fallback to datetime.now() causing data corruption.
+          Now proper validation prevents bad data from entering the system.
+
         comment: |
           ✅ Dashboard Stats API working correctly:
           - Returns all required metrics (total_orders, pending_orders, dispatched_today, etc.)
@@ -623,6 +764,47 @@ frontend:
           - Clear selection functionality
           Needs frontend testing to verify all task bulk operations work.
 
+  - task: "Orders Pagination UI"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/Orders.js"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          CRITICAL BUG FIX: Added pagination UI for orders page.
+          - Added pagination state management (currentPage, pagination metadata)
+          - Updated fetchOrders to handle paginated API response
+          - Backward compatible with old non-paginated response
+          - Pagination controls: Previous/Next buttons, page info
+          - Shows "X to Y of Z orders" display
+          - Filters now work across all pages, not just first 100
+          - useEffect triggers on currentPage change
+          Needs frontend testing to verify pagination controls work correctly.
+
+  - task: "Remove FNSKU Field from Master SKU"
+    implemented: true
+    working: "NA"
+    file: "/app/frontend/src/pages/MasterSKU.js"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          UI CLEANUP: Removed FNSKU field from Master SKU page.
+          Changes:
+          - Removed FNSKU input field from form (was lines 269-275)
+          - Removed FNSKU from display section (was line 362)
+          - Removed amazon_fnsku from formData initial state
+          - Removed amazon_fnsku from resetForm function
+          User reported FNSKU is no longer needed.
+          Needs frontend testing to verify form works without FNSKU field.
+
         agent: "main"
         comment: |
           Order import UI already accepts both .csv and .txt files.
@@ -660,20 +842,23 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "3.0"
-  test_sequence: 2
-  run_ui: true
-  last_updated: "2025-02-26"
+  version: "4.0"
+  test_sequence: 3
+  run_ui: false
+  last_updated: "2025-03-07"
+  session: "bug_fixes"
 
 test_plan:
   current_focus:
-    - "Priority Dashboard Endpoints"
-    - "Fake Shipping Functionality" 
-    - "Historical Orders Import"
-    - "Task Enhancement Features"
+    - "Multi-Item Orders Import Fix"
+    - "Order Pagination System"
+    - "Master SKU Sync Endpoints"
+    - "Order Date Validation Fix"
+    - "Orders Pagination UI"
+    - "Remove FNSKU Field from Master SKU"
   stuck_tasks: []
   test_all: false
-  test_priority: "high_first"
+  test_priority: "critical_first"
 
 agent_communication:
   - agent: "main"
@@ -859,3 +1044,51 @@ agent_communication:
       Main Agent: The newly implemented Furniva CRM features have been thoroughly tested
       and validated. All systems are working correctly and ready for user deployment.
       Only minor enhancement needed: add fake_shipped field to Order Pydantic model.
+
+  - agent: "testing"
+    message: |
+      🎉 CRITICAL BUG FIXES TESTING COMPLETE - ALL 4 TESTS PASSED! 🎉
+      
+      === COMPREHENSIVE VALIDATION RESULTS ===
+      Date: 2025-03-07 Testing Session
+      Test Coverage: 4/4 critical bug fixes passed (100% success rate)
+      
+      ✅ **1. ORDER PAGINATION SYSTEM (CRITICAL) - CONFIRMED WORKING:**
+      - Pagination response structure: {items, total, page, page_size, total_pages} ✅
+      - Mathematical calculations correct: ceil(total/page_size) ✅  
+      - Filtering works across ALL records (not just first 100) ✅
+      - Status and channel filters tested and working ✅
+      
+      ✅ **2. MULTI-ITEM ORDERS IMPORT (CRITICAL) - CONFIRMED WORKING:**
+      - Multi-item orders with same Order ID import correctly ✅
+      - Each row creates unique order with unique ID ✅
+      - Same order_number for grouping, different SKUs for items ✅
+      - No more data loss from duplicate order ID skipping ✅
+      
+      ✅ **3. MASTER SKU SYNC ENDPOINTS (HIGH) - CONFIRMED WORKING:**
+      - Master SKU creation with auto-sync working ✅
+      - POST /api/master-sku/sync-orders/{master_sku} working ✅
+      - POST /api/master-sku/sync-all-orders working ✅
+      - Orders get master_sku field populated correctly ✅
+      - Fixed Pydantic model to include missing fields ✅
+      
+      ✅ **4. ORDER DATE VALIDATION (MEDIUM) - CONFIRMED WORKING:**
+      - Invalid/missing order dates are properly skipped ✅
+      - Error messages mention "Invalid or missing Order Date" ✅
+      - Valid dates import successfully, invalid dates rejected ✅
+      - No data corruption from datetime.now() fallback ✅
+      
+      🔧 **MINOR FIX APPLIED:**
+      - Added missing fields to MasterSKUMapping model (listings_created, orders_updated)
+      - This resolved HTTP 500 error during Master SKU creation
+      
+      🏆 **FINAL STATUS: ALL CRITICAL BUG FIXES CONFIRMED FUNCTIONAL!**
+      
+      Main Agent: All 4 critical backend bug fixes from 2025-03-07 have been thoroughly tested
+      and validated. The Furniva CRM backend is working correctly with proper:
+      - Pagination across large datasets
+      - Multi-item order import without data loss  
+      - Master SKU sync for historical order updates
+      - Date validation preventing data corruption
+      
+      The backend is ready for production use.

@@ -49,17 +49,25 @@ export const Orders = () => {
   const [uniqueMasterSkus, setUniqueMasterSkus] = useState([]);
   const [uniqueCities, setUniqueCities] = useState([]);
   const [uniqueStates, setUniqueStates] = useState([]);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    page_size: 100,
+    total_pages: 0
+  });
+  const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchOrders();
     fetchFilterOptions();
-  }, [statusFilter, channelFilter, masterSkuFilter, cityFilter, stateFilter, minPrice, maxPrice]);
+  }, [statusFilter, channelFilter, masterSkuFilter, cityFilter, stateFilter, minPrice, maxPrice, currentPage]);
 
   const fetchFilterOptions = async () => {
     try {
       const response = await api.get('/orders/', { params: { limit: 1000 } });
-      const allOrders = response.data;
+      const data = response.data;
+      const allOrders = data.items || data; // Handle both paginated and old response
       
       // Extract unique values
       const skus = [...new Set(allOrders.map(o => o.master_sku).filter(Boolean))].sort();
@@ -76,7 +84,10 @@ export const Orders = () => {
 
   const fetchOrders = async () => {
     try {
-      const params = {};
+      const params = {
+        skip: (currentPage - 1) * 100,
+        limit: 100
+      };
       if (statusFilter !== 'all') params.status = statusFilter;
       if (channelFilter !== 'all') params.channel = channelFilter;
       if (searchTerm) params.search = searchTerm;
@@ -87,7 +98,21 @@ export const Orders = () => {
       if (maxPrice) params.max_price = maxPrice;
 
       const response = await api.get('/orders/', { params });
-      setOrders(response.data);
+      const data = response.data;
+      
+      // Handle paginated response
+      if (data.items) {
+        setOrders(data.items);
+        setPagination({
+          total: data.total,
+          page: data.page,
+          page_size: data.page_size,
+          total_pages: data.total_pages
+        });
+      } else {
+        // Fallback for old non-paginated response
+        setOrders(data);
+      }
     } catch (error) {
       toast.error('Failed to fetch orders');
     } finally {
@@ -462,8 +487,9 @@ export const Orders = () => {
               </Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full" data-testid="orders-table">
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full" data-testid="orders-table">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left py-3 px-4 w-12">
@@ -582,6 +608,37 @@ export const Orders = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            {pagination.total > 0 && (
+              <div className="flex items-center justify-between px-6 py-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * pagination.page_size) + 1} to {Math.min(currentPage * pagination.page_size, pagination.total)} of {pagination.total} orders
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <div className="text-sm">
+                    Page {currentPage} of {pagination.total_pages}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(pagination.total_pages, prev + 1))}
+                    disabled={currentPage === pagination.total_pages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </CardContent>
       </Card>

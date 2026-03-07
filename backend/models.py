@@ -1,7 +1,18 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TypeVar, Generic
 from datetime import datetime
 from enum import Enum
+
+# Generic type for paginated responses
+T = TypeVar('T')
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    """Generic paginated response model"""
+    items: List[T]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 class UserRole(str, Enum):
     ADMIN = "admin"
@@ -268,6 +279,8 @@ class MasterSKUMapping(BaseModel):
     selling_price: Optional[float] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    listings_created: Optional[List[str]] = []  # Auto-created listings
+    orders_updated: Optional[int] = 0  # Count of orders updated
 
 class MasterSKUMappingCreate(BaseModel):
     master_sku: str

@@ -21,7 +21,6 @@ export const MasterSKU = () => {
     category: '',
     amazon_sku: '',
     amazon_asin: '',
-    amazon_fnsku: '',
     flipkart_sku: '',
     flipkart_fsn: '',
     website_sku: '',
@@ -102,7 +101,6 @@ export const MasterSKU = () => {
       category: '',
       amazon_sku: '',
       amazon_asin: '',
-      amazon_fnsku: '',
       flipkart_sku: '',
       flipkart_fsn: '',
       website_sku: '',
@@ -265,14 +263,6 @@ export const MasterSKU = () => {
                         placeholder="B0XXXXXXXX"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">FNSKU</label>
-                      <Input
-                        value={formData.amazon_fnsku}
-                        onChange={(e) => setFormData({...formData, amazon_fnsku: e.target.value})}
-                        placeholder="X00XXXXXXX"
-                      />
-                    </div>
                   </div>
                 </div>
 
@@ -362,12 +352,11 @@ export const MasterSKU = () => {
 
                     <div className="grid grid-cols-3 gap-4 text-sm">
                       {/* Amazon */}
-                      {(mapping.amazon_sku || mapping.amazon_asin || mapping.amazon_fnsku) && (
+                      {(mapping.amazon_sku || mapping.amazon_asin) && (
                         <div>
                           <p className="text-xs font-medium text-muted-foreground mb-1">Amazon</p>
                           {mapping.amazon_sku && <p>SKU: {mapping.amazon_sku}</p>}
                           {mapping.amazon_asin && <p>ASIN: {mapping.amazon_asin}</p>}
-                          {mapping.amazon_fnsku && <p>FNSKU: {mapping.amazon_fnsku}</p>}
                         </div>
                       )}
 

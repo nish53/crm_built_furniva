@@ -238,3 +238,98 @@ async def bulk_import_master_sku(
         "errors": errors,
         "total": len(mappings)
     }
+
+@router.post("/sync-orders/{master_sku}")
+async def sync_orders_with_master_sku(
+    master_sku: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Manually sync orders with a specific Master SKU mapping"""
+    # Get the mapping
+    mapping = await db.master_sku_mappings.find_one({"master_sku": master_sku}, {"_id": 0})
+    if not mapping:
+        raise HTTPException(status_code=404, detail="Master SKU mapping not found")
+    
+    update_count = 0
+    
+    # Update Amazon orders
+    if mapping.get("amazon_sku"):
+        result = await db.orders.update_many(
+            {"sku": mapping["amazon_sku"], "channel": "amazon"},
+            {"$set": {"master_sku": master_sku, "product_name": mapping["product_name"]}}
+        )
+        update_count += result.modified_count
+    
+    # Update Flipkart orders
+    if mapping.get("flipkart_sku"):
+        result = await db.orders.update_many(
+            {"sku": mapping["flipkart_sku"], "channel": "flipkart"},
+            {"$set": {"master_sku": master_sku, "product_name": mapping["product_name"]}}
+        )
+        update_count += result.modified_count
+    
+    # Update Website orders
+    if mapping.get("website_sku"):
+        result = await db.orders.update_many(
+            {"sku": mapping["website_sku"], "channel": "website"},
+            {"$set": {"master_sku": master_sku, "product_name": mapping["product_name"]}}
+        )
+        update_count += result.modified_count
+    
+    return {
+        "message": f"Synced {update_count} orders with master SKU {master_sku}",
+        "orders_updated": update_count
+    }
+
+@router.post("/sync-all-orders")
+async def sync_all_orders_with_master_sku(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Sync all orders with their respective Master SKU mappings"""
+    # Get all mappings
+    mappings = await db.master_sku_mappings.find({}, {"_id": 0}).to_list(None)
+    
+    total_updated = 0
+    mapping_results = []
+    
+    for mapping in mappings:
+        update_count = 0
+        
+        # Update Amazon orders
+        if mapping.get("amazon_sku"):
+            result = await db.orders.update_many(
+                {"sku": mapping["amazon_sku"], "channel": "amazon"},
+                {"$set": {"master_sku": mapping["master_sku"], "product_name": mapping["product_name"]}}
+            )
+            update_count += result.modified_count
+        
+        # Update Flipkart orders
+        if mapping.get("flipkart_sku"):
+            result = await db.orders.update_many(
+                {"sku": mapping["flipkart_sku"], "channel": "flipkart"},
+                {"$set": {"master_sku": mapping["master_sku"], "product_name": mapping["product_name"]}}
+            )
+            update_count += result.modified_count
+        
+        # Update Website orders
+        if mapping.get("website_sku"):
+            result = await db.orders.update_many(
+                {"sku": mapping["website_sku"], "channel": "website"},
+                {"$set": {"master_sku": mapping["master_sku"], "product_name": mapping["product_name"]}}
+            )
+            update_count += result.modified_count
+        
+        total_updated += update_count
+        mapping_results.append({
+            "master_sku": mapping["master_sku"],
+            "orders_updated": update_count
+        })
+    
+    return {
+        "message": f"Synced {total_updated} orders across {len(mappings)} master SKU mappings",
+        "total_orders_updated": total_updated,
+        "mappings_processed": len(mappings),
+        "results": mapping_results
+    }
