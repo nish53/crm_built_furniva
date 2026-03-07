@@ -261,31 +261,37 @@ async def take_return_action(
     return {"message": f"Action '{action}' completed successfully", "order_id": order_id}
 
 def classify_return_category(order: dict) -> str:
-    """Classify return into business categories based on user's business logic"""
+    """Classify return into business categories - handles both historical and new orders"""
     
     reason = (order.get("cancellation_reason") or "").lower()
     status = order.get("status", "")
     
-    # Category 1: PFC (Pre-Fulfillment Cancel) - Minimal loss
-    if "pfc" in reason and status == "cancelled":
+    # Category 1: PFC (Pre-Fulfillment Cancel)
+    if "pfc" in reason or "pre fulfillment" in reason:
         return "pfc"
     
-    # Category 4: Fraud/Logistics Error - Double loss
-    if "cancelled and delivered" in reason:
+    # Category 4: Fraud/Logistics Error
+    if "cancelled and delivered" in reason or "fraud" in reason:
         return "fraud"
     
     # Category 2: Resolved (Delivered + solution provided, no refund)
-    if status == "delivered" and any(keyword in reason for keyword in [
-        "damage", "damaged and pending", "damaged and replaced", 
-        "hardware", "customer issue"
-    ]):
-        return "resolved"
+    # Historical: "damaged and replaced" OR status=delivered with damage-related reason
+    if status == "delivered":
+        if any(keyword in reason for keyword in [
+            "damaged and replaced", "damaged and pending",
+            "damage", "quality", "hardware", "customer issue"
+        ]):
+            return "resolved"
     
-    # Category 3: Refunded (Cancelled excluding PFC) - Full loss
-    if status == "cancelled" and "pfc" not in reason:
-        return "refunded"
+    # Category 3: Refunded (Cancelled excluding PFC)
+    if status == "cancelled":
+        if "pfc" not in reason and "pre fulfillment" not in reason:
+            return "refunded"
     
-    # Default
+    # Default for unclear cases
+    if status == "cancelled":
+        return "refunded"  # Default cancelled orders to refunded
+    
     return "unknown"
 
 def calculate_refund_loss(order: dict) -> float:

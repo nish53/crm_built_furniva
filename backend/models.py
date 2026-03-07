@@ -411,28 +411,15 @@ class ProcurementBatchCreate(BaseModel):
 
 # Return Management Models
 class ReturnReason(str, Enum):
-    # Historical reasons from user's data
-    PFC = "PFC"
-    DELAY = "Delay"
+    # For NEW return requests (8 reasons only)
     DAMAGE = "Damage"
-    DAMAGED_AND_PENDING = "damaged and pending"
-    DAMAGED_AND_REPLACED = "damaged and replaced"
-    HARDWARE_MISSING = "Hardware Missing"
-    CUSTOMER_ISSUE = "Customer Issue"
+    CUSTOMER_REFUSED = "Customer Refused at Doorstep"
     FRAUD = "Fraud"
-    CANCELLED_AND_DELIVERED = "cancelled and delivered"
-    STATUS_PENDING = "Status Pending"
-    
-    # Standard return reasons
-    DEFECTIVE_PRODUCT = "Defective Product"
-    DAMAGED_IN_TRANSIT = "Damaged in Transit"
-    WRONG_ITEM_DELIVERED = "Wrong Item Delivered"
-    NOT_AS_DESCRIBED = "Not as Described"
-    SIZE_ISSUE = "Size Issue"
-    QUALITY_ISSUE = "Quality Issue"
-    CUSTOMER_CHANGED_MIND = "Customer Changed Mind"
-    DELIVERY_DELAY = "Delivery Delay"
-    OTHER = "Other"
+    DELAYED = "Delayed"
+    WRONG_ITEM = "Wrong Item Delivered"
+    QUALITY_ISSUE = "Customer Quality Issue"
+    MISSING_ITEM = "Missing Item"
+    PRE_FULFILLMENT_CANCEL = "Pre Fulfillment Cancel"
 
 class ReturnType(str, Enum):
     RETURN = "return"

@@ -238,12 +238,20 @@ export const Replacements = () => {
                       )}
                       
                       {replacement.damage_images && replacement.damage_images.length > 0 && (
-                        <div className="flex gap-2 mt-2">
-                          {replacement.damage_images.map((img, idx) => (
-                            <Badge key={idx} variant="outline" className="text-xs">
-                              📷 Image {idx + 1}
-                            </Badge>
-                          ))}
+                        <div className="mt-3">
+                          <p className="text-xs font-medium text-muted-foreground mb-2">Damage Images:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {replacement.damage_images.map((img, idx) => (
+                              <div key={idx} className="relative group">
+                                <Badge variant="outline" className="text-xs cursor-pointer hover:bg-secondary">
+                                  📷 Image {idx + 1}: {img}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground block mt-1">
+                                  (Click to view - images stored as: {img})
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>

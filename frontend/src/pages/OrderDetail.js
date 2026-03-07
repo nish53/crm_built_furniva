@@ -332,6 +332,67 @@ export const OrderDetail = () => {
             </CardContent>
           </Card>
 
+
+          {/* Return/Replacement Status */}
+          {(order.return_requested || order.replacement_requested) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-[Manrope] flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-orange-600" />
+                  Return/Replacement Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {order.return_requested && (
+                  <div className="bg-orange-50 p-3 rounded-md border border-orange-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-orange-900">Return Request</span>
+                      <Badge className="bg-orange-600">RETURN</Badge>
+                    </div>
+                    {order.cancellation_reason && (
+                      <p className="text-sm text-orange-800">
+                        <span className="font-medium">Reason:</span> {order.cancellation_reason}
+                      </p>
+                    )}
+                    {order.return_date && (
+                      <p className="text-xs text-orange-700 mt-1">
+                        Requested: {safeDateShort(order.return_date)}
+                      </p>
+                    )}
+                  </div>
+                )}
+                
+                {order.replacement_requested && (
+                  <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-blue-900">Replacement Request</span>
+                      <Badge className="bg-blue-600">REPLACEMENT</Badge>
+                    </div>
+                    {order.replacement_reason && (
+                      <p className="text-sm text-blue-800">
+                        <span className="font-medium">Reason:</span> {order.replacement_reason}
+                      </p>
+                    )}
+                    {order.replacement_request_date && (
+                      <p className="text-xs text-blue-700 mt-1">
+                        Requested: {safeDateShort(order.replacement_request_date)}
+                      </p>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-full"
+                      onClick={() => navigate('/replacements')}
+                    >
+                      View in Replacements Dashboard
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+
           {/* Financials */}
           {financials && (
             <Card data-testid="financial-card">
@@ -484,25 +545,14 @@ export const OrderDetail = () => {
                   <Select value={returnForm.return_reason} onValueChange={v => setReturnForm({ ...returnForm, return_reason: v })}>
                     <SelectTrigger data-testid="return-reason-select"><SelectValue placeholder="Select reason" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="PFC">PFC (Pre-Fulfillment Cancel)</SelectItem>
-                      <SelectItem value="Delay">Delay</SelectItem>
                       <SelectItem value="Damage">Damage</SelectItem>
-                      <SelectItem value="damaged and pending">Damaged and Pending</SelectItem>
-                      <SelectItem value="damaged and replaced">Damaged and Replaced</SelectItem>
-                      <SelectItem value="Hardware Missing">Hardware Missing</SelectItem>
-                      <SelectItem value="Customer Issue">Customer Issue</SelectItem>
+                      <SelectItem value="Customer Refused at Doorstep">Customer Refused at Doorstep</SelectItem>
                       <SelectItem value="Fraud">Fraud</SelectItem>
-                      <SelectItem value="cancelled and delivered">Cancelled and Delivered</SelectItem>
-                      <SelectItem value="Status Pending">Status Pending</SelectItem>
-                      <SelectItem value="Defective Product">Defective Product</SelectItem>
-                      <SelectItem value="Damaged in Transit">Damaged in Transit</SelectItem>
+                      <SelectItem value="Delayed">Delayed</SelectItem>
                       <SelectItem value="Wrong Item Delivered">Wrong Item Delivered</SelectItem>
-                      <SelectItem value="Not as Described">Not as Described</SelectItem>
-                      <SelectItem value="Size Issue">Size Issue</SelectItem>
-                      <SelectItem value="Quality Issue">Quality Issue</SelectItem>
-                      <SelectItem value="Customer Changed Mind">Customer Changed Mind</SelectItem>
-                      <SelectItem value="Delivery Delay">Delivery Delay</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
+                      <SelectItem value="Customer Quality Issue">Customer Quality Issue</SelectItem>
+                      <SelectItem value="Missing Item">Missing Item</SelectItem>
+                      <SelectItem value="Pre Fulfillment Cancel">Pre Fulfillment Cancel</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

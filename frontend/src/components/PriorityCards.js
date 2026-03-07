@@ -13,6 +13,8 @@ export const PriorityCards = () => {
   const [dispatchPending, setDispatchPending] = useState(null);
   const [delayedOrders, setDelayedOrders] = useState(null);
   const [unmappedSkus, setUnmappedSkus] = useState(null);
+  const [unspecifiedCancellations, setUnspecifiedCancellations] = useState(null);
+  const [pendingReplacements, setPendingReplacements] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showMasterSKUDialog, setShowMasterSKUDialog] = useState(false);
   const [selectedSKU, setSelectedSKU] = useState('');
@@ -24,14 +26,18 @@ export const PriorityCards = () => {
 
   const fetchPriorityData = async () => {
     try {
-      const [dispatchRes, delayedRes, skuRes] = await Promise.all([
+      const [dispatchRes, delayedRes, skuRes, cancelRes, replaceRes] = await Promise.all([
         api.get('/dashboard/priority/dispatch-pending-today'),
         api.get('/dashboard/priority/delayed-orders'),
         api.get('/dashboard/priority/unmapped-skus'),
+        api.get('/dashboard/priority/unspecified-cancellations'),
+        api.get('/dashboard/priority/pending-replacements'),
       ]);
       setDispatchPending(dispatchRes.data);
       setDelayedOrders(delayedRes.data);
       setUnmappedSkus(skuRes.data);
+      setUnspecifiedCancellations(cancelRes.data);
+      setPendingReplacements(replaceRes.data);
     } catch (error) {
       console.error('Failed to fetch priority data:', error);
     } finally {
@@ -210,6 +216,86 @@ export const PriorityCards = () => {
                 View all {unmappedSkus.count} SKUs
               </Button>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+
+      {/* Unspecified Cancellations - URGENT */}
+      {!loading && unspecifiedCancellations && unspecifiedCancellations.count > 0 && (
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
+              <div>
+                <CardTitle className="text-lg font-[Manrope] text-red-900">
+                  Unspecified Cancellations
+                </CardTitle>
+                <p className="text-sm text-red-700 mt-1">URGENT: Needs reason</p>
+              </div>
+            </div>
+            <Badge className="bg-red-600 text-white">{unspecifiedCancellations.count}</Badge>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-red-800 mb-3">
+              {unspecifiedCancellations.count} cancelled order(s) without cancellation reason specified
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {unspecifiedCancellations.orders.slice(0, 5).map((order) => (
+                <div key={order.id} className="flex items-center justify-between p-2 bg-white rounded border border-red-200">
+                  <div>
+                    <span className="font-[JetBrains_Mono] text-sm font-medium">{order.order_number}</span>
+                    <p className="text-xs text-muted-foreground">{order.customer_name}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => navigate(`/orders/${order.id}`)}
+                  >
+                    Add Reason
+                  </Button>
+                </div>
+              ))}
+            </div>
+            {unspecifiedCancellations.count > 5 && (
+              <Button
+                variant="link"
+                className="mt-2 w-full text-red-700"
+                onClick={() => navigate('/returns?filter=unspecified')}
+              >
+                View all {unspecifiedCancellations.count} orders
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending Replacements */}
+      {!loading && pendingReplacements && pendingReplacements.count > 0 && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-blue-600" />
+              <div>
+                <CardTitle className="text-lg font-[Manrope] text-blue-900">
+                  Pending Replacements
+                </CardTitle>
+                <p className="text-sm text-blue-700 mt-1">Needs action</p>
+              </div>
+            </div>
+            <Badge className="bg-blue-600 text-white">{pendingReplacements.count}</Badge>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-blue-800 mb-3">
+              {pendingReplacements.count} replacement(s) waiting for action
+            </p>
+            <Button
+              className="w-full"
+              variant="outline"
+              onClick={() => navigate('/replacements')}
+            >
+              View Replacements Dashboard
+            </Button>
           </CardContent>
         </Card>
       )}
