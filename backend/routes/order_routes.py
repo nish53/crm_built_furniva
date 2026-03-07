@@ -363,6 +363,7 @@ async def import_historical_orders(
                     
                     # Historical calling/confirmation data
                     "assembly_type": row.get("Assembly Type", "").strip(),
+                    "paid_assembly": row.get("Assembly Type", "").strip().lower() == "paid",  # Set boolean based on assembly type
                     "order_conf_calling": parse_bool(row.get("Order Conf Calling")),
                     "dispatch_conf_sent": parse_bool(row.get("Dispatch Confirmation Sent")),
                     "dnp_day1": parse_bool(row.get("Did Not Pick Day 1")),
