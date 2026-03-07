@@ -245,3 +245,50 @@ async def fake_ship_order(
         raise HTTPException(status_code=404, detail="Order not found")
     
     return {"message": "Order marked as fake shipped", "order_id": order_id}
+
+
+
+@router.get("/priority/unspecified-cancellations")
+async def get_unspecified_cancellations(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get cancelled orders without cancellation reason - URGENT"""
+    query = {
+        "status": "cancelled",
+        "$or": [
+            {"cancellation_reason": {"$exists": False}},
+            {"cancellation_reason": None},
+            {"cancellation_reason": ""}
+        ]
+    }
+    
+    orders = await db.orders.find(query, {"_id": 0}).sort("order_date", -1).to_list(100)
+    count = len(orders)
+    
+    return {
+        "count": count,
+        "orders": orders,
+        "priority": "urgent",
+        "message": f"{count} cancelled order(s) need reason specified"
+    }
+
+@router.get("/priority/pending-replacements")
+async def get_pending_replacements(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get replacement requests that need action"""
+    query = {
+        "replacement_status": {"$in": ["Replacement Pending", "Priority Review"]}
+    }
+    
+    replacements = await db.replacement_requests.find(query, {"_id": 0}).sort("requested_date", 1).to_list(100)
+    count = len(replacements)
+    
+    return {
+        "count": count,
+        "replacements": replacements,
+        "priority": "high",
+        "message": f"{count} replacement(s) need attention"
+    }

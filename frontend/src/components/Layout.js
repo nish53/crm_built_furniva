@@ -30,6 +30,7 @@ export const Layout = () => {
     { name: 'Orders', href: '/orders', icon: Package },
     { name: 'Inventory', href: '/inventory', icon: Archive },
     { name: 'Returns', href: '/returns', icon: RefreshCcw },
+    { name: 'Replacements', href: '/replacements', icon: Package },
     { name: 'Costing', href: '/costing', icon: DollarSign },
     { name: 'Channels', href: '/channels', icon: Layers },
     { name: 'Tasks', href: '/tasks', icon: CheckSquare },

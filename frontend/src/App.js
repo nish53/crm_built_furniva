@@ -15,6 +15,7 @@ import { ImportWizard } from './pages/ImportWizard';
 import { HistoricalImport } from './pages/HistoricalImport';
 import { MasterSKU } from './pages/MasterSKU';
 import { Returns } from './pages/Returns';
+import { Replacements } from './pages/Replacements';
 import { Channels } from './pages/Channels';
 import { Costing } from './pages/Costing';
 import { Layout } from './components/Layout';
@@ -78,6 +79,7 @@ function App() {
             <Route path="orders/import-historical" element={<HistoricalImport />} />
             <Route path="master-sku" element={<MasterSKU />} />
             <Route path="returns" element={<Returns />} />
+            <Route path="replacements" element={<Replacements />} />
             <Route path="channels" element={<Channels />} />
             <Route path="costing" element={<Costing />} />
             <Route path="whatsapp" element={<WhatsAppCRM />} />
