@@ -398,15 +398,32 @@ class ProcurementBatchCreate(BaseModel):
 
 # Return Management Models
 class ReturnReason(str, Enum):
-    DEFECTIVE = "defective"
-    DAMAGED = "damaged"
-    WRONG_ITEM = "wrong_item"
-    NOT_AS_DESCRIBED = "not_as_described"
-    SIZE_ISSUE = "size_issue"
-    QUALITY_ISSUE = "quality_issue"
-    CUSTOMER_CHANGED_MIND = "customer_changed_mind"
-    DELIVERY_DELAY = "delivery_delay"
-    OTHER = "other"
+    # Historical reasons from user's data
+    PFC = "PFC"
+    DELAY = "Delay"
+    DAMAGE = "Damage"
+    DAMAGED_AND_PENDING = "damaged and pending"
+    DAMAGED_AND_REPLACED = "damaged and replaced"
+    HARDWARE_MISSING = "Hardware Missing"
+    CUSTOMER_ISSUE = "Customer Issue"
+    FRAUD = "Fraud"
+    CANCELLED_AND_DELIVERED = "cancelled and delivered"
+    STATUS_PENDING = "Status Pending"
+    
+    # Standard return reasons
+    DEFECTIVE_PRODUCT = "Defective Product"
+    DAMAGED_IN_TRANSIT = "Damaged in Transit"
+    WRONG_ITEM_DELIVERED = "Wrong Item Delivered"
+    NOT_AS_DESCRIBED = "Not as Described"
+    SIZE_ISSUE = "Size Issue"
+    QUALITY_ISSUE = "Quality Issue"
+    CUSTOMER_CHANGED_MIND = "Customer Changed Mind"
+    DELIVERY_DELAY = "Delivery Delay"
+    OTHER = "Other"
+
+class ReturnType(str, Enum):
+    RETURN = "return"
+    REPLACEMENT = "replacement"
 
 class ReturnStatus(str, Enum):
     REQUESTED = "requested"
@@ -420,13 +437,15 @@ class ReturnStatus(str, Enum):
     REPLACED = "replaced"
 
 class DamageCategory(str, Enum):
-    SCRATCH = "scratch"
-    CRACK = "crack"
-    DENT = "dent"
-    BROKEN = "broken"
-    MISSING_PARTS = "missing_parts"
-    PACKAGING_DAMAGE = "packaging_damage"
-    NO_DAMAGE = "no_damage"
+    NO_DAMAGE = "No Damage"
+    SCRATCH = "Scratch"
+    CRACK = "Crack"
+    DENT = "Dent"
+    BROKEN = "Broken"
+    MISSING_PARTS = "Missing Parts"
+    PACKAGING_DAMAGE = "Packaging Damage"
+    HARDWARE_MISSING = "Hardware Missing"
+    PARTS_MISSING = "Parts Missing"
 
 class ReturnRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -436,6 +455,7 @@ class ReturnRequest(BaseModel):
     customer_id: str
     customer_name: str
     phone: str
+    return_type: ReturnType  # Return or Replacement
     return_reason: ReturnReason
     return_reason_details: Optional[str] = None
     damage_category: Optional[DamageCategory] = None
@@ -454,6 +474,8 @@ class ReturnRequest(BaseModel):
     is_installation_related: bool = False
     batch_number: Optional[str] = None
     damage_images: Optional[List[str]] = []
+    replacement_items: Optional[str] = None  # What needs to be replaced
+    replacement_images: Optional[List[str]] = []  # Images for replacement
     refund_amount: Optional[float] = None
     refund_method: Optional[str] = None
     replacement_order_id: Optional[str] = None
@@ -462,11 +484,14 @@ class ReturnRequest(BaseModel):
 
 class ReturnRequestCreate(BaseModel):
     order_id: str
+    return_type: ReturnType  # Return or Replacement
     return_reason: ReturnReason
     return_reason_details: Optional[str] = None
     damage_category: Optional[DamageCategory] = None
     is_installation_related: bool = False
     damage_images: Optional[List[str]] = []
+    replacement_items: Optional[str] = None  # What needs to be replaced (for replacements)
+    replacement_images: Optional[List[str]] = []  # Images showing what needs replacement
 
 # Channel Management Models
 class Channel(BaseModel):

@@ -28,8 +28,12 @@ export const OrderDetail = () => {
   const [editForm, setEditForm] = useState({});
 
   const [returnForm, setReturnForm] = useState({
-    return_reason: '', return_reason_details: '',
-    damage_category: '', is_installation_related: false
+    return_type: 'return',
+    return_reason: '',
+    return_reason_details: '',
+    damage_category: '',
+    is_installation_related: false,
+    replacement_items: ''
   });
 
   const [finForm, setFinForm] = useState({
@@ -79,15 +83,27 @@ export const OrderDetail = () => {
   const handleCreateReturn = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/returns/', {
+      await api.post('/return-requests/', {
         order_id: id,
+        return_type: returnForm.return_type,
         return_reason: returnForm.return_reason,
         return_reason_details: returnForm.return_reason_details || null,
         damage_category: returnForm.damage_category || null,
-        is_installation_related: returnForm.is_installation_related
+        is_installation_related: returnForm.is_installation_related,
+        replacement_items: returnForm.return_type === 'replacement' ? returnForm.replacement_items : null,
+        damage_images: [],
+        replacement_images: []
       });
       toast.success('Return request created');
       setShowReturnModal(false);
+      setReturnForm({
+        return_type: 'return',
+        return_reason: '',
+        return_reason_details: '',
+        damage_category: '',
+        is_installation_related: false,
+        replacement_items: ''
+      });
       fetchOrder();
     } catch (err) { toast.error(err.response?.data?.detail || 'Failed to create return'); }
   };
@@ -425,59 +441,100 @@ export const OrderDetail = () => {
       {/* ===== CREATE RETURN MODAL ===== */}
       {showReturnModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="return-modal">
-          <Card className="w-full max-w-lg">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="font-[Manrope]">Create Return Request</CardTitle>
+              <CardTitle className="font-[Manrope]">Create Return/Replacement Request</CardTitle>
               <Button variant="ghost" size="sm" onClick={() => setShowReturnModal(false)}><X className="w-4 h-4" /></Button>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreateReturn} className="space-y-4">
                 <div>
+                  <label className="text-xs font-medium text-muted-foreground">Request Type *</label>
+                  <Select value={returnForm.return_type} onValueChange={v => setReturnForm({ ...returnForm, return_type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="return">Return (Refund)</SelectItem>
+                      <SelectItem value="replacement">Replacement</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
                   <label className="text-xs font-medium text-muted-foreground">Return Reason *</label>
                   <Select value={returnForm.return_reason} onValueChange={v => setReturnForm({ ...returnForm, return_reason: v })}>
                     <SelectTrigger data-testid="return-reason-select"><SelectValue placeholder="Select reason" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="defective">Defective Product</SelectItem>
-                      <SelectItem value="damaged">Damaged in Transit</SelectItem>
-                      <SelectItem value="wrong_item">Wrong Item Delivered</SelectItem>
-                      <SelectItem value="not_as_described">Not as Described</SelectItem>
-                      <SelectItem value="size_issue">Size Issue</SelectItem>
-                      <SelectItem value="quality_issue">Quality Issue</SelectItem>
-                      <SelectItem value="customer_changed_mind">Customer Changed Mind</SelectItem>
-                      <SelectItem value="delivery_delay">Delivery Delay</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
+                      <SelectItem value="PFC">PFC (Pre-Fulfillment Cancel)</SelectItem>
+                      <SelectItem value="Delay">Delay</SelectItem>
+                      <SelectItem value="Damage">Damage</SelectItem>
+                      <SelectItem value="damaged and pending">Damaged and Pending</SelectItem>
+                      <SelectItem value="damaged and replaced">Damaged and Replaced</SelectItem>
+                      <SelectItem value="Hardware Missing">Hardware Missing</SelectItem>
+                      <SelectItem value="Customer Issue">Customer Issue</SelectItem>
+                      <SelectItem value="Fraud">Fraud</SelectItem>
+                      <SelectItem value="cancelled and delivered">Cancelled and Delivered</SelectItem>
+                      <SelectItem value="Status Pending">Status Pending</SelectItem>
+                      <SelectItem value="Defective Product">Defective Product</SelectItem>
+                      <SelectItem value="Damaged in Transit">Damaged in Transit</SelectItem>
+                      <SelectItem value="Wrong Item Delivered">Wrong Item Delivered</SelectItem>
+                      <SelectItem value="Not as Described">Not as Described</SelectItem>
+                      <SelectItem value="Size Issue">Size Issue</SelectItem>
+                      <SelectItem value="Quality Issue">Quality Issue</SelectItem>
+                      <SelectItem value="Customer Changed Mind">Customer Changed Mind</SelectItem>
+                      <SelectItem value="Delivery Delay">Delivery Delay</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Damage Category</label>
                   <Select value={returnForm.damage_category} onValueChange={v => setReturnForm({ ...returnForm, damage_category: v })}>
                     <SelectTrigger><SelectValue placeholder="Select (optional)" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="scratch">Scratch</SelectItem>
-                      <SelectItem value="crack">Crack</SelectItem>
-                      <SelectItem value="dent">Dent</SelectItem>
-                      <SelectItem value="broken">Broken</SelectItem>
-                      <SelectItem value="missing_parts">Missing Parts</SelectItem>
-                      <SelectItem value="packaging_damage">Packaging Damage</SelectItem>
-                      <SelectItem value="no_damage">No Damage</SelectItem>
+                      <SelectItem value="No Damage">No Damage</SelectItem>
+                      <SelectItem value="Scratch">Scratch</SelectItem>
+                      <SelectItem value="Crack">Crack</SelectItem>
+                      <SelectItem value="Dent">Dent</SelectItem>
+                      <SelectItem value="Broken">Broken</SelectItem>
+                      <SelectItem value="Missing Parts">Missing Parts</SelectItem>
+                      <SelectItem value="Packaging Damage">Packaging Damage</SelectItem>
+                      <SelectItem value="Hardware Missing">Hardware Missing</SelectItem>
+                      <SelectItem value="Parts Missing">Parts Missing</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                
+                {returnForm.return_type === 'replacement' && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">What needs to be replaced? *</label>
+                    <Input 
+                      value={returnForm.replacement_items}
+                      onChange={e => setReturnForm({ ...returnForm, replacement_items: e.target.value })}
+                      placeholder="e.g., Left door hinge, screws, etc."
+                      required={returnForm.return_type === 'replacement'}
+                    />
+                  </div>
+                )}
+                
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Details</label>
                   <Input value={returnForm.return_reason_details}
                     onChange={e => setReturnForm({ ...returnForm, return_reason_details: e.target.value })}
                     placeholder="Additional details..." data-testid="return-details-input" />
                 </div>
+                
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="checkbox" checked={returnForm.is_installation_related}
                     onChange={e => setReturnForm({ ...returnForm, is_installation_related: e.target.checked })} className="rounded border-input" />
                   Installation related issue
                 </label>
+                
                 <div className="flex gap-3">
                   <Button type="button" variant="outline" onClick={() => setShowReturnModal(false)} className="flex-1">Cancel</Button>
-                  <Button type="submit" className="flex-1" disabled={!returnForm.return_reason} data-testid="submit-return-btn">Create Return</Button>
+                  <Button type="submit" className="flex-1" disabled={!returnForm.return_reason || (returnForm.return_type === 'replacement' && !returnForm.replacement_items)} data-testid="submit-return-btn">
+                    Create {returnForm.return_type === 'replacement' ? 'Replacement' : 'Return'}
+                  </Button>
                 </div>
               </form>
             </CardContent>

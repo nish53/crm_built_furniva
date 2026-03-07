@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
-from models import ReturnRequest, ReturnRequestCreate, ReturnStatus, User
+from models import ReturnRequest, ReturnRequestCreate, ReturnStatus, ReturnType, User
 from auth import get_current_active_user
 from database import get_database
 from datetime import datetime, timezone
