@@ -159,12 +159,16 @@ export const OrderDetail = () => {
   };
 
   // Communication checklist - correct workflow order, read-only (green/red)
+  // Supports both old fields (dnp1_conf) and new historical fields (order_conf_calling, dnp_day1)
   const commChecklist = [
-    { key: 'dc1_called', label: 'Order Confirmation Call', dateKey: 'dc1_date' },
-    { key: 'cp_sent', label: 'Order Confirmation Message Sent' },
-    { key: 'dnp1_conf', label: 'DNP Day 1 (Did Not Pick)' },
-    { key: 'dnp2_conf', label: 'DNP Day 2' },
-    { key: 'dnp3_conf', label: 'DNP Day 3' },
+    { key: 'order_conf_calling', fallbackKey: 'dc1_called', label: 'Order Confirmation Call', dateKey: 'dc1_date' },
+    { key: 'dispatch_conf_sent', fallbackKey: 'cp_sent', label: 'Order Confirmation Message Sent' },
+    { key: 'dnp_day1', fallbackKey: 'dnp1_conf', label: 'DNP Day 1 (Did Not Pick)' },
+    { key: 'confirmed_day1', label: 'Confirmed on Day 1' },
+    { key: 'dnp_day2', fallbackKey: 'dnp2_conf', label: 'DNP Day 2' },
+    { key: 'confirmed_day2', label: 'Confirmed on Day 2' },
+    { key: 'dnp_day3', fallbackKey: 'dnp3_conf', label: 'DNP Day 3' },
+    { key: 'confirmed_day3', label: 'Confirmed on Day 3' },
     { key: 'dp_conf', label: 'Dispatch Confirmation' },
     { key: 'deliver_conf', label: 'Delivery Confirmation' },
     { key: 'install_conf', label: 'Installation Confirmation' },
@@ -206,6 +210,8 @@ export const OrderDetail = () => {
                 <InfoField label="Total" value={order.total_amount ? `₹${order.total_amount.toLocaleString()}` : '-'} />
                 <InfoField label="Dispatch By" value={safeDateShort(order.dispatch_by)} />
                 <InfoField label="Delivery By" value={safeDateShort(order.delivery_by)} />
+                {order.delivery_date && <InfoField label="Actual Delivery Date" value={safeDateShort(order.delivery_date)} />}
+                {order.cancellation_reason && <InfoField label="Cancellation/Return Reason" value={order.cancellation_reason} />}
                 <InfoField label="Payment" value={order.payment_method || '-'} />
                 <InfoField label="Fulfillment" value={order.fulfillment_channel || '-'} />
                 <InfoField label="Sales Channel" value={order.sales_channel || '-'} />
@@ -488,8 +494,8 @@ export const OrderDetail = () => {
               <p className="text-xs text-muted-foreground">Automated via WhatsApp CRM</p>
             </CardHeader>
             <CardContent className="space-y-2">
-              {commChecklist.map(({ key, label, dateKey }) => {
-                const done = !!order[key];
+              {commChecklist.map(({ key, fallbackKey, label, dateKey }) => {
+                const done = !!order[key] || (fallbackKey && !!order[fallbackKey]);
                 const dateVal = dateKey ? order[dateKey] : null;
                 return (
                   <div key={key} className="flex items-center justify-between text-sm" data-testid={`comm-${key}`}>

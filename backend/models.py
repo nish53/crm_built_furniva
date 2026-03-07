@@ -160,6 +160,17 @@ class Order(OrderBase):
     cp_sent: bool = False  # Confirmation Photo Sent (order ready photo)
     assembly_type: Optional[str] = None  # self/paid/free
     paid_assembly: bool = False
+    
+    # Historical communication tracking
+    order_conf_calling: bool = False  # Order Confirmation Call
+    dispatch_conf_sent: bool = False  # Dispatch Confirmation Sent
+    dnp_day1: bool = False  # Did Not Pick Day 1
+    confirmed_day1: bool = False  # Confirmed on Day 1
+    dnp_day2: bool = False  # Did Not Pick Day 2
+    confirmed_day2: bool = False  # Confirmed on Day 2
+    dnp_day3: bool = False  # Did Not Pick Day 3
+    confirmed_day3: bool = False  # Confirmed on Day 3
+    
     dnp1_conf: bool = False  # Day N-1 Pre-Delivery Confirmation (day before delivery)
     dnp2_conf: bool = False  # Day N-2 Pre-Delivery Confirmation (2 days before)
     dnp3_conf: bool = False  # Day N-3 Pre-Delivery Confirmation (3 days before)

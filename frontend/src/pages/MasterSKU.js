@@ -60,11 +60,19 @@ export const MasterSKU = () => {
     e.preventDefault();
     
     try {
+      // Convert empty strings to null for numeric fields
+      const submitData = {
+        ...formData,
+        weight: formData.weight === '' ? null : formData.weight,
+        cost_price: formData.cost_price === '' ? null : formData.cost_price,
+        selling_price: formData.selling_price === '' ? null : formData.selling_price
+      };
+      
       if (editingId) {
-        await api.put(`/master-sku/${editingId}`, formData);
+        await api.put(`/master-sku/${editingId}`, submitData);
         toast.success('Master SKU updated successfully');
       } else {
-        await api.post('/master-sku/', formData);
+        await api.post('/master-sku/', submitData);
         toast.success('Master SKU created successfully');
       }
       

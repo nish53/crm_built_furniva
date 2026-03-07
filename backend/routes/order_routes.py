@@ -344,7 +344,7 @@ async def import_historical_orders(
                     "dispatch_by": parse_date(row.get("Dispatch By")),
                     "delivery_by": parse_date(row.get("Delivery By")),
                     "dispatch_date": parse_date(row.get("Actual Dispatch Date")),
-                    "delivery_date": parse_date(row.get("Delivery Date")) if status == "delivered" else None,
+                    "delivery_date": parse_date(row.get("Delivery Date")),  # Import delivery date regardless of status
                     "customer_id": str(uuid.uuid4()),
                     "customer_name": row.get("Customer Name", "Unknown"),
                     "phone": row.get("Billing No.", row.get("Shipping No.", "")).strip(),
