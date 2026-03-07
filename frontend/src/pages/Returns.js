@@ -4,8 +4,8 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import api from '../services/api';
-import { toast } from 'react-hot-toast';
+import api from '../lib/api';
+import { toast } from 'sonner';
 import { 
   RefreshCcw, 
   AlertTriangle, 
