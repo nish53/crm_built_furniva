@@ -265,19 +265,32 @@ async def import_historical_orders(
                 # Each item gets unique id but same order_number
                 # This allows multiple items under same order while maintaining current schema
                 
-                # Parse dates with dd/mm/yyyy format
+                # Parse dates with dd/mm/yyyy or dd/mm/yyyy HH:MM format
                 def parse_date(date_str):
                     if not date_str or date_str.strip() == "" or date_str.lower() == 'na':
                         return None
                     try:
-                        # Try dd/mm/yyyy format first
-                        parts = date_str.strip().split('/')
+                        date_str = date_str.strip()
+                        
+                        # Try dd/mm/yyyy HH:MM format first (with time)
+                        if ' ' in date_str:
+                            date_part = date_str.split(' ')[0]  # Get just the date part
+                            parts = date_part.split('/')
+                            if len(parts) == 3:
+                                day, month, year = parts
+                                if len(year) == 2:
+                                    year = '20' + year
+                                return datetime(int(year), int(month), int(day), tzinfo=timezone.utc).isoformat()
+                        
+                        # Try dd/mm/yyyy format (without time)
+                        parts = date_str.split('/')
                         if len(parts) == 3:
                             day, month, year = parts
                             if len(year) == 2:
                                 year = '20' + year
                             return datetime(int(year), int(month), int(day), tzinfo=timezone.utc).isoformat()
-                        # Fallback to dateparser
+                        
+                        # Fallback to dateparser for other formats
                         return date_parser.parse(date_str).replace(tzinfo=timezone.utc).isoformat()
                     except Exception:
                         return None

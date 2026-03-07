@@ -71,7 +71,24 @@ export const MasterSKU = () => {
       resetForm();
       fetchMappings();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to save Master SKU');
+      // Handle validation errors from FastAPI
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        // If detail is an array of validation errors
+        if (Array.isArray(detail)) {
+          const errorMessages = detail.map(err => {
+            const field = err.loc?.join('.') || 'field';
+            return `${field}: ${err.msg}`;
+          }).join(', ');
+          toast.error(errorMessages);
+        } else if (typeof detail === 'string') {
+          toast.error(detail);
+        } else {
+          toast.error('Failed to save Master SKU');
+        }
+      } else {
+        toast.error('Failed to save Master SKU');
+      }
     }
   };
 

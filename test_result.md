@@ -1092,3 +1092,54 @@ agent_communication:
       - Date validation preventing data corruption
       
       The backend is ready for production use.
+
+
+  - agent: "main"
+    message: |
+      === CRITICAL USER-REPORTED BUGS FIXED (Post-Testing Session) ===
+      Date: 2025-03-07
+      
+      User tested the system and reported 2 critical issues:
+      
+      🔧 **Issue 1: Master SKU Creation React Error - FIXED**
+      Problem: "Objects are not valid as a React child (found: object with keys {type, loc, msg, input, url})"
+      When: Creating Master SKU from unmapped SKUs list
+      
+      Root Cause Analysis:
+      - Backend was setting listings_created and orders_updated AFTER creating Pydantic model instance
+      - Pydantic was validating the response and throwing errors
+      - Frontend error handling tried to render the validation error object directly
+      
+      Fixes Applied:
+      1. Backend: /app/backend/routes/master_sku_routes.py (lines 101-104)
+         - Changed to add fields to mapping_dict BEFORE instantiating MasterSKUMapping
+         - Now: mapping_dict["listings_created"] = listings_created
+         - Now: mapping_dict["orders_updated"] = update_count
+         - Then: response = MasterSKUMapping(**mapping_dict)
+      
+      2. Frontend: /app/frontend/src/pages/MasterSKU.js (handleSubmit function)
+         - Enhanced error handling to properly extract validation error messages
+         - Checks if detail is array and formats error messages properly
+         - Extracts field names and messages from validation errors
+      
+      🔧 **Issue 2: Date Parsing Error for "dd/mm/yyyy HH:MM" format - FIXED**
+      Problem: All 399 orders failed with "Invalid or missing Order Date"
+      User's CSV: Order Date column has format "03/10/2025 05:56" (date with time)
+      
+      Root Cause Analysis:
+      - parse_date() function only handled "dd/mm/yyyy" format
+      - When splitting "03/10/2025 05:56" by '/', got ['03', '10', '2025 05:56']
+      - Trying int('2025 05:56') caused parsing failure
+      - My Bug #4 fix made it reject rows instead of using current date
+      
+      Fix Applied:
+      Location: /app/backend/routes/order_routes.py (lines 268-292)
+      Enhanced parse_date() function to:
+      1. Detect space in date string (indicates time component)
+      2. If space found, extract date part before space: date_str.split(' ')[0]
+      3. Parse the date part: "03/10/2025" separately
+      4. Still supports "dd/mm/yyyy" without time
+      5. Fallback to dateparser for other formats
+      
+      Both fixes deployed and backend restarted.
+      Status: READY FOR USER VALIDATION

@@ -98,9 +98,11 @@ async def create_master_sku_mapping(
         )
         update_count += result.modified_count
     
+    # Add the auto-generated fields to the dict before creating response
+    mapping_dict["listings_created"] = listings_created
+    mapping_dict["orders_updated"] = update_count
+    
     response = MasterSKUMapping(**mapping_dict)
-    response.listings_created = listings_created
-    response.orders_updated = update_count
     
     return response
 
