@@ -9,6 +9,7 @@ import csv
 import io
 import math
 from dateutil import parser as date_parser
+from routes.edit_history_routes import track_order_changes
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -116,7 +117,7 @@ async def update_order(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """Update an existing order"""
+    """Update an existing order with edit history tracking"""
     existing = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -125,6 +126,19 @@ async def update_order(
     update_data = order_update.model_dump(exclude_unset=True)
     
     if update_data:
+        # Track changes before updating
+        await track_order_changes(
+            order_id=order_id,
+            old_order=existing,
+            new_data=update_data,
+            user_email=current_user.email,
+            edit_reason=update_data.get("internal_notes"),  # Use notes as edit reason if provided
+            db=db
+        )
+        
+        # Update last_updated timestamp
+        update_data["last_updated"] = datetime.now(timezone.utc).isoformat()
+        
         await db.orders.update_one({"id": order_id}, {"$set": update_data})
     
     updated_order = await db.orders.find_one({"id": order_id}, {"_id": 0})

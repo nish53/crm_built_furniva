@@ -624,6 +624,31 @@ class OrderLossUpdate(BaseModel):
     total_loss: Optional[float] = None
     loss_notes: Optional[str] = None
 
+
+
+# Edit History Tracking
+class FieldChange(BaseModel):
+    field_name: str
+    old_value: Any
+    new_value: Any
+    field_type: Optional[str] = None  # For better display
+
+class EditHistoryEntry(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    order_id: str
+    order_number: str
+    changes: List[FieldChange]
+    edited_by: str  # User email
+    edited_at: datetime
+    edit_reason: Optional[str] = None  # Optional reason for edit
+    ip_address: Optional[str] = None
+
+class EditHistoryCreate(BaseModel):
+    order_id: str
+    changes: List[FieldChange]
+    edit_reason: Optional[str] = None
+
     resolved_at: Optional[datetime] = None
     resolution_notes: Optional[str] = None
 
