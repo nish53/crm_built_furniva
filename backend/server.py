@@ -21,6 +21,7 @@ from routes.financial_routes import router as financial_router
 from routes.master_sku_routes import router as master_sku_router
 from routes.import_routes import router as import_router
 from routes.return_routes import router as return_router
+from routes.replacement_routes import router as replacement_router
 from routes.returns_routes import router as returns_router
 from routes.channel_routes import router as channel_router
 from routes.platform_listing_routes import router as platform_listing_router
@@ -54,6 +55,7 @@ app.include_router(financial_router, prefix="/api")
 app.include_router(master_sku_router, prefix="/api")
 app.include_router(import_router, prefix="/api")
 app.include_router(return_router, prefix="/api")
+app.include_router(replacement_router, prefix="/api")
 app.include_router(returns_router, prefix="/api")
 app.include_router(channel_router, prefix="/api")
 app.include_router(platform_listing_router, prefix="/api")

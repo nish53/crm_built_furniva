@@ -455,7 +455,6 @@ class ReturnRequest(BaseModel):
     customer_id: str
     customer_name: str
     phone: str
-    return_type: ReturnType  # Return or Replacement
     return_reason: ReturnReason
     return_reason_details: Optional[str] = None
     damage_category: Optional[DamageCategory] = None
@@ -474,24 +473,68 @@ class ReturnRequest(BaseModel):
     is_installation_related: bool = False
     batch_number: Optional[str] = None
     damage_images: Optional[List[str]] = []
-    replacement_items: Optional[str] = None  # What needs to be replaced
-    replacement_images: Optional[List[str]] = []  # Images for replacement
     refund_amount: Optional[float] = None
     refund_method: Optional[str] = None
-    replacement_order_id: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
 class ReturnRequestCreate(BaseModel):
     order_id: str
-    return_type: ReturnType  # Return or Replacement
     return_reason: ReturnReason
     return_reason_details: Optional[str] = None
     damage_category: Optional[DamageCategory] = None
     is_installation_related: bool = False
     damage_images: Optional[List[str]] = []
-    replacement_items: Optional[str] = None  # What needs to be replaced (for replacements)
-    replacement_images: Optional[List[str]] = []  # Images showing what needs replacement
+
+
+
+# Replacement Request Models (Separate from Return)
+class ReplacementReason(str, Enum):
+    DAMAGE = "Damage"
+    QUALITY_ISSUE = "Quality Issue"
+
+class ReplacementStatus(str, Enum):
+    PENDING = "Replacement Pending"
+    PRIORITY_REVIEW = "Priority Review"
+    SHIP_REPLACEMENT = "Ship Replacement"
+    TRACKING_ADDED = "Tracking Added"
+    DELIVERED = "Delivered"
+    RESOLVED = "Issue Resolved"
+    NOT_RESOLVED = "Issue Not Resolved"
+
+class ReplacementRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    order_id: str
+    order_number: str
+    customer_id: str
+    customer_name: str
+    phone: str
+    replacement_reason: ReplacementReason  # Only Damage or Quality Issue
+    damage_description: str  # Detailed description of what's damaged
+    replacement_status: ReplacementStatus
+    damage_images: List[str] = []  # Image URLs (mandatory)
+    requested_date: datetime
+    priority_review_date: Optional[datetime] = None
+    ship_date: Optional[datetime] = None
+    tracking_number: Optional[str] = None
+    tracking_added_date: Optional[datetime] = None
+    delivered_date: Optional[datetime] = None
+    resolved_date: Optional[datetime] = None
+    issue_resolved: Optional[bool] = None  # Yes/No after delivery
+    resolution_notes: Optional[str] = None
+    courier_partner: Optional[str] = None
+    replacement_cost: Optional[float] = None
+    status_history: List[Dict[str, Any]] = []
+    created_by: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+class ReplacementRequestCreate(BaseModel):
+    order_id: str
+    replacement_reason: ReplacementReason
+    damage_description: str  # Required detailed description
+    damage_images: List[str]  # Mandatory image URLs
 
 # Channel Management Models
 class Channel(BaseModel):

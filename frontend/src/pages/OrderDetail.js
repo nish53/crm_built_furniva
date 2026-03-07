@@ -22,18 +22,23 @@ export const OrderDetail = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showReplacementModal, setShowReplacementModal] = useState(false);
   const [showFinancialModal, setShowFinancialModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [financials, setFinancials] = useState(null);
   const [editForm, setEditForm] = useState({});
 
   const [returnForm, setReturnForm] = useState({
-    return_type: 'return',
     return_reason: '',
     return_reason_details: '',
     damage_category: '',
-    is_installation_related: false,
-    replacement_items: ''
+    is_installation_related: false
+  });
+
+  const [replacementForm, setReplacementForm] = useState({
+    replacement_reason: 'Damage',
+    damage_description: '',
+    damage_images: []
   });
 
   const [finForm, setFinForm] = useState({
@@ -85,27 +90,50 @@ export const OrderDetail = () => {
     try {
       await api.post('/return-requests/', {
         order_id: id,
-        return_type: returnForm.return_type,
         return_reason: returnForm.return_reason,
         return_reason_details: returnForm.return_reason_details || null,
         damage_category: returnForm.damage_category || null,
         is_installation_related: returnForm.is_installation_related,
-        replacement_items: returnForm.return_type === 'replacement' ? returnForm.replacement_items : null,
-        damage_images: [],
-        replacement_images: []
+        damage_images: []
       });
       toast.success('Return request created');
       setShowReturnModal(false);
       setReturnForm({
-        return_type: 'return',
         return_reason: '',
         return_reason_details: '',
         damage_category: '',
-        is_installation_related: false,
-        replacement_items: ''
+        is_installation_related: false
       });
       fetchOrder();
     } catch (err) { toast.error(err.response?.data?.detail || 'Failed to create return'); }
+  };
+
+  const handleCreateReplacement = async (e) => {
+    e.preventDefault();
+    if (!replacementForm.damage_description.trim()) {
+      toast.error('Please describe what is damaged');
+      return;
+    }
+    if (!replacementForm.damage_images || replacementForm.damage_images.length === 0) {
+      toast.error('Please upload at least one image');
+      return;
+    }
+    try {
+      await api.post('/replacement-requests/', {
+        order_id: id,
+        replacement_reason: replacementForm.replacement_reason,
+        damage_description: replacementForm.damage_description,
+        damage_images: replacementForm.damage_images
+      });
+      toast.success('Replacement request created');
+      setShowReplacementModal(false);
+      setReplacementForm({
+        replacement_reason: 'Damage',
+        damage_description: '',
+        damage_images: []
+      });
+      fetchOrder();
+    } catch (err) { toast.error(err.response?.data?.detail || 'Failed to create replacement'); }
   };
 
   const handleCalculateFinancials = async (e) => {
@@ -350,24 +378,27 @@ export const OrderDetail = () => {
                 </Button>
               )}
 
-              {/* Return Actions - Always visible for actionable statuses */}
-              {!order.return_requested && (
-                <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => setShowReturnModal(true)} data-testid="create-return-button">
-                  <RefreshCcw className="w-4 h-4 mr-2" />Create Return Request
-                </Button>
-              )}
-              {order.return_requested && !order.replacement_order_id && (
-                <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => {
-                  setReturnForm({ ...returnForm, return_reason: 'customer_changed_mind' });
-                  setShowReturnModal(true);
-                }} data-testid="create-replacement-button">
-                  <RefreshCcw className="w-4 h-4 mr-2" />Request Replacement
-                </Button>
+              {/* Return and Replacement Actions - Separate buttons */}
+              {!order.return_requested && !order.replacement_requested && (
+                <>
+                  <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => setShowReturnModal(true)} data-testid="create-return-button">
+                    <RefreshCcw className="w-4 h-4 mr-2" />Create Return Request
+                  </Button>
+                  <Button variant="outline" className="w-full border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => setShowReplacementModal(true)} data-testid="create-replacement-button">
+                    <Package className="w-4 h-4 mr-2" />Create Replacement Request
+                  </Button>
+                </>
               )}
               {order.return_requested && (
-                <Button variant="outline" className="w-full" onClick={() => navigate('/returns')} data-testid="view-returns-button">
-                  <AlertTriangle className="w-4 h-4 mr-2" />View Returns
-                </Button>
+                <div className="space-y-2">
+                  <Badge variant="outline" className="text-orange-600 border-orange-400">Return Requested</Badge>
+                  <Button variant="outline" className="w-full" onClick={() => navigate('/returns')} data-testid="view-returns-button">
+                    <AlertTriangle className="w-4 h-4 mr-2" />View Returns
+                  </Button>
+                </div>
+              )}
+              {order.replacement_requested && (
+                <Badge variant="outline" className="text-blue-600 border-blue-400">Replacement Requested</Badge>
               )}
 
               <Button variant="outline" className="w-full" onClick={() => setShowFinancialModal(true)} data-testid="calculate-financials-button">
@@ -443,22 +474,11 @@ export const OrderDetail = () => {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="return-modal">
           <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="font-[Manrope]">Create Return/Replacement Request</CardTitle>
+              <CardTitle className="font-[Manrope]">Create Return Request (Refund)</CardTitle>
               <Button variant="ghost" size="sm" onClick={() => setShowReturnModal(false)}><X className="w-4 h-4" /></Button>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreateReturn} className="space-y-4">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Request Type *</label>
-                  <Select value={returnForm.return_type} onValueChange={v => setReturnForm({ ...returnForm, return_type: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="return">Return (Refund)</SelectItem>
-                      <SelectItem value="replacement">Replacement</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Return Reason *</label>
                   <Select value={returnForm.return_reason} onValueChange={v => setReturnForm({ ...returnForm, return_reason: v })}>
@@ -505,18 +525,6 @@ export const OrderDetail = () => {
                   </Select>
                 </div>
                 
-                {returnForm.return_type === 'replacement' && (
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">What needs to be replaced? *</label>
-                    <Input 
-                      value={returnForm.replacement_items}
-                      onChange={e => setReturnForm({ ...returnForm, replacement_items: e.target.value })}
-                      placeholder="e.g., Left door hinge, screws, etc."
-                      required={returnForm.return_type === 'replacement'}
-                    />
-                  </div>
-                )}
-                
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Details</label>
                   <Input value={returnForm.return_reason_details}
@@ -532,8 +540,8 @@ export const OrderDetail = () => {
                 
                 <div className="flex gap-3">
                   <Button type="button" variant="outline" onClick={() => setShowReturnModal(false)} className="flex-1">Cancel</Button>
-                  <Button type="submit" className="flex-1" disabled={!returnForm.return_reason || (returnForm.return_type === 'replacement' && !returnForm.replacement_items)} data-testid="submit-return-btn">
-                    Create {returnForm.return_type === 'replacement' ? 'Replacement' : 'Return'}
+                  <Button type="submit" className="flex-1" disabled={!returnForm.return_reason} data-testid="submit-return-btn">
+                    Create Return
                   </Button>
                 </div>
               </form>
@@ -585,6 +593,93 @@ export const OrderDetail = () => {
                 <div className="flex gap-3">
                   <Button type="button" variant="outline" onClick={() => setShowFinancialModal(false)} className="flex-1">Cancel</Button>
                   <Button type="submit" className="flex-1" data-testid="calculate-financials-submit">Calculate</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+
+      {/* ===== REPLACEMENT REQUEST MODAL ===== */}
+      {showReplacementModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="replacement-modal">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="font-[Manrope] flex items-center gap-2">
+                <Package className="w-5 h-5 text-blue-600" />
+                Create Replacement Request
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowReplacementModal(false)}><X className="w-4 h-4" /></Button>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleCreateReplacement} className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Reason *</label>
+                  <Select value={replacementForm.replacement_reason} onValueChange={v => setReplacementForm({ ...replacementForm, replacement_reason: v })}>
+                    <SelectTrigger data-testid="replacement-reason-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Damage">Damage</SelectItem>
+                      <SelectItem value="Quality Issue">Quality Issue</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">What is damaged? Describe in detail *</label>
+                  <textarea 
+                    value={replacementForm.damage_description}
+                    onChange={e => setReplacementForm({ ...replacementForm, damage_description: e.target.value })}
+                    placeholder="Example: Left door hinge is broken, screw holes are stripped, glass shelf has crack on corner..."
+                    className="w-full min-h-[100px] p-2 border rounded-md"
+                    required
+                    data-testid="damage-description-input"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Upload Images * (at least 1 required)</label>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    multiple
+                    onChange={(e) => {
+                      // For now, just store file names as placeholder
+                      // In production, upload to cloud storage and get URLs
+                      const files = Array.from(e.target.files);
+                      const fileUrls = files.map(f => f.name); // Placeholder - should be actual uploaded URLs
+                      setReplacementForm({ ...replacementForm, damage_images: fileUrls });
+                    }}
+                    className="w-full p-2 border rounded-md"
+                    data-testid="damage-images-input"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {replacementForm.damage_images.length > 0 ? `${replacementForm.damage_images.length} image(s) selected` : 'No images selected'}
+                  </p>
+                </div>
+                
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <p className="text-sm text-blue-800 font-medium">Replacement Workflow:</p>
+                  <ol className="text-xs text-blue-700 mt-2 space-y-1 list-decimal list-inside">
+                    <li>Replacement Pending</li>
+                    <li>Priority Review</li>
+                    <li>Ship Replacement</li>
+                    <li>Tracking Added</li>
+                    <li>Delivered</li>
+                    <li>Issue Resolved</li>
+                  </ol>
+                </div>
+                
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setShowReplacementModal(false)} className="flex-1">Cancel</Button>
+                  <Button 
+                    type="submit" 
+                    className="flex-1 bg-blue-600 hover:bg-blue-700" 
+                    disabled={!replacementForm.damage_description.trim() || replacementForm.damage_images.length === 0}
+                    data-testid="submit-replacement-btn"
+                  >
+                    Create Replacement Request
+                  </Button>
                 </div>
               </form>
             </CardContent>
