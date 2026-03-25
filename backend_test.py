@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 import io
 import csv
 
-BASE_URL = "https://crm-bug-tracker-2.preview.emergentagent.com/api"
+BASE_URL = "https://order-management-hub-29.preview.emergentagent.com/api"
 
 class FurnivaAPITester:
     def __init__(self):
