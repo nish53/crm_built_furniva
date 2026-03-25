@@ -18,6 +18,8 @@ import {
   Layers,
   Settings,
   FileText,
+  XCircle,
+  CheckCircle,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -31,6 +33,8 @@ export const Layout = () => {
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Orders', href: '/orders', icon: Package },
     { name: 'Inventory', href: '/inventory', icon: Archive },
+    { name: 'Cancelled Orders', href: '/cancelled-orders', icon: XCircle },
+    { name: 'Resolved Orders', href: '/resolved-orders', icon: CheckCircle },
     { name: 'Returns', href: '/returns', icon: RefreshCcw },
     { name: 'Replacements', href: '/replacements', icon: Package },
     { name: 'Claims', href: '/claims', icon: FileText },

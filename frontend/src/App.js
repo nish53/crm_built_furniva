@@ -22,6 +22,8 @@ import { Claims } from './pages/Claims';
 import { Channels } from './pages/Channels';
 import { Costing } from './pages/Costing';
 import { Settings } from './pages/Settings';
+import CancelledOrders from './pages/CancelledOrders';
+import ResolvedOrders from './pages/ResolvedOrders';
 import { Layout } from './components/Layout';
 import './App.css';
 
@@ -81,6 +83,8 @@ function App() {
             <Route path="orders/:id" element={<OrderDetail />} />
             <Route path="orders/import" element={<ImportWizard />} />
             <Route path="orders/import-historical" element={<HistoricalImport />} />
+            <Route path="cancelled-orders" element={<CancelledOrders />} />
+            <Route path="resolved-orders" element={<ResolvedOrders />} />
             <Route path="master-sku" element={<MasterSKU />} />
             <Route path="returns" element={<Returns />} />
             <Route path="returns/:id" element={<ReturnDetail />} />

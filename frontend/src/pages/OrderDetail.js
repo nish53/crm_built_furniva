@@ -42,9 +42,12 @@ export const OrderDetail = () => {
   });
 
   const [replacementForm, setReplacementForm] = useState({
-    replacement_reason: 'Damage',
+    replacement_reason: 'damaged',
+    replacement_type: 'full_replacement',  // NEW: full or partial
     damage_description: '',
-    damage_images: []
+    damage_images: [],
+    notes: '',  // NEW: additional notes
+    difference_amount: ''  // NEW: for customer_change_of_mind upsell
   });
 
   const [finForm, setFinForm] = useState({
@@ -162,7 +165,13 @@ export const OrderDetail = () => {
   const handleCreateReturn = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/return-requests/', {
+      // NEW: Pass cancellation_reason and notes as query parameters
+      const params = new URLSearchParams({
+        cancellation_reason: returnForm.return_reason,
+        notes: returnForm.return_reason_details || ''
+      });
+      
+      await api.post(`/return-requests/?${params.toString()}`, {
         order_id: id,
         return_reason: returnForm.return_reason,
         return_reason_details: returnForm.return_reason_details || null,
@@ -170,7 +179,7 @@ export const OrderDetail = () => {
         is_installation_related: returnForm.is_installation_related,
         damage_images: []
       });
-      toast.success('Return request created');
+      toast.success('Return request created successfully');
       setShowReturnModal(false);
       setReturnForm({
         return_reason: '',
@@ -179,7 +188,9 @@ export const OrderDetail = () => {
         is_installation_related: false
       });
       fetchOrder();
-    } catch (err) { toast.error(err.response?.data?.detail || 'Failed to create return'); }
+    } catch (err) { 
+      toast.error(err.response?.data?.detail || 'Failed to create return'); 
+    }
   };
 
   const handleCreateReplacement = async (e) => {
@@ -192,22 +203,37 @@ export const OrderDetail = () => {
       toast.error('Please upload at least one image');
       return;
     }
+    
+    // Set default replacement_type for non-damaged/quality reasons
+    let replacement_type = replacementForm.replacement_type || 'full_replacement';
+    if (replacementForm.replacement_reason === 'wrong_product_sent' || replacementForm.replacement_reason === 'customer_change_of_mind') {
+      replacement_type = 'full_replacement';
+    }
+    
     try {
       await api.post('/replacement-requests/', {
         order_id: id,
         replacement_reason: replacementForm.replacement_reason,
+        replacement_type: replacement_type,
         damage_description: replacementForm.damage_description,
-        damage_images: replacementForm.damage_images
+        damage_images: replacementForm.damage_images,
+        notes: replacementForm.notes || null,
+        difference_amount: replacementForm.difference_amount ? parseFloat(replacementForm.difference_amount) : null
       });
-      toast.success('Replacement request created');
+      toast.success('Replacement request created successfully');
       setShowReplacementModal(false);
       setReplacementForm({
-        replacement_reason: 'Damage',
+        replacement_reason: 'damaged',
+        replacement_type: 'full_replacement',
         damage_description: '',
-        damage_images: []
+        damage_images: [],
+        notes: '',
+        difference_amount: ''
       });
       fetchOrder();
-    } catch (err) { toast.error(err.response?.data?.detail || 'Failed to create replacement'); }
+    } catch (err) { 
+      toast.error(err.response?.data?.detail || 'Failed to create replacement'); 
+    }
   };
 
   const handleCalculateFinancials = async (e) => {
@@ -526,8 +552,10 @@ export const OrderDetail = () => {
                 </Button>
               )}
 
-              {/* Cancel Order Button - Only for pending or confirmed orders */}
-              {(order.status === 'pending' || order.status === 'confirmed') && !order.return_requested && (
+              {/* CONTEXT-DEPENDENT ACTION BUTTONS BASED ON ORDER STATUS */}
+              
+              {/* PRE-DISPATCH: Cancel Order button (for pending/confirmed orders) */}
+              {(order.status === 'pending' || order.status === 'confirmed') && !order.return_requested && !order.cancelled_at && (
                 <Button 
                   variant="outline" 
                   className="w-full border-red-300 text-red-700 hover:bg-red-50" 
@@ -535,20 +563,45 @@ export const OrderDetail = () => {
                   disabled={updating}
                   data-testid="cancel-order-button"
                 >
-                  <XCircle className="w-4 h-4 mr-2" />Cancel Order
+                  <XCircle className="w-4 h-4 mr-2" />Cancel Order (Pre-Dispatch)
                 </Button>
               )}
 
-              {/* Return Request Button - Only for dispatched or delivered orders */}
-              {(order.status === 'dispatched' || order.status === 'delivered') && !order.return_requested && !order.replacement_requested && (
-                <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => setShowReturnModal(true)} data-testid="create-return-button">
+              {/* IN-TRANSIT: Cancel/RTO button (for dispatched/in_transit orders) */}
+              {(order.status === 'dispatched' || order.status === 'in_transit') && !order.return_requested && !order.cancelled_at && (
+                <Button 
+                  variant="outline" 
+                  className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" 
+                  onClick={() => setShowCancelModal(true)} 
+                  disabled={updating}
+                  data-testid="cancel-rto-button"
+                >
+                  <XCircle className="w-4 h-4 mr-2" />Cancel / RTO (In-Transit)
+                </Button>
+              )}
+
+              {/* POST-DELIVERY: Return Request button */}
+              {order.status === 'delivered' && !order.return_requested && !order.replacement_requested && (
+                <Button 
+                  variant="outline" 
+                  className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" 
+                  onClick={() => setShowReturnModal(true)} 
+                  disabled={updating}
+                  data-testid="create-return-button"
+                >
                   <RefreshCcw className="w-4 h-4 mr-2" />Create Return Request
                 </Button>
               )}
 
-              {/* Replacement Request Button - Only for dispatched or delivered orders */}
-              {(order.status === 'dispatched' || order.status === 'delivered') && !order.return_requested && !order.replacement_requested && (
-                <Button variant="outline" className="w-full border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => setShowReplacementModal(true)} data-testid="create-replacement-button">
+              {/* POST-DELIVERY: Replacement Request button */}
+              {order.status === 'delivered' && !order.return_requested && !order.replacement_requested && (
+                <Button 
+                  variant="outline" 
+                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-50" 
+                  onClick={() => setShowReplacementModal(true)} 
+                  disabled={updating}
+                  data-testid="create-replacement-button"
+                >
                   <Package className="w-4 h-4 mr-2" />Create Replacement Request
                 </Button>
               )}
@@ -739,37 +792,43 @@ export const OrderDetail = () => {
         </div>
       </div>
 
-      {/* ===== CREATE RETURN MODAL ===== */}
+      {/* ===== CREATE RETURN MODAL (POST-DELIVERY ONLY) ===== */}
       {showReturnModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="return-modal">
           <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="font-[Manrope]">Create Return Request (Refund)</CardTitle>
+              <CardTitle className="font-[Manrope]">Create Return Request (Post-Delivery)</CardTitle>
               <Button variant="ghost" size="sm" onClick={() => setShowReturnModal(false)}><X className="w-4 h-4" /></Button>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreateReturn} className="space-y-4">
+                <div className="bg-blue-50 p-3 rounded-md border border-blue-200 mb-4">
+                  <p className="text-xs text-blue-800">
+                    Order has been delivered. Select return reason for post-delivery return.
+                  </p>
+                </div>
+
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Return Reason *</label>
                   <Select value={returnForm.return_reason} onValueChange={v => setReturnForm({ ...returnForm, return_reason: v })}>
                     <SelectTrigger data-testid="return-reason-select"><SelectValue placeholder="Select reason" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Damage">Damage</SelectItem>
-                      <SelectItem value="Customer Refused at Doorstep">Customer Refused at Doorstep</SelectItem>
-                      <SelectItem value="Fraud">Fraud</SelectItem>
-                      <SelectItem value="Delayed">Delayed</SelectItem>
-                      <SelectItem value="Wrong Item Delivered">Wrong Item Delivered</SelectItem>
-                      <SelectItem value="Customer Quality Issue">Customer Quality Issue</SelectItem>
-                      <SelectItem value="Missing Item">Missing Item</SelectItem>
-                      <SelectItem value="Pre Fulfillment Cancel">Pre Fulfillment Cancel</SelectItem>
+                      <SelectItem value="damage">Damage</SelectItem>
+                      <SelectItem value="customer_issues_except_quality">Customer Issues (Except Quality)</SelectItem>
+                      <SelectItem value="hardware_missing">Hardware Missing</SelectItem>
+                      <SelectItem value="defective_product">Defective Product</SelectItem>
+                      <SelectItem value="fraud_customer">Fraud Customer</SelectItem>
+                      <SelectItem value="wrong_product_sent">Wrong Product Sent</SelectItem>
+                      <SelectItem value="customer_quality_issues">Customer Quality Issues</SelectItem>
+                      <SelectItem value="product_delayed_customer_accepted">Product Delayed & Customer Accepted</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Damage Category</label>
+                  <label className="text-xs font-medium text-muted-foreground">Damage Category (Optional)</label>
                   <Select value={returnForm.damage_category} onValueChange={v => setReturnForm({ ...returnForm, damage_category: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select (optional)" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select if applicable" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="No Damage">No Damage</SelectItem>
                       <SelectItem value="Scratch">Scratch</SelectItem>
@@ -785,10 +844,10 @@ export const OrderDetail = () => {
                 </div>
                 
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Details</label>
+                  <label className="text-xs font-medium text-muted-foreground">Additional Notes (Optional)</label>
                   <Input value={returnForm.return_reason_details}
                     onChange={e => setReturnForm({ ...returnForm, return_reason_details: e.target.value })}
-                    placeholder="Additional details..." data-testid="return-details-input" />
+                    placeholder="Add any additional details..." data-testid="return-details-input" />
                 </div>
                 
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -874,15 +933,47 @@ export const OrderDetail = () => {
             <CardContent>
               <form onSubmit={handleCreateReplacement} className="space-y-4">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground">Reason *</label>
+                  <label className="text-xs font-medium text-muted-foreground">Replacement Reason *</label>
                   <Select value={replacementForm.replacement_reason} onValueChange={v => setReplacementForm({ ...replacementForm, replacement_reason: v })}>
-                    <SelectTrigger data-testid="replacement-reason-select"><SelectValue /></SelectTrigger>
+                    <SelectTrigger data-testid="replacement-reason-select"><SelectValue placeholder="Select reason" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Damage">Damage</SelectItem>
-                      <SelectItem value="Quality Issue">Quality Issue</SelectItem>
+                      <SelectItem value="damaged">Damaged</SelectItem>
+                      <SelectItem value="quality">Quality</SelectItem>
+                      <SelectItem value="wrong_product_sent">Wrong Product Sent</SelectItem>
+                      <SelectItem value="customer_change_of_mind">Customer Change of Mind</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+                
+                {/* REPLACEMENT TYPE SELECTION (Full or Partial) */}
+                {(replacementForm.replacement_reason === 'damaged' || replacementForm.replacement_reason === 'quality') && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Replacement Type *</label>
+                    <Select value={replacementForm.replacement_type} onValueChange={v => setReplacementForm({ ...replacementForm, replacement_type: v })}>
+                      <SelectTrigger data-testid="replacement-type-select"><SelectValue placeholder="Select type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="full_replacement">Full Replacement</SelectItem>
+                        <SelectItem value="partial_replacement">Partial Replacement (Parts Only)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                
+                {/* DIFFERENCE AMOUNT FOR CUSTOMER CHANGE OF MIND (UPSELL) */}
+                {replacementForm.replacement_reason === 'customer_change_of_mind' && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Difference Amount (₹) *</label>
+                    <Input 
+                      type="number" 
+                      step="0.01"
+                      value={replacementForm.difference_amount || ''}
+                      onChange={e => setReplacementForm({ ...replacementForm, difference_amount: e.target.value })}
+                      placeholder="Enter amount if upselling, or 0"
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Enter difference amount if customer is upgrading to a higher-priced product</p>
+                  </div>
+                )}
                 
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">What is damaged? Describe in detail *</label>
@@ -915,6 +1006,16 @@ export const OrderDetail = () => {
                   <p className="text-xs text-muted-foreground mt-1">
                     {replacementForm.damage_images.length > 0 ? `${replacementForm.damage_images.length} image(s) selected` : 'No images selected'}
                   </p>
+                </div>
+                
+                {/* NOTES FIELD */}
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Additional Notes (Optional)</label>
+                  <Input 
+                    value={replacementForm.notes}
+                    onChange={e => setReplacementForm({ ...replacementForm, notes: e.target.value })}
+                    placeholder="Any additional information..."
+                  />
                 </div>
                 
                 <div className="bg-blue-50 p-3 rounded-md">
@@ -1022,16 +1123,18 @@ export const OrderDetail = () => {
         </div>
       )}
 
-      {/* ===== CANCEL ORDER MODAL ===== */}
+      {/* ===== CANCEL ORDER MODAL (CONTEXT-DEPENDENT REASONS) ===== */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="cancel-order-modal">
           <Card className="w-full max-w-md">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="font-[Manrope] text-red-700 flex items-center gap-2">
                 <XCircle className="w-5 h-5" />
-                Cancel Order
+                {order?.status === 'pending' || order?.status === 'confirmed' 
+                  ? 'Cancel Order (Pre-Dispatch)' 
+                  : 'Cancel / RTO (In-Transit)'}
               </CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => setShowCancelModal(false)}><X className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="sm" onClick={() => { setShowCancelModal(false); setCancellationReason(''); }}><X className="w-4 h-4" /></Button>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="bg-red-50 p-3 rounded-md border border-red-200">
@@ -1039,7 +1142,9 @@ export const OrderDetail = () => {
                   <span className="font-medium">Order:</span> {order?.order_number}
                 </p>
                 <p className="text-xs text-red-600 mt-1">
-                  This action will cancel the order. A cancellation reason is required.
+                  {order?.status === 'pending' || order?.status === 'confirmed'
+                    ? 'Order has not been dispatched yet. Select pre-dispatch cancellation reason.'
+                    : 'Order is in transit. This will create an RTO (Return to Origin) request.'}
                 </p>
               </div>
               
@@ -1050,17 +1155,38 @@ export const OrderDetail = () => {
                     <SelectValue placeholder="Select a reason" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Customer Request">Customer Request</SelectItem>
-                    <SelectItem value="Pre Fulfillment Cancel">Pre Fulfillment Cancel (PFC)</SelectItem>
-                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
-                    <SelectItem value="Pricing Error">Pricing Error</SelectItem>
-                    <SelectItem value="Address Issue">Address Issue</SelectItem>
-                    <SelectItem value="Customer Unreachable">Customer Unreachable</SelectItem>
-                    <SelectItem value="Duplicate Order">Duplicate Order</SelectItem>
-                    <SelectItem value="Fraud Suspected">Fraud Suspected</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
+                    {/* PRE-DISPATCH REASONS */}
+                    {(order?.status === 'pending' || order?.status === 'confirmed') && (
+                      <>
+                        <SelectItem value="change_of_mind">Change of Mind</SelectItem>
+                        <SelectItem value="found_better_pricing">Found Better Pricing</SelectItem>
+                        <SelectItem value="ordered_mistakenly">Ordered Mistakenly</SelectItem>
+                        <SelectItem value="wants_to_customize">Wants to Customize</SelectItem>
+                        <SelectItem value="did_not_specify">Did Not Specify</SelectItem>
+                        <SelectItem value="customer_not_available">Customer not Available</SelectItem>
+                      </>
+                    )}
+                    
+                    {/* IN-TRANSIT REASONS */}
+                    {(order?.status === 'dispatched' || order?.status === 'in_transit') && (
+                      <>
+                        <SelectItem value="customer_refused_doorstep">Customer Refused at Doorstep</SelectItem>
+                        <SelectItem value="customer_unavailable">Customer Unavailable</SelectItem>
+                        <SelectItem value="delay">Delay</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
+              </div>
+              
+              {/* NOTES FIELD */}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Additional Notes (Optional)</label>
+                <Input 
+                  placeholder="Add any additional details..." 
+                  value={returnForm.return_reason_details}
+                  onChange={e => setReturnForm({ ...returnForm, return_reason_details: e.target.value })}
+                />
               </div>
               
               <div className="flex gap-3">
