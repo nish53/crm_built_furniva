@@ -521,7 +521,7 @@ class ReturnRequest(BaseModel):
     customer_id: str
     customer_name: str
     phone: str
-    return_reason: ReturnReason
+    return_reason: Optional[str] = None  # Changed to Optional[str] for flexibility with old and new data
     return_reason_details: Optional[str] = None
     damage_category: Optional[DamageCategory] = None
     return_status: ReturnStatus
