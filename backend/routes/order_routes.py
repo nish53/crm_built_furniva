@@ -204,17 +204,17 @@ async def cancel_order(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """Cancel an order (pre-dispatch only) with mandatory reason"""
+    """Cancel an order (pre-dispatch or in-transit) with mandatory reason"""
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
-    # Only allow cancellation for pre-dispatch orders
+    # Allow cancellation for pre-dispatch and in-transit orders
     current_status = order.get("status", "")
-    if current_status not in ["pending", "confirmed"]:
+    if current_status not in ["pending", "confirmed", "dispatched", "in_transit", "out_for_delivery"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot cancel order with status '{current_status}'. Only pending or confirmed orders can be cancelled."
+            detail=f"Cannot cancel order with status '{current_status}'. Only pending, confirmed, dispatched, in_transit, or out_for_delivery orders can be cancelled."
         )
     
     if not cancellation_reason or not cancellation_reason.strip():
@@ -523,12 +523,18 @@ async def import_historical_orders(
                     }
                     order["cancellation_reason"] = reason_mapping.get(reason_from_csv, "did_not_specify")
                 
-                # For delivered orders with cancellation reason, mark as resolved
+                # For delivered orders with damage/issue reasons, mark as resolved
                 elif status == "delivered" and reason_from_csv:
-                    resolved_keywords = ["Part Damage", "Full Damage", "Hardware Missing", "Minimal Installation Issue"]
-                    if any(keyword in reason_from_csv for keyword in resolved_keywords):
+                    # These are orders that were delivered but had issues that were resolved
+                    resolved_keywords = ["Part Damage", "Full Damage", "Hardware Missing", "Minimal Installation Issue", 
+                                        "Damage", "Defective", "Quality", "Scratch", "Crack", "Dent", "Broken"]
+                    if any(keyword.lower() in reason_from_csv.lower() for keyword in resolved_keywords):
                         order["cancellation_reason"] = "resolved"  # Special marker for Resolved Orders page
                         order["internal_notes"] += f" | Resolved issue: {reason_from_csv}"
+                    else:
+                        order["cancellation_reason"] = ""  # Normal delivered order
+                else:
+                    order["cancellation_reason"] = ""  # Default
                 
                 await db.orders.insert_one(order)
                 imported_count += 1

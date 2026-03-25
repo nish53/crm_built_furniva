@@ -26,6 +26,9 @@ export const Replacements = () => {
   const fetchReplacements = async () => {
     try {
       const params = {};
+      // ONLY fetch open replacements (exclude resolved status)
+      params.exclude_status = 'resolved';
+      
       if (statusFilter !== 'all') params.status = statusFilter;
       
       const response = await api.get('/replacement-requests/', { params });
@@ -109,8 +112,8 @@ export const Replacements = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold font-[Manrope]">Replacement Requests</h1>
-          <p className="text-muted-foreground mt-1">Manage damage and quality issue replacements</p>
+          <h1 className="text-3xl font-bold font-[Manrope]">Open Replacements</h1>
+          <p className="text-muted-foreground mt-1">Manage in-progress replacement requests (resolved replacements moved to Resolved Orders)</p>
         </div>
       </div>
 

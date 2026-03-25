@@ -58,9 +58,12 @@ const CancelledOrders = () => {
     { key: 'wrong_product_sent', label: 'Wrong Product', color: 'blue' },
     { key: 'customer_quality_issues', label: 'Quality Issues', color: 'orange' },
     { key: 'product_delayed_customer_accepted', label: 'Product Delayed', color: 'yellow' },
-    { key: 'did_not_specify', label: 'Did Not Specify', color: 'gray' },
+    { key: 'did_not_specify', label: 'Did Not Specify (PFC)', color: 'gray' },
     { key: 'change_of_mind', label: 'Change of Mind', color: 'blue' },
-    { key: 'found_better_pricing', label: 'Better Pricing', color: 'green' }
+    { key: 'found_better_pricing', label: 'Better Pricing', color: 'green' },
+    { key: 'customer_refused_doorstep', label: 'Customer Refused', color: 'red' },
+    { key: 'customer_unavailable', label: 'Customer Unavailable', color: 'orange' },
+    { key: 'delay', label: 'Delay', color: 'yellow' }
   ];
 
   const getReasonCount = (reason) => {
@@ -111,25 +114,51 @@ const CancelledOrders = () => {
           <Card>
             <CardContent className="pt-6">
               <div className="text-3xl font-bold text-red-600">{stats.total_cancelled || 0}</div>
-              <div className="text-sm text-muted-foreground">Total Cancelled</div>
+              <div className="text-sm text-muted-foreground">Total Cancelled Orders</div>
+              <div className="text-xs text-gray-500 mt-1">100%</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
-              <div className="text-3xl font-bold text-orange-600">{getReasonCount('damage')}</div>
-              <div className="text-sm text-muted-foreground">Damage</div>
+              <div className="text-3xl font-bold text-orange-600">
+                {(getReasonCount('damage') + getReasonCount('customer_issues_except_quality') + 
+                  getReasonCount('hardware_missing') + getReasonCount('defective_product') + 
+                  getReasonCount('fraud_customer') + getReasonCount('wrong_product_sent') + 
+                  getReasonCount('customer_quality_issues') + getReasonCount('product_delayed_customer_accepted'))}
+              </div>
+              <div className="text-sm text-muted-foreground">Returns % (Post-Delivery)</div>
+              <div className="text-xs text-gray-500 mt-1">
+                {stats.total_cancelled > 0 
+                  ? ((((getReasonCount('damage') + getReasonCount('customer_issues_except_quality') + 
+                        getReasonCount('hardware_missing') + getReasonCount('defective_product') + 
+                        getReasonCount('fraud_customer') + getReasonCount('wrong_product_sent') + 
+                        getReasonCount('customer_quality_issues') + getReasonCount('product_delayed_customer_accepted')) / stats.total_cancelled) * 100).toFixed(1))
+                  : 0}%
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
-              <div className="text-3xl font-bold text-blue-600">{getReasonCount('customer_issues_except_quality')}</div>
-              <div className="text-sm text-muted-foreground">Customer Issues</div>
+              <div className="text-3xl font-bold text-blue-600">
+                {(getReasonCount('customer_refused_doorstep') + getReasonCount('customer_unavailable') + getReasonCount('delay'))}
+              </div>
+              <div className="text-sm text-muted-foreground">RTO Pre-Delivery (Excluding PFC)</div>
+              <div className="text-xs text-gray-500 mt-1">
+                {stats.total_cancelled > 0 
+                  ? ((((getReasonCount('customer_refused_doorstep') + getReasonCount('customer_unavailable') + getReasonCount('delay')) / stats.total_cancelled) * 100).toFixed(1))
+                  : 0}%
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
               <div className="text-3xl font-bold text-gray-600">{getReasonCount('did_not_specify')}</div>
-              <div className="text-sm text-muted-foreground">Did Not Specify</div>
+              <div className="text-sm text-muted-foreground">Pre-Fulfillment Cancellations (PFC)</div>
+              <div className="text-xs text-gray-500 mt-1">
+                {stats.total_cancelled > 0 
+                  ? (((getReasonCount('did_not_specify') / stats.total_cancelled) * 100).toFixed(1))
+                  : 0}%
+              </div>
             </CardContent>
           </Card>
         </div>

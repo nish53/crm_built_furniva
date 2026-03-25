@@ -35,6 +35,9 @@ export const Returns = () => {
   const fetchReturns = async () => {
     try {
       const params = {};
+      // ONLY fetch open returns (exclude closed status)
+      params.exclude_status = 'closed';
+      
       if (activeTab === 'pfc') params.category = 'pfc';
       if (activeTab === 'resolved') params.category = 'resolved';
       if (activeTab === 'refunded') params.category = 'refunded';
@@ -98,8 +101,8 @@ export const Returns = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold font-[Manrope]">Returns & Claims</h1>
-          <p className="text-muted-foreground mt-1">Manage cancellations, returns, and fraudulent orders</p>
+          <h1 className="text-3xl font-bold font-[Manrope]">Open Returns</h1>
+          <p className="text-muted-foreground mt-1">Manage in-progress return requests (closed returns moved to Cancelled/Resolved)</p>
         </div>
         <Button onClick={() => { fetchReturns(); fetchAnalytics(); }}>
           <RefreshCcw className="w-4 h-4 mr-2" />

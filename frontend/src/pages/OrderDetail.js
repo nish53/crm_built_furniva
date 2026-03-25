@@ -189,7 +189,16 @@ export const OrderDetail = () => {
       });
       fetchOrder();
     } catch (err) { 
-      toast.error(err.response?.data?.detail || 'Failed to create return'); 
+      // Handle validation errors properly
+      let errorMsg = 'Failed to create return';
+      if (err.response?.data?.detail) {
+        if (Array.isArray(err.response.data.detail)) {
+          errorMsg = err.response.data.detail.map(e => e.msg || e).join(', ');
+        } else if (typeof err.response.data.detail === 'string') {
+          errorMsg = err.response.data.detail;
+        }
+      }
+      toast.error(errorMsg); 
     }
   };
 
@@ -567,8 +576,8 @@ export const OrderDetail = () => {
                 </Button>
               )}
 
-              {/* IN-TRANSIT: Cancel/RTO button (for dispatched/in_transit orders) */}
-              {(order.status === 'dispatched' || order.status === 'in_transit') && !order.return_requested && !order.cancelled_at && (
+              {/* IN-TRANSIT: Cancel/RTO button (for dispatched/in_transit/out_for_delivery orders) */}
+              {(order.status === 'dispatched' || order.status === 'in_transit' || order.status === 'out_for_delivery') && !order.return_requested && !order.cancelled_at && (
                 <Button 
                   variant="outline" 
                   className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" 
@@ -830,15 +839,10 @@ export const OrderDetail = () => {
                   <Select value={returnForm.damage_category} onValueChange={v => setReturnForm({ ...returnForm, damage_category: v })}>
                     <SelectTrigger><SelectValue placeholder="Select if applicable" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="No Damage">No Damage</SelectItem>
-                      <SelectItem value="Scratch">Scratch</SelectItem>
-                      <SelectItem value="Crack">Crack</SelectItem>
                       <SelectItem value="Dent">Dent</SelectItem>
                       <SelectItem value="Broken">Broken</SelectItem>
-                      <SelectItem value="Missing Parts">Missing Parts</SelectItem>
-                      <SelectItem value="Packaging Damage">Packaging Damage</SelectItem>
-                      <SelectItem value="Hardware Missing">Hardware Missing</SelectItem>
-                      <SelectItem value="Parts Missing">Parts Missing</SelectItem>
+                      <SelectItem value="Scratches">Scratches</SelectItem>
+                      <SelectItem value="Crack">Crack</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1168,7 +1172,7 @@ export const OrderDetail = () => {
                     )}
                     
                     {/* IN-TRANSIT REASONS */}
-                    {(order?.status === 'dispatched' || order?.status === 'in_transit') && (
+                    {(order?.status === 'dispatched' || order?.status === 'in_transit' || order?.status === 'out_for_delivery') && (
                       <>
                         <SelectItem value="customer_refused_doorstep">Customer Refused at Doorstep</SelectItem>
                         <SelectItem value="customer_unavailable">Customer Unavailable</SelectItem>
