@@ -25,11 +25,11 @@ async def get_dashboard_stats(
     # Pending Confirmation = orders that are:
     # 1. NOT dispatched (status = pending)
     # 2. NOT confirmed (confirmed != True)
-    # 3. Need to be shipped TODAY (expected_dispatch_date = today)
+    # 3. Expected dispatch is TODAY or PAST (not future) - urgency increases with past dates
     pending_confirmation = await db.orders.count_documents({
         "status": "pending",
         "confirmed": {"$ne": True},
-        "expected_dispatch_date": {"$lte": today}
+        "expected_dispatch_date": {"$lte": today}  # Today or past (excludes future)
     })
     
     low_stock_items = await db.products.count_documents({
@@ -80,6 +80,63 @@ async def get_recent_orders(
 ):
     orders = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
     return orders
+
+@router.get("/revenue/{period}")
+async def get_revenue_by_period(
+    period: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get revenue and units for different time periods"""
+    from datetime import timedelta
+    
+    today = datetime.now(timezone.utc)
+    
+    # Calculate date range based on period
+    if period == "today":
+        start_date = today.date().isoformat()
+        match_query = {
+            "order_date": {"$gte": start_date},
+            "status": {"$nin": ["cancelled", "returned"]}
+        }
+    elif period == "30days":
+        start_date = (today - timedelta(days=30)).isoformat()
+        match_query = {
+            "order_date": {"$gte": start_date},
+            "status": {"$nin": ["cancelled", "returned"]}
+        }
+    elif period == "year":
+        start_date = today.replace(month=1, day=1).isoformat()
+        match_query = {
+            "order_date": {"$gte": start_date},
+            "status": {"$nin": ["cancelled", "returned"]}
+        }
+    else:  # lifetime
+        match_query = {
+            "status": {"$nin": ["cancelled", "returned"]}
+        }
+    
+    # Aggregate revenue and units
+    pipeline = [
+        {"$match": match_query},
+        {
+            "$group": {
+                "_id": None,
+                "amount": {"$sum": "$price"},
+                "units": {"$sum": 1}
+            }
+        }
+    ]
+    
+    result = await db.orders.aggregate(pipeline).to_list(1)
+    
+    if result:
+        return {
+            "amount": result[0]["amount"],
+            "units": result[0]["units"]
+        }
+    else:
+        return {"amount": 0, "units": 0}
 
 @router.get("/analytics/sales-by-state")
 async def get_sales_by_state(

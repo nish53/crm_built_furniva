@@ -15,10 +15,25 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [revenuePeriod, setRevenuePeriod] = useState('today'); // today, 30days, year, lifetime
   const [revenueMetric, setRevenueMetric] = useState('amount'); // amount, units
+  const [revenueData, setRevenueData] = useState({ amount: 0, units: 0 });
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  useEffect(() => {
+    fetchRevenueData();
+  }, [revenuePeriod]);
+
+  const fetchRevenueData = async () => {
+    try {
+      const response = await api.get(`/dashboard/revenue/${revenuePeriod}`);
+      setRevenueData(response.data);
+    } catch (error) {
+      console.error('Failed to fetch revenue data:', error);
+      setRevenueData({ amount: 0, units: 0 });
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
@@ -160,8 +175,54 @@ export const Dashboard = () => {
         </div>
       </div>
 
+      {/* Revenue Card - Special with Dropdown */}
+      <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100 col-span-1 md:col-span-2">
+        <CardContent className="p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-sm font-medium text-muted-foreground">Revenue</p>
+                <select 
+                  value={revenuePeriod}
+                  onChange={(e) => setRevenuePeriod(e.target.value)}
+                  className="text-xs border rounded px-2 py-1 bg-white"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <option value="today">Today</option>
+                  <option value="30days">Last 30 Days</option>
+                  <option value="year">This Year</option>
+                  <option value="lifetime">Lifetime</option>
+                </select>
+                <button
+                  onClick={() => setRevenueMetric(revenueMetric === 'amount' ? 'units' : 'amount')}
+                  className="text-xs border rounded px-2 py-1 bg-white hover:bg-gray-50"
+                >
+                  {revenueMetric === 'amount' ? '₹ Amount' : '📦 Units'}
+                </button>
+              </div>
+              <div className="text-4xl font-bold font-[Manrope] text-green-600 mt-2 mb-1">
+                {revenueMetric === 'amount' 
+                  ? `₹${revenueData.amount.toLocaleString()}` 
+                  : `${revenueData.units.toLocaleString()} units`
+                }
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {revenuePeriod === 'today' && 'Orders placed today'}
+                {revenuePeriod === '30days' && 'Last 30 days performance'}
+                {revenuePeriod === 'year' && 'Year-to-date revenue'}
+                {revenuePeriod === 'lifetime' && 'Total all-time revenue'}
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-green-100 shadow-sm">
+              <TrendingUp className="h-6 w-6 text-green-600" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Other Tiles */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {statCards.map((stat, index) => {
+        {statCards.slice(1).map((stat, index) => {
           const Icon = stat.icon;
           return (
             <Card 

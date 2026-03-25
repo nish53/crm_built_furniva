@@ -25,6 +25,8 @@ async def get_orders(
     max_price: Optional[float] = None,
     city: Optional[str] = None,
     state: Optional[str] = None,
+    dispatch_date: Optional[str] = None,  # For "dispatched today" filter
+    confirmed: Optional[str] = None,  # 'true' or 'false'
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     current_user: User = Depends(get_current_active_user),
@@ -43,6 +45,14 @@ async def get_orders(
         query["city"] = {"$regex": city, "$options": "i"}
     if state:
         query["state"] = {"$regex": state, "$options": "i"}
+    
+    # Dashboard tile filters
+    if dispatch_date:
+        query["dispatch_date"] = {"$gte": dispatch_date}  # Orders dispatched on or after this date
+    if confirmed == 'true':
+        query["confirmed"] = True
+    elif confirmed == 'false':
+        query["confirmed"] = {"$ne": True}
     
     if search:
         query["$or"] = [

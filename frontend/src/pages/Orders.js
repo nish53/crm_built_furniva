@@ -57,6 +57,8 @@ export const Orders = () => {
     total_pages: 0
   });
   const [currentPage, setCurrentPage] = useState(1);
+  const [dispatchedTodayFilter, setDispatchedTodayFilter] = useState(false);
+  const [confirmedFilter, setConfirmedFilter] = useState('all'); // 'all', 'confirmed', 'unconfirmed'
   const navigate = useNavigate();
 
   // Apply filters from navigation state (from dashboard tiles)
@@ -66,11 +68,15 @@ export const Orders = () => {
         setStatusFilter(location.state.filterStatus);
       }
       if (location.state.filterDispatchedToday) {
-        // Handle dispatched today filter
+        setDispatchedTodayFilter(true);
         setShowAdvancedFilters(true);
       }
       if (location.state.filterConfirmed === false) {
-        // Handle unconfirmed filter
+        setConfirmedFilter('unconfirmed');
+        setShowAdvancedFilters(true);
+      }
+      if (location.state.filterDispatchToday) {
+        setDispatchedTodayFilter(true);
         setShowAdvancedFilters(true);
       }
     }
@@ -79,7 +85,7 @@ export const Orders = () => {
   useEffect(() => {
     fetchOrders();
     fetchFilterOptions();
-  }, [statusFilter, channelFilter, masterSkuFilter, cityFilter, stateFilter, minPrice, maxPrice, currentPage]);
+  }, [statusFilter, channelFilter, masterSkuFilter, cityFilter, stateFilter, minPrice, maxPrice, currentPage, dispatchedTodayFilter, confirmedFilter]);
 
   const fetchFilterOptions = async () => {
     try {
@@ -114,6 +120,14 @@ export const Orders = () => {
       if (stateFilter && stateFilter !== 'all') params.state = stateFilter;
       if (minPrice) params.min_price = minPrice;
       if (maxPrice) params.max_price = maxPrice;
+      
+      // Dashboard tile filters
+      if (dispatchedTodayFilter) {
+        const today = new Date().toISOString().split('T')[0];
+        params.dispatch_date = today; // Filter by today's dispatch date
+      }
+      if (confirmedFilter === 'confirmed') params.confirmed = 'true';
+      if (confirmedFilter === 'unconfirmed') params.confirmed = 'false';
 
       const response = await api.get('/orders/', { params });
       const data = response.data;
