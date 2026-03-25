@@ -17,6 +17,7 @@ import {
   DollarSign,
   Layers,
   Settings,
+  FileText,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -32,6 +33,7 @@ export const Layout = () => {
     { name: 'Inventory', href: '/inventory', icon: Archive },
     { name: 'Returns', href: '/returns', icon: RefreshCcw },
     { name: 'Replacements', href: '/replacements', icon: Package },
+    { name: 'Claims', href: '/claims', icon: FileText },
     { name: 'Costing', href: '/costing', icon: DollarSign },
     { name: 'Channels', href: '/channels', icon: Layers },
     { name: 'Tasks', href: '/tasks', icon: CheckSquare },

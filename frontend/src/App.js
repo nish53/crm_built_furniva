@@ -17,6 +17,8 @@ import { MasterSKU } from './pages/MasterSKU';
 import { Returns } from './pages/Returns';
 import { ReturnDetail } from './pages/ReturnDetail';
 import { Replacements } from './pages/Replacements';
+import { ReplacementDetail } from './pages/ReplacementDetail';
+import { Claims } from './pages/Claims';
 import { Channels } from './pages/Channels';
 import { Costing } from './pages/Costing';
 import { Settings } from './pages/Settings';
@@ -83,6 +85,8 @@ function App() {
             <Route path="returns" element={<Returns />} />
             <Route path="returns/:id" element={<ReturnDetail />} />
             <Route path="replacements" element={<Replacements />} />
+            <Route path="replacements/:id" element={<ReplacementDetail />} />
+            <Route path="claims" element={<Claims />} />
             <Route path="channels" element={<Channels />} />
             <Route path="costing" element={<Costing />} />
             <Route path="settings" element={<Settings />} />

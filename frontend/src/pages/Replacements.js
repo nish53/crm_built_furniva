@@ -204,7 +204,8 @@ export const Replacements = () => {
           ) : (
             <div className="space-y-4">
               {replacements.map((replacement) => (
-                <div key={replacement.id} className="border rounded-lg p-4 hover:bg-secondary/20">
+                <div key={replacement.id} className="border rounded-lg p-4 hover:bg-secondary/20 cursor-pointer"
+                  onClick={() => navigate(`/replacements/${replacement.id}`)}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
