@@ -56,8 +56,8 @@ WORKFLOW_TRANSITIONS = {
     },
     "post_delivery": {
         "requested": ["accepted", "closed", "rejected"],
-        "accepted": ["pickup_scheduled", "pickup_not_required"],
-        "pickup_scheduled": ["pickup_in_transit"],
+        "accepted": ["picked_up", "pickup_not_required"],
+        "picked_up": ["pickup_in_transit", "warehouse_received"],  # Can go to warehouse directly
         "pickup_in_transit": ["warehouse_received"],
         "pickup_not_required": ["closed"],  # Skip directly to closed
         "warehouse_received": ["condition_checked"],
@@ -207,6 +207,7 @@ async def create_return_request(
 @router.get("/", response_model=List[ReturnRequest])
 async def get_return_requests(
     status: Optional[ReturnStatus] = None,
+    exclude_status: Optional[str] = None,  # NEW: exclude certain statuses
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     skip: int = 0,
@@ -214,11 +215,15 @@ async def get_return_requests(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """Get all return requests"""
+    """Get all return requests with option to exclude closed returns"""
     query = {}
     
     if status:
         query["return_status"] = status
+    
+    # NEW: Exclude closed returns for "Open Returns" page
+    if exclude_status:
+        query["return_status"] = {"$ne": exclude_status}
     
     if start_date:
         query["requested_date"] = {"$gte": start_date}
@@ -422,10 +427,10 @@ async def advance_return_workflow(
             )
     
     elif return_type == "post_delivery":
-        if next_status == "pickup_scheduled" and not (pickup_date or pickup_tracking_id):
+        if next_status == "picked_up" and not (pickup_date or pickup_tracking_id):
             raise HTTPException(
                 status_code=400,
-                detail="pickup_date and pickup_tracking_id are required for pickup_scheduled status"
+                detail="pickup_date and pickup_tracking_id are required for picked_up status"
             )
         if next_status == "condition_checked" and not received_condition:
             raise HTTPException(
@@ -467,7 +472,7 @@ async def advance_return_workflow(
             update_data["return_status"] = "closed"
             update_data["closed_date"] = now
             update_data["closed_by"] = current_user.email
-        elif next_status == "pickup_scheduled":
+        elif next_status == "picked_up":
             update_data["pickup_date"] = pickup_date
             update_data["pickup_tracking_id"] = pickup_tracking_id
             update_data["pickup_courier"] = pickup_courier

@@ -28,7 +28,7 @@ const WORKFLOW_STAGES = {
   post_delivery: [
     { key: 'requested', label: 'Requested', icon: Clock },
     { key: 'accepted', label: 'Accepted', icon: CheckCircle },
-    { key: 'pickup_scheduled', label: 'Pickup Scheduled', icon: Truck },
+    { key: 'picked_up', label: 'Picked Up', icon: Truck },
     { key: 'pickup_in_transit', label: 'Pickup In Transit', icon: Truck },
     { key: 'warehouse_received', label: 'Warehouse Received', icon: Package },
     { key: 'condition_checked', label: 'Condition Checked', icon: CheckCircle },
@@ -42,7 +42,7 @@ const statusColors = {
   accepted: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
   rto_in_transit: 'bg-orange-100 text-orange-800',
-  pickup_scheduled: 'bg-blue-100 text-blue-800',
+  picked_up: 'bg-blue-100 text-blue-800',
   pickup_in_transit: 'bg-orange-100 text-orange-800',
   pickup_not_required: 'bg-gray-100 text-gray-800',
   warehouse_received: 'bg-teal-100 text-teal-800',
@@ -412,7 +412,7 @@ export const ReturnDetail = () => {
                 </>
               )}
 
-              {selectedNextStatus === 'pickup_scheduled' && (
+              {selectedNextStatus === 'picked_up' && (
                 <>
                   <div>
                     <label className="text-sm font-medium">Pickup Date</label>

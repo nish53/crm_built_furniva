@@ -485,7 +485,7 @@ class ReturnStatus(str, Enum):
     # In-transit RTO specific
     RTO_IN_TRANSIT = "rto_in_transit"
     # Post-delivery pickup specific
-    PICKUP_SCHEDULED = "pickup_scheduled"
+    PICKED_UP = "picked_up"  # Changed from pickup_scheduled
     PICKUP_IN_TRANSIT = "pickup_in_transit"
     PICKUP_NOT_REQUIRED = "pickup_not_required"
     # Warehouse phase
@@ -629,7 +629,7 @@ class ReturnRequest(BaseModel):
 
 class ReturnRequestCreate(BaseModel):
     order_id: str
-    return_reason: ReturnReason
+    return_reason: str  # Changed from ReturnReason enum to str to accept context-dependent reasons
     return_reason_details: Optional[str] = None
     damage_category: Optional[DamageCategory] = None
     is_installation_related: bool = False
@@ -655,7 +655,7 @@ class ReplacementStatus(str, Enum):
     REQUESTED = "requested"
     APPROVED = "approved"
     REJECTED = "rejected"
-    PICKUP_SCHEDULED = "pickup_scheduled"
+    PICKED_UP = "picked_up"  # Changed from pickup_scheduled
     PICKUP_IN_TRANSIT = "pickup_in_transit"
     PICKUP_NOT_REQUIRED = "pickup_not_required"
     WAREHOUSE_RECEIVED = "warehouse_received"

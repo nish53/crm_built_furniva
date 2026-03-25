@@ -88,13 +88,18 @@ async def create_replacement_request(
 @router.get("/", response_model=List[ReplacementRequest])
 async def get_replacement_requests(
     status: Optional[ReplacementStatus] = None,
+    exclude_status: Optional[str] = None,  # NEW: exclude certain statuses
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """Get all replacement requests with optional status filter"""
+    """Get all replacement requests with optional status filter and exclusion"""
     query = {}
     if status:
         query["replacement_status"] = status
+    
+    # NEW: Exclude resolved replacements for "Open Replacements" page
+    if exclude_status:
+        query["replacement_status"] = {"$ne": exclude_status}
     
     replacements = await db.replacement_requests.find(query, {"_id": 0}).sort("requested_date", -1).to_list(None)
     return replacements
@@ -210,16 +215,16 @@ async def advance_replacement_workflow(
     current_status = replacement.get("replacement_status", "requested")
     replacement_type = replacement.get("replacement_type", "full_replacement")
     
-    # Define allowed transitions (simplified)
+    # Define allowed transitions - PARALLEL WORKFLOWS ALLOWED
     REPLACEMENT_TRANSITIONS = {
         "requested": ["approved", "rejected"],
-        "approved": ["pickup_scheduled", "pickup_not_required"],
-        "pickup_scheduled": ["pickup_in_transit"],
-        "pickup_in_transit": ["warehouse_received"],
-        "pickup_not_required": ["new_shipment_dispatched", "parts_shipped"],  # Skip pickup
-        "warehouse_received": ["new_shipment_dispatched", "parts_shipped"],
-        "new_shipment_dispatched": ["delivered"],
-        "parts_shipped": ["delivered"],
+        "approved": ["picked_up", "pickup_not_required", "new_shipment_dispatched", "parts_shipped"],  # Can ship before pickup
+        "picked_up": ["pickup_in_transit", "warehouse_received", "new_shipment_dispatched", "parts_shipped"],  # Parallel
+        "pickup_in_transit": ["warehouse_received", "new_shipment_dispatched", "parts_shipped"],  # Parallel
+        "pickup_not_required": ["new_shipment_dispatched", "parts_shipped", "delivered"],
+        "warehouse_received": ["new_shipment_dispatched", "parts_shipped", "delivered"],
+        "new_shipment_dispatched": ["delivered", "warehouse_received"],  # Can receive pickup after shipping
+        "parts_shipped": ["delivered", "warehouse_received"],  # Can receive pickup after shipping
         "delivered": ["resolved"],
         "rejected": [],
         "resolved": []
@@ -233,7 +238,7 @@ async def advance_replacement_workflow(
         )
     
     # Validate required fields
-    if next_status == "pickup_scheduled" and not (pickup_date and pickup_tracking_id):
+    if next_status == "picked_up" and not (pickup_date and pickup_tracking_id):
         raise HTTPException(
             status_code=400,
             detail="pickup_date and pickup_tracking_id are required"
@@ -265,7 +270,7 @@ async def advance_replacement_workflow(
         update_data["pickup_not_required"] = True
         # Set status directly to avoid requiring another call
         update_data["replacement_status"] = next_status
-    elif next_status == "pickup_scheduled":
+    elif next_status == "picked_up":
         update_data["pickup_date"] = pickup_date
         update_data["pickup_tracking_id"] = pickup_tracking_id
         update_data["pickup_courier"] = pickup_courier

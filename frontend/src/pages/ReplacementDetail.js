@@ -15,7 +15,7 @@ import {
 const WORKFLOW_STAGES = [
   { key: 'requested', label: 'Requested', icon: Clock },
   { key: 'approved', label: 'Approved', icon: CheckCircle },
-  { key: 'pickup_scheduled', label: 'Pickup', icon: Truck },
+  { key: 'picked_up', label: 'Picked Up', icon: Truck },
   { key: 'warehouse_received', label: 'Warehouse', icon: Package },
   { key: 'new_shipment_dispatched', label: 'New Shipment', icon: Truck },
   { key: 'delivered', label: 'Delivered', icon: CheckCircle },
@@ -26,7 +26,7 @@ const statusColors = {
   requested: 'bg-blue-100 text-blue-800',
   approved: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
-  pickup_scheduled: 'bg-blue-100 text-blue-800',
+  picked_up: 'bg-blue-100 text-blue-800',
   pickup_in_transit: 'bg-orange-100 text-orange-800',
   pickup_not_required: 'bg-gray-100 text-gray-800',
   warehouse_received: 'bg-teal-100 text-teal-800',
@@ -407,7 +407,7 @@ export const ReplacementDetail = () => {
                   <option value="">-- Select --</option>
                   <option value="approved">Approved</option>
                   <option value="rejected">Rejected</option>
-                  <option value="pickup_scheduled">Pickup Scheduled</option>
+                  <option value="picked_up">Picked Up</option>
                   <option value="pickup_not_required">Pickup Not Required</option>
                   <option value="warehouse_received">Warehouse Received</option>
                   <option value="new_shipment_dispatched">New Shipment Dispatched</option>
@@ -418,7 +418,7 @@ export const ReplacementDetail = () => {
               </div>
 
               {/* Context-specific fields */}
-              {selectedNextStatus === 'pickup_scheduled' && (
+              {selectedNextStatus === 'picked_up' && (
                 <>
                   <div>
                     <label className="text-sm font-medium">Pickup Date</label>

@@ -123,13 +123,27 @@ export const OrderDetail = () => {
     }
     setUpdating(true);
     try {
-      await api.patch(`/orders/${id}/cancel?cancellation_reason=${encodeURIComponent(cancellationReason)}`);
-      toast.success('Order cancelled successfully');
+      // Create a return request instead of directly cancelling
+      const params = new URLSearchParams({
+        cancellation_reason: cancellationReason,
+        notes: returnForm.return_reason_details || ''
+      });
+      
+      await api.post(`/return-requests/?${params.toString()}`, {
+        order_id: id,
+        return_reason: cancellationReason,
+        return_reason_details: returnForm.return_reason_details || null,
+        damage_category: null,
+        is_installation_related: false,
+        damage_images: []
+      });
+      
+      toast.success('Return request created - order will be cancelled after workflow completion');
       setShowCancelModal(false);
       setCancellationReason('');
       fetchOrder();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to cancel order');
+      toast.error(err.response?.data?.detail || 'Failed to create return request');
     } finally {
       setUpdating(false);
     }
@@ -204,13 +218,17 @@ export const OrderDetail = () => {
 
   const handleCreateReplacement = async (e) => {
     e.preventDefault();
-    if (!replacementForm.damage_description.trim()) {
-      toast.error('Please describe what is damaged');
-      return;
-    }
-    if (!replacementForm.damage_images || replacementForm.damage_images.length === 0) {
-      toast.error('Please upload at least one image');
-      return;
+    
+    // Only validate damage description and images for 'damaged' reason
+    if (replacementForm.replacement_reason === 'damaged') {
+      if (!replacementForm.damage_description.trim()) {
+        toast.error('Please describe the damage');
+        return;
+      }
+      if (!replacementForm.damage_images || replacementForm.damage_images.length === 0) {
+        toast.error('Please upload at least one damage image');
+        return;
+      }
     }
     
     // Set default replacement_type for non-damaged/quality reasons
@@ -224,8 +242,8 @@ export const OrderDetail = () => {
         order_id: id,
         replacement_reason: replacementForm.replacement_reason,
         replacement_type: replacement_type,
-        damage_description: replacementForm.damage_description,
-        damage_images: replacementForm.damage_images,
+        damage_description: replacementForm.damage_description || 'N/A',
+        damage_images: replacementForm.damage_images || [],
         notes: replacementForm.notes || null,
         difference_amount: replacementForm.difference_amount ? parseFloat(replacementForm.difference_amount) : null
       });
@@ -834,18 +852,21 @@ export const OrderDetail = () => {
                   </Select>
                 </div>
                 
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Damage Category (Optional)</label>
-                  <Select value={returnForm.damage_category} onValueChange={v => setReturnForm({ ...returnForm, damage_category: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select if applicable" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Dent">Dent</SelectItem>
-                      <SelectItem value="Broken">Broken</SelectItem>
-                      <SelectItem value="Scratches">Scratches</SelectItem>
-                      <SelectItem value="Crack">Crack</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* DAMAGE CATEGORY - ONLY SHOW IF DAMAGE REASON SELECTED */}
+                {returnForm.return_reason === 'damage' && (
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground">Damage Category (Optional)</label>
+                    <Select value={returnForm.damage_category} onValueChange={v => setReturnForm({ ...returnForm, damage_category: v })}>
+                      <SelectTrigger><SelectValue placeholder="Select if applicable" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Dent">Dent</SelectItem>
+                        <SelectItem value="Broken">Broken</SelectItem>
+                        <SelectItem value="Scratches">Scratches</SelectItem>
+                        <SelectItem value="Crack">Crack</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Additional Notes (Optional)</label>
@@ -979,38 +1000,41 @@ export const OrderDetail = () => {
                   </div>
                 )}
                 
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">What is damaged? Describe in detail *</label>
-                  <textarea 
-                    value={replacementForm.damage_description}
-                    onChange={e => setReplacementForm({ ...replacementForm, damage_description: e.target.value })}
-                    placeholder="Example: Left door hinge is broken, screw holes are stripped, glass shelf has crack on corner..."
-                    className="w-full min-h-[100px] p-2 border rounded-md"
-                    required
-                    data-testid="damage-description-input"
-                  />
-                </div>
-                
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Upload Images * (at least 1 required)</label>
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    multiple
-                    onChange={(e) => {
-                      // For now, just store file names as placeholder
-                      // In production, upload to cloud storage and get URLs
-                      const files = Array.from(e.target.files);
-                      const fileUrls = files.map(f => f.name); // Placeholder - should be actual uploaded URLs
-                      setReplacementForm({ ...replacementForm, damage_images: fileUrls });
-                    }}
-                    className="w-full p-2 border rounded-md"
-                    data-testid="damage-images-input"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {replacementForm.damage_images.length > 0 ? `${replacementForm.damage_images.length} image(s) selected` : 'No images selected'}
-                  </p>
-                </div>
+                {/* DAMAGE DESCRIPTION AND IMAGES - ONLY FOR 'damaged' REASON */}
+                {replacementForm.replacement_reason === 'damaged' && (
+                  <>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">What is damaged? Describe in detail *</label>
+                      <textarea 
+                        value={replacementForm.damage_description}
+                        onChange={e => setReplacementForm({ ...replacementForm, damage_description: e.target.value })}
+                        placeholder="Example: Left door hinge is broken, screw holes are stripped, glass shelf has crack on corner..."
+                        className="w-full min-h-[100px] p-2 border rounded-md"
+                        required
+                        data-testid="damage-description-input"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Upload Images * (at least 1 required)</label>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        multiple
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files);
+                          const fileUrls = files.map(f => f.name);
+                          setReplacementForm({ ...replacementForm, damage_images: fileUrls });
+                        }}
+                        className="w-full p-2 border rounded-md"
+                        data-testid="damage-images-input"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {replacementForm.damage_images.length > 0 ? `${replacementForm.damage_images.length} image(s) selected` : 'No images selected'}
+                      </p>
+                    </div>
+                  </>
+                )}
                 
                 {/* NOTES FIELD */}
                 <div>
@@ -1039,7 +1063,7 @@ export const OrderDetail = () => {
                   <Button 
                     type="submit" 
                     className="flex-1 bg-blue-600 hover:bg-blue-700" 
-                    disabled={!replacementForm.damage_description.trim() || replacementForm.damage_images.length === 0}
+                    disabled={!replacementForm.replacement_reason}
                     data-testid="submit-replacement-btn"
                   >
                     Create Replacement Request
