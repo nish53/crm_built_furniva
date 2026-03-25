@@ -215,6 +215,242 @@ async def update_return_status(
     return ReturnRequest(**updated_return)
 
 
+# ===== WORKFLOW PROGRESSION ENDPOINTS =====
+
+@router.patch("/{return_id}/workflow/advance")
+async def advance_return_workflow(
+    return_id: str,
+    new_status: ReturnStatus,
+    # Stage-specific optional fields
+    has_negative_feedback: Optional[bool] = None,
+    feedback_platform: Optional[str] = None,
+    feedback_details: Optional[str] = None,
+    customer_claim_filed: Optional[bool] = None,
+    customer_claim_type: Optional[str] = None,
+    customer_claim_id: Optional[str] = None,
+    authorization_type: Optional[str] = None,
+    return_tracking_number: Optional[str] = None,
+    courier_partner: Optional[str] = None,
+    received_by: Optional[str] = None,
+    qc_passed: Optional[bool] = None,
+    qc_notes: Optional[str] = None,
+    damage_severity: Optional[str] = None,
+    product_condition: Optional[str] = None,
+    claim_type: Optional[str] = None,
+    claim_amount: Optional[float] = None,
+    claim_against: Optional[str] = None,
+    claim_reference: Optional[str] = None,
+    claim_status_update: Optional[str] = None,
+    claim_approved_amount: Optional[float] = None,
+    refund_amount: Optional[float] = None,
+    refund_method: Optional[str] = None,
+    refund_reference: Optional[str] = None,
+    resolution: Optional[str] = None,
+    notes: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Advance return to next workflow stage with stage-specific data"""
+    return_req = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
+    if not return_req:
+        raise HTTPException(status_code=404, detail="Return request not found")
+    
+    current_status = return_req.get("return_status")
+    
+    # Workflow validation - define allowed transitions
+    workflow_rules = {
+        "requested": ["feedback_check", "authorized", "rejected", "cancelled"],
+        "feedback_check": ["claim_filed", "authorized", "rejected"],
+        "claim_filed": ["authorized", "rejected"],
+        "authorized": ["return_initiated", "cancelled"],
+        "return_initiated": ["in_transit"],
+        "in_transit": ["warehouse_received"],
+        "warehouse_received": ["qc_inspection"],
+        "qc_inspection": ["claim_filing", "refund_processed", "closed"],
+        "claim_filing": ["claim_status"],
+        "claim_status": ["refund_processed", "closed"],
+        "refund_processed": ["closed"],
+        "closed": []
+    }
+    
+    allowed_next = workflow_rules.get(current_status, [])
+    if str(new_status) not in allowed_next:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot transition from '{current_status}' to '{new_status}'. Allowed: {', '.join(allowed_next)}"
+        )
+    
+    # Build update data based on new status
+    update_data = {
+        "return_status": new_status,
+        "previous_status": current_status,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Add stage-specific fields based on new status
+    if new_status == ReturnStatus.FEEDBACK_CHECK:
+        if has_negative_feedback is not None:
+            update_data["has_negative_feedback"] = has_negative_feedback
+        if feedback_platform:
+            update_data["feedback_platform"] = feedback_platform
+        if feedback_details:
+            update_data["feedback_details"] = feedback_details
+    
+    elif new_status == ReturnStatus.CLAIM_FILED:
+        if customer_claim_filed is not None:
+            update_data["customer_claim_filed"] = customer_claim_filed
+        if customer_claim_type:
+            update_data["customer_claim_type"] = customer_claim_type
+        if customer_claim_id:
+            update_data["customer_claim_id"] = customer_claim_id
+    
+    elif new_status == ReturnStatus.AUTHORIZED:
+        update_data["authorized_date"] = datetime.now(timezone.utc).isoformat()
+        update_data["authorized_by"] = current_user.email
+        if authorization_type:
+            update_data["authorization_type"] = authorization_type
+    
+    elif new_status == ReturnStatus.RETURN_INITIATED:
+        update_data["return_initiated_date"] = datetime.now(timezone.utc).isoformat()
+        if return_tracking_number:
+            update_data["return_tracking_number"] = return_tracking_number
+        if courier_partner:
+            update_data["courier_partner"] = courier_partner
+    
+    elif new_status == ReturnStatus.WAREHOUSE_RECEIVED:
+        update_data["warehouse_received_date"] = datetime.now(timezone.utc).isoformat()
+        if received_by:
+            update_data["received_by"] = received_by
+        else:
+            update_data["received_by"] = current_user.email
+    
+    elif new_status == ReturnStatus.QC_INSPECTION:
+        update_data["inspection_date"] = datetime.now(timezone.utc).isoformat()
+        if qc_passed is not None:
+            update_data["qc_passed"] = qc_passed
+        if qc_notes:
+            update_data["qc_notes"] = qc_notes
+        if damage_severity:
+            update_data["damage_severity"] = damage_severity
+        if product_condition:
+            update_data["product_condition"] = product_condition
+    
+    elif new_status == ReturnStatus.CLAIM_FILING:
+        update_data["claim_filed_date"] = datetime.now(timezone.utc).isoformat()
+        if claim_type:
+            update_data["claim_type"] = claim_type
+        if claim_amount:
+            update_data["claim_amount"] = claim_amount
+        if claim_against:
+            update_data["claim_against"] = claim_against
+        if claim_reference:
+            update_data["claim_reference"] = claim_reference
+        update_data["claim_status"] = "pending"
+    
+    elif new_status == ReturnStatus.CLAIM_STATUS:
+        if claim_status_update:
+            update_data["claim_status"] = claim_status_update
+        if claim_approved_amount:
+            update_data["claim_approved_amount"] = claim_approved_amount
+    
+    elif new_status == ReturnStatus.REFUND_PROCESSED:
+        update_data["refund_date"] = datetime.now(timezone.utc).isoformat()
+        if refund_amount:
+            update_data["refund_amount"] = refund_amount
+        if refund_method:
+            update_data["refund_method"] = refund_method
+        if refund_reference:
+            update_data["refund_reference"] = refund_reference
+    
+    elif new_status == ReturnStatus.CLOSED:
+        update_data["closed_date"] = datetime.now(timezone.utc).isoformat()
+        if resolution:
+            update_data["resolution"] = resolution
+    
+    # Add notes if provided
+    if notes:
+        update_data["internal_notes"] = notes
+    
+    # Record in history
+    history_entry = {
+        "from_status": current_status,
+        "to_status": str(new_status),
+        "changed_at": datetime.now(timezone.utc).isoformat(),
+        "changed_by": current_user.email,
+        "notes": notes or ""
+    }
+    
+    # Update database
+    await db.return_requests.update_one(
+        {"id": return_id},
+        {"$set": update_data, "$push": {"status_history": history_entry}}
+    )
+    
+    # Update linked order status
+    await db.orders.update_one(
+        {"id": return_req["order_id"]},
+        {"$set": {"return_status": str(new_status)}}
+    )
+    
+    updated_return = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
+    return ReturnRequest(**updated_return)
+
+@router.patch("/{return_id}/qc-images")
+async def add_qc_images(
+    return_id: str,
+    image_urls: List[str],
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Add QC inspection images to return"""
+    result = await db.return_requests.update_one(
+        {"id": return_id},
+        {"$push": {"damage_images": {"$each": image_urls}}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Return request not found")
+    
+    return {"message": f"{len(image_urls)} images added successfully"}
+
+@router.get("/{return_id}/workflow-stages")
+async def get_workflow_stages(
+    return_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get available next stages for current workflow"""
+    return_req = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
+    if not return_req:
+        raise HTTPException(status_code=404, detail="Return request not found")
+    
+    current_status = return_req.get("return_status")
+    
+    workflow_rules = {
+        "requested": ["feedback_check", "authorized", "rejected", "cancelled"],
+        "feedback_check": ["claim_filed", "authorized", "rejected"],
+        "claim_filed": ["authorized", "rejected"],
+        "authorized": ["return_initiated", "cancelled"],
+        "return_initiated": ["in_transit"],
+        "in_transit": ["warehouse_received"],
+        "warehouse_received": ["qc_inspection"],
+        "qc_inspection": ["claim_filing", "refund_processed", "closed"],
+        "claim_filing": ["claim_status"],
+        "claim_status": ["refund_processed", "closed"],
+        "refund_processed": ["closed"],
+        "closed": []
+    }
+    
+    next_stages = workflow_rules.get(current_status, [])
+    
+    return {
+        "current_status": current_status,
+        "next_stages": next_stages,
+        "can_advance": len(next_stages) > 0
+    }
+
+
+
 @router.patch("/{return_id}/undo")
 async def undo_return_status(
     return_id: str,

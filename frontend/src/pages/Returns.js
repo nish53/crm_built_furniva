@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -31,6 +32,7 @@ const STATUS_COLORS = {
 };
 
 export const Returns = () => {
+  const navigate = useNavigate();
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -176,7 +178,7 @@ export const Returns = () => {
         <div className="space-y-3">
           {filtered.map(ret => (
             <Card key={ret.id} className="hover:border-primary/40 transition-colors cursor-pointer"
-              onClick={() => setSelectedReturn(ret)} data-testid={`return-card-${ret.id}`}>
+              onClick={() => navigate(`/returns/${ret.id}`)} data-testid={`return-card-${ret.id}`}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4 min-w-0">

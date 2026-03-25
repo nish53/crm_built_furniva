@@ -390,15 +390,20 @@ class ReturnReason(str, Enum):
     OTHER = "other"
 
 class ReturnStatus(str, Enum):
-    REQUESTED = "requested"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    PICKUP_SCHEDULED = "pickup_scheduled"
-    IN_TRANSIT = "in_transit"
-    RECEIVED = "received"
-    INSPECTED = "inspected"
-    REFUNDED = "refunded"
-    REPLACED = "replaced"
+    REQUESTED = "requested"  # 1. Customer initiates return
+    FEEDBACK_CHECK = "feedback_check"  # 2. Check for negative reviews
+    CLAIM_FILED = "claim_filed"  # 3. Customer filed marketplace claim
+    AUTHORIZED = "authorized"  # 4. Return authorized (auto or manual)
+    RETURN_INITIATED = "return_initiated"  # 5. Customer shipped back
+    IN_TRANSIT = "in_transit"  # 6. Return shipment tracking
+    WAREHOUSE_RECEIVED = "warehouse_received"  # 7. Back in warehouse
+    QC_INSPECTION = "qc_inspection"  # 8. Quality check
+    CLAIM_FILING = "claim_filing"  # 9. Filing courier/insurance claim
+    CLAIM_STATUS = "claim_status"  # 10. Claim approved/rejected/pending
+    REFUND_PROCESSED = "refund_processed"  # 11. Refund issued
+    CLOSED = "closed"  # 12. Return complete
+    REJECTED = "rejected"  # Return rejected
+    CANCELLED = "cancelled"  # Return cancelled
 
 class DamageCategory(str, Enum):
     SCRATCH = "scratch"
@@ -423,21 +428,66 @@ class ReturnRequest(BaseModel):
     return_status: ReturnStatus
     previous_status: Optional[str] = None
     status_history: List[Dict[str, Any]] = []
+    
+    # Stage-specific fields
     requested_date: datetime
-    approved_date: Optional[datetime] = None
-    pickup_date: Optional[datetime] = None
-    received_date: Optional[datetime] = None
-    inspection_date: Optional[datetime] = None
-    refund_date: Optional[datetime] = None
+    
+    # Feedback check
+    has_negative_feedback: Optional[bool] = None
+    feedback_platform: Optional[str] = None  # amazon, flipkart, google
+    feedback_details: Optional[str] = None
+    
+    # Customer claim filed
+    customer_claim_filed: Optional[bool] = None
+    customer_claim_type: Optional[str] = None  # a_to_z, safe_t, other
+    customer_claim_id: Optional[str] = None
+    
+    # Authorization
+    authorized_date: Optional[datetime] = None
+    authorized_by: Optional[str] = None
+    authorization_type: Optional[str] = None  # auto, manual
+    
+    # Return shipping
+    return_initiated_date: Optional[datetime] = None
     return_tracking_number: Optional[str] = None
     courier_partner: Optional[str] = None
+    
+    # Warehouse
+    warehouse_received_date: Optional[datetime] = None
+    received_by: Optional[str] = None
+    
+    # QC Inspection
+    inspection_date: Optional[datetime] = None
+    qc_passed: Optional[bool] = None
     qc_notes: Optional[str] = None
-    is_installation_related: bool = False
-    batch_number: Optional[str] = None
+    damage_severity: Optional[str] = None  # minor, moderate, severe
     damage_images: Optional[List[str]] = []
+    product_condition: Optional[str] = None  # sellable, refurbish_needed, scrap
+    
+    # Courier/Insurance claim
+    claim_filed_date: Optional[datetime] = None
+    claim_type: Optional[str] = None  # courier_damage, insurance
+    claim_amount: Optional[float] = None
+    claim_against: Optional[str] = None  # courier name
+    claim_reference: Optional[str] = None
+    claim_status: Optional[str] = None  # pending, approved, rejected, partial
+    claim_approved_amount: Optional[float] = None
+    claim_documents: Optional[List[str]] = []
+    
+    # Refund
+    refund_date: Optional[datetime] = None
     refund_amount: Optional[float] = None
     refund_method: Optional[str] = None
+    refund_reference: Optional[str] = None
+    
+    # Closure
+    closed_date: Optional[datetime] = None
+    resolution: Optional[str] = None  # refunded, replaced, repaired, customer_kept
+    
+    is_installation_related: bool = False
+    batch_number: Optional[str] = None
     replacement_order_id: Optional[str] = None
+    internal_notes: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

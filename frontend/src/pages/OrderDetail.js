@@ -35,13 +35,23 @@ export const OrderDetail = () => {
   });
   const [damageImages, setDamageImages] = useState([]);
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [lossData, setLossData] = useState(null);
+  const [loadingLoss, setLoadingLoss] = useState(false);
+  const [editingLoss, setEditingLoss] = useState(false);
+  const [lossEditForm, setLossEditForm] = useState({});
+  const [editHistory, setEditHistory] = useState([]);
+  const [showEditHistory, setShowEditHistory] = useState(false);
 
   const [finForm, setFinForm] = useState({
     product_cost: '', shipping_cost: '', packaging_cost: '',
     installation_cost: '', marketplace_commission_rate: '15'
   });
 
-  useEffect(() => { fetchOrder(); }, [id]);
+  useEffect(() => { 
+    fetchOrder(); 
+    fetchLossData();
+    fetchEditHistory();
+  }, [id]);
 
   const fetchOrder = async () => {
     try {
@@ -55,6 +65,47 @@ export const OrderDetail = () => {
 
   const updateOrderStatus = async (status) => {
     setUpdating(true);
+
+  const fetchLossData = async () => {
+    try {
+      const res = await api.get(`/financials/loss/${id}`);
+      setLossData(res.data);
+    } catch (error) {
+      // Loss not calculated yet - that's okay
+      setLossData(null);
+    }
+  };
+
+  const handleCalculateLoss = async (manual = false) => {
+    setLoadingLoss(true);
+    try {
+      const params = new URLSearchParams();
+      if (manual && lossEditForm.logistics_outbound) params.append('logistics_outbound', lossEditForm.logistics_outbound);
+      if (manual && lossEditForm.logistics_return) params.append('logistics_return', lossEditForm.logistics_return);
+      if (manual && lossEditForm.product_cost) params.append('product_cost', lossEditForm.product_cost);
+      if (manual && lossEditForm.replacement_cost) params.append('replacement_cost', lossEditForm.replacement_cost);
+      
+      const res = await api.post(`/financials/loss/calculate/${id}?${params.toString()}`);
+      setLossData(res.data);
+      toast.success('Loss calculated successfully');
+      setEditingLoss(false);
+      setLossEditForm({});
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to calculate loss');
+    } finally {
+      setLoadingLoss(false);
+    }
+  };
+
+  const fetchEditHistory = async () => {
+    try {
+      const res = await api.get(`/edit-history/order/${id}`);
+      setEditHistory(res.data || []);
+    } catch (error) {
+      console.error('Failed to fetch edit history');
+    }
+  };
+
     try {
       await api.patch(`/orders/${id}`, { status });
       toast.success(`Order ${status}`);
@@ -612,6 +663,118 @@ export const OrderDetail = () => {
                 );
               })}
               <div className="pt-2 border-t border-border/50 space-y-2 mt-2">
+
+
+          {/* Loss Calculation Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="font-[Manrope]">Loss Calculation</CardTitle>
+              {!editingLoss && (
+                <div className="flex gap-2">
+                  {lossData && (
+                    <Button size="sm" variant="outline" onClick={() => { setEditingLoss(true); setLossEditForm({
+                      logistics_outbound: lossData.logistics_outbound,
+                      logistics_return: lossData.logistics_return,
+                      product_cost: lossData.product_cost,
+                      replacement_cost: lossData.replacement_cost
+                    }); }}>
+                      <Edit className="w-3 h-3 mr-1" />Edit
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={() => handleCalculateLoss(false)} disabled={loadingLoss}>
+                    {loadingLoss ? 'Calculating...' : lossData ? 'Recalculate' : 'Calculate'}
+                  </Button>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent>
+              {editingLoss ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground mb-3">Manually override loss components (leave blank for auto-calculation)</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium">Logistics Outbound (₹)</label>
+                      <Input type="number" step="0.01" value={lossEditForm.logistics_outbound || ''} onChange={e => setLossEditForm({...lossEditForm, logistics_outbound: e.target.value})} placeholder="Auto" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Logistics Return (₹)</label>
+                      <Input type="number" step="0.01" value={lossEditForm.logistics_return || ''} onChange={e => setLossEditForm({...lossEditForm, logistics_return: e.target.value})} placeholder="Auto" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Product Cost (₹)</label>
+                      <Input type="number" step="0.01" value={lossEditForm.product_cost || ''} onChange={e => setLossEditForm({...lossEditForm, product_cost: e.target.value})} placeholder="Auto" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Replacement Cost (₹)</label>
+                      <Input type="number" step="0.01" value={lossEditForm.replacement_cost || ''} onChange={e => setLossEditForm({...lossEditForm, replacement_cost: e.target.value})} placeholder="0" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button size="sm" variant="outline" onClick={() => { setEditingLoss(false); setLossEditForm({}); }}>Cancel</Button>
+                    <Button size="sm" onClick={() => handleCalculateLoss(true)} disabled={loadingLoss}>Save & Calculate</Button>
+                  </div>
+                </div>
+              ) : lossData ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Logistics Outbound:</span><span className="font-medium">₹{lossData.logistics_outbound}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Logistics Return:</span><span className="font-medium">₹{lossData.logistics_return}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Product Cost:</span><span className="font-medium">₹{lossData.product_cost}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Replacement Cost:</span><span className="font-medium">₹{lossData.replacement_cost}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Additional Costs:</span><span className="font-medium">₹{lossData.additional_costs}</span></div>
+                  </div>
+                  <div className="pt-3 border-t flex justify-between items-center">
+                    <span className="font-semibold">Total Loss:</span>
+                    <span className="text-2xl font-bold text-red-600">₹{lossData.total_loss}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
+                    <span>Method: {lossData.calculation_method === 'auto' ? 'Auto-calculated' : 'Manual override'}</span>
+                    <span>{lossData.calculated_by}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-sm text-muted-foreground mb-3">No loss calculated yet</p>
+                  <Button size="sm" onClick={() => handleCalculateLoss(false)} disabled={loadingLoss}>
+                    Calculate Loss
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Edit History Card */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between cursor-pointer" onClick={() => setShowEditHistory(!showEditHistory)}>
+              <CardTitle className="font-[Manrope]">Edit History</CardTitle>
+              <Badge variant="outline">{editHistory.length} changes</Badge>
+            </CardHeader>
+            {showEditHistory && (
+              <CardContent>
+                {editHistory.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No edit history available</p>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {editHistory.map((h, i) => (
+                      <div key={i} className="p-3 bg-secondary/30 rounded-lg text-sm space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium capitalize">{h.field_name?.replace(/_/g, ' ')}</span>
+                          <span className="text-xs text-muted-foreground">{format(new Date(h.changed_at), 'MMM dd, HH:mm')}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground line-through">{h.old_value || '-'}</span>
+                          <ChevronRight className="w-3 h-3" />
+                          <span className="font-medium">{h.new_value || '-'}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">By: {h.changed_by}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </Card>
+
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Assembly Type</span>
                   <span className="font-medium">{order.assembly_type || 'Not set'}</span>
