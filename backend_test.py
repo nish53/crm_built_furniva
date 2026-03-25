@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 import time
 
 # Configuration
-BASE_URL = "https://routes.preview.emergentagent.com/api"
+BASE_URL = "https://furniture-erp-system.preview.emergentagent.com/api"
 TEST_USER_EMAIL = "test@furniva.com"
 TEST_USER_PASSWORD = "testpass123"
 

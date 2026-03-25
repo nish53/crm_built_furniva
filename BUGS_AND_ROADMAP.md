@@ -1,10 +1,23 @@
 # FURNIVA CRM - BUGS & ROADMAP
 **Last Updated:** July 2025
-**Status:** WORKFLOW REDESIGN IN PROGRESS — See `/app/WORKFLOW_SPECIFICATION.md` for full spec
+**Status:** WORKFLOW REDESIGN READY TO IMPLEMENT
 
-> ⚠️ **IMPORTANT:** The old return/replacement workflow described below is SUPERSEDED.
-> The new workflow specification in `WORKFLOW_SPECIFICATION.md` is the SINGLE SOURCE OF TRUTH.
-> All return reasons, statuses, and flows must follow that document.
+> ⚠️ **CRITICAL:** This document is NOW DEPRECATED.
+> 
+> **NEW SINGLE SOURCE OF TRUTH:** `/app/UPDATED_ROADMAP_AND_STATUS.md`
+> 
+> The new consolidated roadmap document contains:
+> - Complete current state (what's done vs what's not)
+> - Full workflow redesign specification
+> - Context-dependent reason taxonomy
+> - 3-type return workflow (pre-dispatch, in-transit RTO, post-delivery)
+> - Full/partial replacement workflow
+> - Historical import mapping rules
+> - Backend model & route changes required
+> - Frontend changes required
+> - Step-by-step implementation order (16-22 hours)
+> 
+> **Next agent: Start with `/app/UPDATED_ROADMAP_AND_STATUS.md` and follow the implementation order exactly.**
 
 ---
 

@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 import os
 
 # Backend URL from environment
-BACKEND_URL = "https://routes.preview.emergentagent.com/api"
+BACKEND_URL = "https://furniture-erp-system.preview.emergentagent.com/api"
 
 class FurnivaBackendTesterFinal:
     def __init__(self):
