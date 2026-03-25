@@ -187,3 +187,154 @@ async def get_leakage_report(
     
     leakages = await db.order_financials.aggregate(pipeline).to_list(100)
     return leakages
+
+
+# Loss Calculation Configuration
+DEFAULT_LOSS_CONFIG = {
+    "resolved_cost_percentage": 15.0,  # % of product cost for resolved returns (replacement parts)
+    "default_outbound_logistics": 150.0,  # Default outbound shipping cost
+    "default_return_logistics": 120.0,  # Default return shipping cost  
+    "refund_processing_fee": 50.0,  # Processing fee for refunds
+    "qc_inspection_cost": 30.0,  # QC inspection cost per return
+    "restocking_fee_percentage": 10.0,  # % for restocking refurbished items
+    "fraud_investigation_cost": 500.0,  # Cost to investigate fraud cases
+}
+
+@router.get("/loss/config")
+async def get_loss_config(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get loss calculation configuration variables"""
+    config = await db.loss_config.find_one({}, {"_id": 0})
+    if not config:
+        # Return defaults if not configured
+        return {"config": DEFAULT_LOSS_CONFIG, "is_default": True}
+    return {"config": config, "is_default": False}
+
+@router.patch("/loss/config")
+async def update_loss_config(
+    resolved_cost_percentage: Optional[float] = None,
+    default_outbound_logistics: Optional[float] = None,
+    default_return_logistics: Optional[float] = None,
+    refund_processing_fee: Optional[float] = None,
+    qc_inspection_cost: Optional[float] = None,
+    restocking_fee_percentage: Optional[float] = None,
+    fraud_investigation_cost: Optional[float] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Update loss calculation configuration"""
+    # Get existing config or use defaults
+    existing = await db.loss_config.find_one({}, {"_id": 0})
+    if not existing:
+        existing = DEFAULT_LOSS_CONFIG.copy()
+    
+    # Update only provided values
+    update_data = {}
+    if resolved_cost_percentage is not None:
+        update_data["resolved_cost_percentage"] = resolved_cost_percentage
+    if default_outbound_logistics is not None:
+        update_data["default_outbound_logistics"] = default_outbound_logistics
+    if default_return_logistics is not None:
+        update_data["default_return_logistics"] = default_return_logistics
+    if refund_processing_fee is not None:
+        update_data["refund_processing_fee"] = refund_processing_fee
+    if qc_inspection_cost is not None:
+        update_data["qc_inspection_cost"] = qc_inspection_cost
+    if restocking_fee_percentage is not None:
+        update_data["restocking_fee_percentage"] = restocking_fee_percentage
+    if fraud_investigation_cost is not None:
+        update_data["fraud_investigation_cost"] = fraud_investigation_cost
+    
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    update_data["updated_by"] = current_user.email
+    
+    # Merge with existing
+    final_config = {**existing, **update_data}
+    
+    # Upsert
+    await db.loss_config.replace_one({}, final_config, upsert=True)
+    
+    return {"message": "Loss configuration updated", "config": final_config}
+
+@router.post("/loss/calculate/{order_id}")
+async def calculate_order_loss(
+    order_id: str,
+    logistics_outbound: Optional[float] = None,
+    logistics_return: Optional[float] = None,
+    product_cost: Optional[float] = None,
+    replacement_cost: Optional[float] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Calculate loss for a specific order with returns/cancellations"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Get loss config
+    config = await db.loss_config.find_one({}, {"_id": 0})
+    if not config:
+        config = DEFAULT_LOSS_CONFIG
+    
+    # Get return info if exists
+    return_req = await db.return_requests.find_one({"order_id": order_id}, {"_id": 0})
+    
+    # Calculate components
+    outbound_cost = logistics_outbound or config.get("default_outbound_logistics", 150.0)
+    return_cost = logistics_return or config.get("default_return_logistics", 120.0) if return_req else 0.0
+    
+    prod_cost = product_cost or order.get("price", 0) * 0.6  # Assume 60% cost if not provided
+    
+    # Replacement cost (for resolved returns)
+    repl_cost = replacement_cost or 0.0
+    if return_req and return_req.get("category") == "resolved":
+        repl_cost = prod_cost * (config.get("resolved_cost_percentage", 15.0) / 100)
+    
+    # Additional costs
+    additional_costs = 0.0
+    if return_req:
+        additional_costs += config.get("qc_inspection_cost", 30.0)
+        if return_req.get("category") == "fraud":
+            additional_costs += config.get("fraud_investigation_cost", 500.0)
+        if return_req.get("return_status") == "refunded":
+            additional_costs += config.get("refund_processing_fee", 50.0)
+    
+    # Total loss
+    total_loss = outbound_cost + return_cost + prod_cost + repl_cost + additional_costs
+    
+    loss_data = {
+        "order_id": order_id,
+        "order_number": order.get("order_number"),
+        "logistics_outbound": round(outbound_cost, 2),
+        "logistics_return": round(return_cost, 2),
+        "product_cost": round(prod_cost, 2),
+        "replacement_cost": round(repl_cost, 2),
+        "additional_costs": round(additional_costs, 2),
+        "total_loss": round(total_loss, 2),
+        "calculation_method": "auto" if not (logistics_outbound or product_cost) else "manual",
+        "calculated_at": datetime.now(timezone.utc).isoformat(),
+        "calculated_by": current_user.email
+    }
+    
+    # Store in database
+    await db.order_losses.update_one(
+        {"order_id": order_id},
+        {"$set": loss_data},
+        upsert=True
+    )
+    
+    return loss_data
+
+@router.get("/loss/{order_id}")
+async def get_order_loss(
+    order_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get loss calculation for a specific order"""
+    loss = await db.order_losses.find_one({"order_id": order_id}, {"_id": 0})
+    if not loss:
+        raise HTTPException(status_code=404, detail="No loss calculation found for this order")
+    return loss

@@ -17,6 +17,7 @@ import { MasterSKU } from './pages/MasterSKU';
 import { Returns } from './pages/Returns';
 import { Channels } from './pages/Channels';
 import { Costing } from './pages/Costing';
+import { Settings } from './pages/Settings';
 import { Layout } from './components/Layout';
 import './App.css';
 
@@ -84,6 +85,7 @@ function App() {
             <Route path="tasks" element={<Tasks />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="analytics" element={<Analytics />} />
+            <Route path="settings" element={<Settings />} />
             <Route
               path="team"
               element={

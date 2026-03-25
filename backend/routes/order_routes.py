@@ -108,6 +108,15 @@ async def update_order(
     # Only update provided fields
     update_data = order_update.model_dump(exclude_unset=True)
     
+    # Validate: if status is being changed to "cancelled", cancellation_reason must be provided
+    if update_data.get("status") == "cancelled":
+        # Check if cancellation_reason is provided in update OR already exists
+        if not update_data.get("cancellation_reason") and not existing.get("cancellation_reason"):
+            raise HTTPException(
+                status_code=400, 
+                detail="Cancellation reason is required when marking order as cancelled"
+            )
+    
     if update_data:
         await db.orders.update_one({"id": order_id}, {"$set": update_data})
     

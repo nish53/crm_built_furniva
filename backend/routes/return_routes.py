@@ -8,6 +8,56 @@ import uuid
 
 router = APIRouter(prefix="/returns", tags=["returns"])
 
+def classify_return_category(return_reason: str, order_status: str = None, is_delivered: bool = False) -> str:
+    """
+    Classify return into business categories based on return reason and order state
+    
+    Categories:
+    - pfc: Pre-Fulfillment Cancel (cancelled before dispatch)
+    - resolved: Damage/issue resolved (sent replacement/repair)
+    - refunded: Full refund given
+    - fraud: Fraudulent order/return
+    """
+    reason_lower = str(return_reason).lower()
+    
+    # Pre-Fulfillment Cancellation
+    if "pre_fulfillment" in reason_lower or "pre fulfillment" in reason_lower:
+        return "pfc"
+    
+    # Fraud cases
+    if "fraud" in reason_lower:
+        return "fraud"
+    
+    # Damage cases - depends on resolution
+    if "damage" in reason_lower or "damaged" in reason_lower:
+        if is_delivered:
+            return "resolved"  # If delivered, usually resolved with replacement
+        else:
+            return "refunded"  # If not delivered, refunded
+    
+    # Customer refused at doorstep
+    if "refused" in reason_lower or "doorstep" in reason_lower:
+        return "refunded"
+    
+    # Delayed delivery
+    if "delay" in reason_lower or "delayed" in reason_lower:
+        return "refunded"
+    
+    # Quality/Defective issues
+    if "quality" in reason_lower or "defective" in reason_lower or "not_as_described" in reason_lower:
+        return "refunded"
+    
+    # Customer changed mind
+    if "changed_mind" in reason_lower or "customer_changed" in reason_lower:
+        return "refunded"
+    
+    # Wrong item
+    if "wrong" in reason_lower:
+        return "resolved"  # Usually send correct item
+    
+    # Default to refunded for other cases
+    return "refunded"
+
 @router.post("/", response_model=ReturnRequest)
 async def create_return_request(
     return_req: ReturnRequestCreate,
@@ -31,6 +81,14 @@ async def create_return_request(
     return_dict["requested_date"] = datetime.now(timezone.utc).isoformat()
     return_dict["created_at"] = datetime.now(timezone.utc).isoformat()
     
+    # Classify return category
+    is_delivered = order.get("status") == "delivered"
+    return_dict["category"] = classify_return_category(
+        str(return_req.return_reason), 
+        order.get("status"),
+        is_delivered
+    )
+    
     await db.return_requests.insert_one(return_dict)
     
     # Update order
@@ -39,6 +97,7 @@ async def create_return_request(
         {"$set": {
             "return_requested": True,
             "return_reason": return_req.return_reason,
+            "cancellation_reason": str(return_req.return_reason),  # Sync to cancellation_reason for dashboard
             "return_date": datetime.now(timezone.utc).isoformat()
         }}
     )
@@ -283,3 +342,43 @@ async def get_returns_by_product(
     # Sort and return top
     sorted_products = sorted(sku_counts.values(), key=lambda x: x["return_count"], reverse=True)[:limit]
     return {"products": sorted_products}
+
+@router.get("/analytics/by-category")
+async def get_returns_by_category(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get returns grouped by classification category (pfc, resolved, refunded, fraud)"""
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$category",
+                "count": {"$sum": 1},
+                "total_refund": {"$sum": {"$ifNull": ["$refund_amount", 0]}}
+            }
+        },
+        {"$sort": {"count": -1}}
+    ]
+    
+    results = await db.return_requests.aggregate(pipeline).to_list(100)
+    
+    # Format results with proper category names
+    formatted = []
+    category_names = {
+        "pfc": "Pre-Fulfillment Cancel",
+        "resolved": "Resolved (Replacement/Repair)",
+        "refunded": "Refunded",
+        "fraud": "Fraud",
+        None: "Unclassified"
+    }
+    
+    for r in results:
+        category = r["_id"] or "unclassified"
+        formatted.append({
+            "category": category,
+            "category_name": category_names.get(category, category.title()),
+            "count": r["count"],
+            "total_refund": r["total_refund"]
+        })
+    
+    return {"analytics": formatted}

@@ -16,6 +16,7 @@ import {
   RefreshCcw,
   DollarSign,
   Layers,
+  Settings,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -35,6 +36,7 @@ export const Layout = () => {
     { name: 'Tasks', href: '/tasks', icon: CheckSquare },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'WhatsApp', href: '/whatsapp', icon: MessageSquare },
+    { name: 'Settings', href: '/settings', icon: Settings },
     { name: 'Team', href: '/team', icon: Users },
   ];
 

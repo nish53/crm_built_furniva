@@ -122,12 +122,20 @@ export const OrderDetail = () => {
       pincode: order.pincode || '',
       shipping_address: order.shipping_address || '',
       instructions: order.instructions || '',
+      cancellation_reason: order.cancellation_reason || '',
     });
     setShowEditModal(true);
   };
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
+    
+    // Validation: if status is cancelled, cancellation_reason must be provided
+    if (editForm.status === 'cancelled' && !editForm.cancellation_reason) {
+      toast.error('Cancellation reason is required when marking order as cancelled');
+      return;
+    }
+    
     setUpdating(true);
     try {
       await api.patch(`/orders/${id}`, editForm);
@@ -689,6 +697,25 @@ export const OrderDetail = () => {
                     <label className="text-xs font-medium text-muted-foreground">Courier Partner</label>
                     <Input value={editForm.courier_partner} onChange={e => setEditForm({ ...editForm, courier_partner: e.target.value })} placeholder="Courier partner" />
                   </div>
+                  {editForm.status === 'cancelled' && (
+                    <div className="col-span-2">
+                      <label className="text-xs font-medium text-muted-foreground">Cancellation Reason *</label>
+                      <Select value={editForm.cancellation_reason} onValueChange={v => setEditForm({ ...editForm, cancellation_reason: v })} required>
+                        <SelectTrigger className="border-orange-300"><SelectValue placeholder="Select reason (required)" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="customer_requested">Customer Requested Cancellation</SelectItem>
+                          <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                          <SelectItem value="pricing_error">Pricing Error</SelectItem>
+                          <SelectItem value="duplicate_order">Duplicate Order</SelectItem>
+                          <SelectItem value="customer_unreachable">Customer Unreachable</SelectItem>
+                          <SelectItem value="delivery_delay">Delivery Delay</SelectItem>
+                          <SelectItem value="payment_issue">Payment Issue</SelectItem>
+                          <SelectItem value="address_issue">Address Issue</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Customer Name</label>
                     <Input value={editForm.customer_name} onChange={e => setEditForm({ ...editForm, customer_name: e.target.value })} placeholder="Customer name" />
