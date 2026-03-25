@@ -31,6 +31,8 @@ export const OrderDetail = () => {
     return_reason: '', return_reason_details: '',
     damage_category: '', is_installation_related: false
   });
+  const [damageImages, setDamageImages] = useState([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   const [finForm, setFinForm] = useState({
     product_cost: '', shipping_cost: '', packaging_cost: '',
@@ -78,18 +80,55 @@ export const OrderDetail = () => {
 
   const handleCreateReturn = async (e) => {
     e.preventDefault();
+    
     try {
+      let imageUrls = [];
+      
+      // Upload images first if any
+      if (damageImages.length > 0) {
+        setUploadingImages(true);
+        const formData = new FormData();
+        damageImages.forEach(file => {
+          formData.append('files', file);
+        });
+        
+        try {
+          const uploadRes = await api.post('/uploads/damage-images/bulk', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          imageUrls = uploadRes.data.images.map(img => img.image_url);
+          if (uploadRes.data.failed > 0) {
+            toast.warning(`${uploadRes.data.uploaded} images uploaded, ${uploadRes.data.failed} failed`);
+          }
+        } catch (uploadErr) {
+          toast.error('Failed to upload images');
+          setUploadingImages(false);
+          return;
+        }
+        setUploadingImages(false);
+      }
+      
+      // Create return request with image URLs
       await api.post('/returns/', {
         order_id: id,
         return_reason: returnForm.return_reason,
         return_reason_details: returnForm.return_reason_details || null,
         damage_category: returnForm.damage_category || null,
-        is_installation_related: returnForm.is_installation_related
+        is_installation_related: returnForm.is_installation_related,
+        damage_images: imageUrls
       });
+      
       toast.success('Return request created');
       setShowReturnModal(false);
+      setDamageImages([]);
+      setReturnForm({
+        return_reason: '', return_reason_details: '',
+        damage_category: '', is_installation_related: false
+      });
       fetchOrder();
-    } catch (err) { toast.error(err.response?.data?.detail || 'Failed to create return'); }
+    } catch (err) { 
+      toast.error(err.response?.data?.detail || 'Failed to create return'); 
+    }
   };
 
   const handleCalculateFinancials = async (e) => {
@@ -604,9 +643,22 @@ export const OrderDetail = () => {
                     onChange={e => setReturnForm({ ...returnForm, is_installation_related: e.target.checked })} className="rounded border-input" />
                   Installation related issue
                 </label>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Damage Images (Optional)</label>
+                  <Input type="file" multiple accept="image/*"
+                    onChange={e => setDamageImages(Array.from(e.target.files || []))}
+                    className="mt-1" />
+                  {damageImages.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {damageImages.length} file(s) selected
+                    </p>
+                  )}
+                </div>
                 <div className="flex gap-3">
                   <Button type="button" variant="outline" onClick={() => setShowReturnModal(false)} className="flex-1">Cancel</Button>
-                  <Button type="submit" className="flex-1" disabled={!returnForm.return_reason} data-testid="submit-return-btn">Create Return</Button>
+                  <Button type="submit" className="flex-1" disabled={!returnForm.return_reason || uploadingImages} data-testid="submit-return-btn">
+                    {uploadingImages ? 'Uploading...' : 'Create Return'}
+                  </Button>
                 </div>
               </form>
             </CardContent>

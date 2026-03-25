@@ -21,6 +21,7 @@ class OrderStatus(str, Enum):
 
 class OrderChannel(str, Enum):
     AMAZON = "amazon"
+    AMZ = "amz"  # Amazon short form
     FLIPKART = "flipkart"
     WHATSAPP = "whatsapp"
     WEBSITE = "website"
