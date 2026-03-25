@@ -4,8 +4,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { XCircle, Search, Filter } from 'lucide-react';
-import api from '../utils/api';
-import { toast } from 'react-toastify';
+import api from '../lib/api';
+import { toast } from 'sonner';
 
 const CancelledOrders = () => {
   const navigate = useNavigate();

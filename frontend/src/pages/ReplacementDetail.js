@@ -7,54 +7,33 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, Package, Clock, CheckCircle2, Truck, AlertTriangle,
-  Camera, User, Calendar, Wrench, X, ChevronRight, MapPin, Undo2
+  ArrowLeft, Package, User, Calendar, Truck,
+  CheckCircle, XCircle, Clock, ChevronRight, Box
 } from 'lucide-react';
-import { format } from 'date-fns';
 
-// Replacement workflow stages
+// Replacement Workflow Stages
 const WORKFLOW_STAGES = [
-  { key: 'Replacement Pending', label: 'Pending', icon: Clock },
-  { key: 'Priority Review', label: 'Priority Review', icon: AlertTriangle },
-  { key: 'Ship Replacement', label: 'Ship', icon: Package },
-  { key: 'Tracking Added', label: 'In Transit', icon: Truck },
-  { key: 'Delivered', label: 'Delivered', icon: MapPin },
-  { key: 'Issue Resolved', label: 'Resolved', icon: CheckCircle2 },
+  { key: 'requested', label: 'Requested', icon: Clock },
+  { key: 'approved', label: 'Approved', icon: CheckCircle },
+  { key: 'pickup_scheduled', label: 'Pickup', icon: Truck },
+  { key: 'warehouse_received', label: 'Warehouse', icon: Package },
+  { key: 'new_shipment_dispatched', label: 'New Shipment', icon: Truck },
+  { key: 'delivered', label: 'Delivered', icon: CheckCircle },
+  { key: 'resolved', label: 'Resolved', icon: XCircle }
 ];
 
-const TERMINAL_STATUSES = ['Issue Resolved', 'Issue Not Resolved'];
-
 const statusColors = {
-  'Replacement Pending': 'bg-orange-100 text-orange-800',
-  'Priority Review': 'bg-red-100 text-red-800',
-  'Ship Replacement': 'bg-blue-100 text-blue-800',
-  'Tracking Added': 'bg-cyan-100 text-cyan-800',
-  'Delivered': 'bg-green-100 text-green-800',
-  'Issue Resolved': 'bg-emerald-100 text-emerald-800',
-  'Issue Not Resolved': 'bg-red-100 text-red-800',
-};
-
-const getNextActions = (status) => {
-  switch (status) {
-    case 'Replacement Pending':
-      return [
-        { label: 'Mark Priority', status: 'Priority Review' },
-        { label: 'Ship Replacement', status: 'Ship Replacement' },
-      ];
-    case 'Priority Review':
-      return [{ label: 'Ship Replacement', status: 'Ship Replacement' }];
-    case 'Ship Replacement':
-      return [{ label: 'Add Tracking', status: 'Tracking Added', needsTracking: true }];
-    case 'Tracking Added':
-      return [{ label: 'Mark Delivered', status: 'Delivered' }];
-    case 'Delivered':
-      return [
-        { label: 'Issue Resolved', status: 'Issue Resolved', needsNotes: true },
-        { label: 'Not Resolved', status: 'Issue Not Resolved', needsNotes: true },
-      ];
-    default:
-      return [];
-  }
+  requested: 'bg-blue-100 text-blue-800',
+  approved: 'bg-green-100 text-green-800',
+  rejected: 'bg-red-100 text-red-800',
+  pickup_scheduled: 'bg-blue-100 text-blue-800',
+  pickup_in_transit: 'bg-orange-100 text-orange-800',
+  pickup_not_required: 'bg-gray-100 text-gray-800',
+  warehouse_received: 'bg-teal-100 text-teal-800',
+  new_shipment_dispatched: 'bg-orange-100 text-orange-800',
+  parts_shipped: 'bg-yellow-100 text-yellow-800',
+  delivered: 'bg-green-100 text-green-800',
+  resolved: 'bg-gray-100 text-gray-800'
 };
 
 export const ReplacementDetail = () => {
@@ -63,11 +42,31 @@ export const ReplacementDetail = () => {
   const [replacement, setReplacement] = useState(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
-  const [showActionModal, setShowActionModal] = useState(false);
-  const [selectedAction, setSelectedAction] = useState(null);
-  const [trackingNumber, setTrackingNumber] = useState('');
-  const [courierPartner, setCourierPartner] = useState('');
-  const [resolutionNotes, setResolutionNotes] = useState('');
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [selectedNextStatus, setSelectedNextStatus] = useState('');
+  const [advanceForm, setAdvanceForm] = useState({
+    notes: '',
+    // Pickup fields
+    pickup_date: '',
+    pickup_tracking_id: '',
+    pickup_courier: '',
+    pickup_not_required: false,
+    // Warehouse fields
+    warehouse_received_date: '',
+    received_condition: '',
+    condition_notes: '',
+    // New shipment fields
+    new_tracking_id: '',
+    new_courier: '',
+    items_sent_description: '',
+    // Parts fields (partial replacement)
+    parts_description: '',
+    parts_tracking_id: '',
+    parts_courier: '',
+    // Delivery
+    delivered_date: '',
+    delivery_confirmed: false
+  });
 
   useEffect(() => {
     fetchReplacement();
@@ -78,378 +77,489 @@ export const ReplacementDetail = () => {
       const res = await api.get(`/replacement-requests/${id}`);
       setReplacement(res.data);
     } catch (err) {
-      toast.error('Failed to fetch replacement details');
+      toast.error('Failed to load replacement request');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStatusUpdate = async () => {
-    if (!selectedAction) return;
-    if (selectedAction.needsTracking && !trackingNumber) {
-      toast.error('Tracking number is required');
+  const handleAdvanceWorkflow = async () => {
+    if (!selectedNextStatus) {
+      toast.error('Please select next status');
       return;
     }
+
     setUpdating(true);
     try {
-      const params = { new_status: selectedAction.status };
-      if (trackingNumber) params.tracking_number = trackingNumber;
-      if (courierPartner) params.courier_partner = courierPartner;
-      if (resolutionNotes) params.resolution_notes = resolutionNotes;
+      const params = new URLSearchParams({
+        next_status: selectedNextStatus,
+        ...Object.fromEntries(
+          Object.entries(advanceForm).filter(([_, v]) => v !== '' && v !== false)
+        )
+      });
 
-      await api.patch(`/replacement-requests/${id}/status`, null, { params });
-      toast.success(`Status updated to: ${selectedAction.status}`);
-      setShowActionModal(false);
-      setSelectedAction(null);
-      setTrackingNumber('');
-      setCourierPartner('');
-      setResolutionNotes('');
+      await api.patch(`/replacement-requests/${id}/advance?${params.toString()}`);
+      toast.success('Replacement workflow advanced successfully');
+      setShowAdvanceModal(false);
+      setSelectedNextStatus('');
+      setAdvanceForm({
+        notes: '',
+        pickup_date: '',
+        pickup_tracking_id: '',
+        pickup_courier: '',
+        pickup_not_required: false,
+        warehouse_received_date: '',
+        received_condition: '',
+        condition_notes: '',
+        new_tracking_id: '',
+        new_courier: '',
+        items_sent_description: '',
+        parts_description: '',
+        parts_tracking_id: '',
+        parts_courier: '',
+        delivered_date: '',
+        delivery_confirmed: false
+      });
       fetchReplacement();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to update status');
+      toast.error(err.response?.data?.detail || 'Failed to advance workflow');
     } finally {
       setUpdating(false);
     }
   };
 
-  const safeDate = (d) => {
-    if (!d) return '-';
-    try { return format(new Date(d), 'MMM dd, yyyy HH:mm'); }
-    catch { return '-'; }
+  const getCurrentStageIndex = () => {
+    if (!replacement) return 0;
+    return WORKFLOW_STAGES.findIndex(s => s.key === replacement.replacement_status);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <Package className="w-8 h-8 animate-spin mx-auto mb-2 text-primary" />
+          <p className="text-muted-foreground">Loading replacement details...</p>
+        </div>
       </div>
     );
   }
 
   if (!replacement) {
     return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Replacement request not found</p>
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <XCircle className="w-12 h-12 text-red-500 mx-auto mb-2" />
+          <p className="text-muted-foreground">Replacement request not found</p>
+        </div>
       </div>
     );
   }
 
-  const currentStageIdx = WORKFLOW_STAGES.findIndex(s => s.key === replacement.replacement_status);
-  const isTerminal = TERMINAL_STATUSES.includes(replacement.replacement_status);
-  const actions = getNextActions(replacement.replacement_status);
+  const currentStageIndex = getCurrentStageIndex();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => navigate('/replacements')}>
-          <ArrowLeft className="w-4 h-4 mr-2" />Back
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold font-[Manrope] tracking-tight">
-            Replacement #{replacement.order_number}
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Created {safeDate(replacement.created_at)}
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/replacements')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />Back to Replacements
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold font-[Manrope] flex items-center gap-3">
+              <Package className="w-8 h-8 text-blue-600" />
+              Replacement Request #{replacement.id?.slice(0, 8)}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {replacement.replacement_type === 'full_replacement' ? 'Full Replacement' : 'Partial Replacement'}
+            </p>
+          </div>
         </div>
-        <Badge className={`text-sm px-3 py-1 ${statusColors[replacement.replacement_status] || 'bg-gray-100 text-gray-800'}`}>
-          {replacement.replacement_status}
+        <Badge className={`${statusColors[replacement.replacement_status]} text-lg px-4 py-2`}>
+          {replacement.replacement_status?.replace(/_/g, ' ').toUpperCase()}
         </Badge>
       </div>
 
-      {/* Visual Stepper */}
+      {/* Workflow Progress */}
       <Card>
         <CardHeader>
-          <CardTitle className="font-[Manrope] text-lg">Workflow Progress</CardTitle>
+          <CardTitle className="font-[Manrope]">Replacement Workflow Progress</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center overflow-x-auto pb-2 gap-2">
-            {WORKFLOW_STAGES.map((stage, idx) => {
+          <div className="flex items-center justify-between mb-4">
+            {WORKFLOW_STAGES.map((stage, index) => {
               const Icon = stage.icon;
-              const isCompleted = currentStageIdx >= 0 && idx < currentStageIdx;
-              const isCurrent = stage.key === replacement.replacement_status;
-              const isPending = currentStageIdx >= 0 ? idx > currentStageIdx : true;
+              const isCompleted = index < currentStageIndex;
+              const isCurrent = index === currentStageIndex;
 
               return (
                 <React.Fragment key={stage.key}>
-                  <div className="flex flex-col items-center min-w-[80px]">
+                  <div className="flex flex-col items-center">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors ${
-                        isCompleted ? 'bg-green-500 border-green-500 text-white' :
-                        isCurrent ? 'bg-primary border-primary text-white' :
-                        'bg-muted border-border text-muted-foreground'
+                      className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                        isCompleted
+                          ? 'bg-green-500 text-white'
+                          : isCurrent
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-200 text-gray-400'
                       }`}
                     >
-                      {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
+                      <Icon className="w-6 h-6" />
                     </div>
-                    <span className={`text-xs mt-2 text-center leading-tight ${
-                      isCurrent ? 'font-medium text-foreground' : 'text-muted-foreground'
-                    }`}>
+                    <span className={`text-xs mt-2 text-center ${isCurrent ? 'font-bold' : ''}`}>
                       {stage.label}
                     </span>
                   </div>
-                  {idx < WORKFLOW_STAGES.length - 1 && (
-                    <div className={`h-0.5 w-6 flex-shrink-0 mt-[-16px] ${
-                      isCompleted ? 'bg-green-500' : 'bg-border'
-                    }`} />
+                  {index < WORKFLOW_STAGES.length - 1 && (
+                    <ChevronRight
+                      className={`w-6 h-6 ${isCompleted ? 'text-green-500' : 'text-gray-300'}`}
+                    />
                   )}
                 </React.Fragment>
               );
             })}
           </div>
-          {replacement.replacement_status === 'Issue Not Resolved' && (
-            <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200 text-center">
-              <X className="w-5 h-5 text-red-600 mx-auto mb-1" />
-              <p className="text-sm font-medium text-red-800">Issue Not Resolved - Needs Follow-up</p>
-            </div>
+
+          {replacement.replacement_status !== 'resolved' && replacement.replacement_status !== 'rejected' && (
+            <Button onClick={() => setShowAdvanceModal(true)} className="w-full">
+              Advance Workflow
+            </Button>
           )}
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Info */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Replacement Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-[Manrope] flex items-center gap-2">
-                <Wrench className="w-5 h-5" />Replacement Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                <InfoField label="Order Number" value={replacement.order_number} mono />
-                <InfoField label="Reason" value={replacement.replacement_reason} />
-                <InfoField label="Requested" value={safeDate(replacement.requested_date)} />
-                <InfoField label="Tracking" value={replacement.tracking_number || '-'} mono />
-                <InfoField label="Courier" value={replacement.courier_partner || '-'} />
-                <InfoField label="Replacement Cost" value={replacement.replacement_cost ? `\u20B9${replacement.replacement_cost}` : '-'} />
-                <InfoField label="Priority Review" value={safeDate(replacement.priority_review_date)} />
-                <InfoField label="Ship Date" value={safeDate(replacement.ship_date)} />
-                <InfoField label="Delivered" value={safeDate(replacement.delivered_date)} />
-              </div>
-              <div className="mt-4 p-3 bg-muted/50 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Damage Description</p>
-                <p className="text-sm">{replacement.damage_description}</p>
-              </div>
-              {replacement.resolution_notes && (
-                <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
-                  <p className="text-xs text-green-700 mb-1">Resolution Notes</p>
-                  <p className="text-sm text-green-900">{replacement.resolution_notes}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+      {/* Order Details */}
+      <Card>
+        <CardHeader><CardTitle className="font-[Manrope]">Order Details</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <span className="text-muted-foreground">Order Number:</span>
+              <p className="font-[JetBrains_Mono] font-medium">{replacement.order_number}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Customer:</span>
+              <p className="font-medium">{replacement.customer_name}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Phone:</span>
+              <p className="font-[JetBrains_Mono]">{replacement.phone}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Requested Date:</span>
+              <p>{formatDate(replacement.requested_date)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* Customer */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-[Manrope] flex items-center gap-2">
-                <User className="w-5 h-5" />Customer
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <InfoField label="Name" value={replacement.customer_name} />
-                <InfoField label="Phone" value={replacement.phone} mono />
+      {/* Replacement Information */}
+      <Card>
+        <CardHeader><CardTitle className="font-[Manrope]">Replacement Information</CardTitle></CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <span className="text-muted-foreground">Replacement Type:</span>
+              <Badge className="ml-2">
+                {replacement.replacement_type === 'full_replacement' ? 'FULL REPLACEMENT' : 'PARTIAL REPLACEMENT'}
+              </Badge>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Reason:</span>
+              <p className="font-medium capitalize">{replacement.replacement_reason?.replace(/_/g, ' ') || '-'}</p>
+            </div>
+            {replacement.difference_amount && replacement.difference_amount > 0 && (
+              <div>
+                <span className="text-muted-foreground">Difference Amount:</span>
+                <p className="font-[JetBrains_Mono] font-medium text-lg">₹{replacement.difference_amount}</p>
+                <p className="text-xs text-muted-foreground">Customer upgrading to higher-priced product</p>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Damage Images */}
-          {replacement.damage_images && replacement.damage_images.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-[Manrope] flex items-center gap-2">
-                  <Camera className="w-5 h-5" />Damage Images
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            )}
+            {replacement.damage_description && (
+              <div>
+                <span className="text-muted-foreground">Description:</span>
+                <p className="mt-1 p-3 bg-gray-50 rounded-md">{replacement.damage_description}</p>
+              </div>
+            )}
+            {replacement.notes && (
+              <div>
+                <span className="text-muted-foreground">Notes:</span>
+                <p className="mt-1 p-3 bg-gray-50 rounded-md">{replacement.notes}</p>
+              </div>
+            )}
+            {replacement.damage_images && replacement.damage_images.length > 0 && (
+              <div>
+                <span className="text-muted-foreground">Images:</span>
+                <div className="mt-2 flex gap-2">
                   {replacement.damage_images.map((img, idx) => (
-                    <a key={idx} href={img} target="_blank" rel="noopener noreferrer">
-                      <img
-                        src={img}
-                        alt={`Damage ${idx + 1}`}
-                        className="w-full h-32 object-cover rounded-lg border hover:opacity-80 transition-opacity"
-                        onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'flex'); }}
-                      />
-                      <div className="hidden w-full h-32 bg-muted rounded-lg border items-center justify-center">
-                        <span className="text-xs text-muted-foreground">Image {idx + 1}</span>
-                      </div>
-                    </a>
+                    <Badge key={idx} variant="outline" className="text-xs">
+                      Image {idx + 1}
+                    </Badge>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* Status History */}
-          {replacement.status_history && replacement.status_history.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-[Manrope] flex items-center gap-2">
-                  <Clock className="w-5 h-5" />Status History
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {[...replacement.status_history].reverse().map((entry, idx) => (
-                    <div key={idx} className="flex items-start gap-3 text-sm border-l-2 border-primary/20 pl-4 py-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {entry.from_status || 'Created'} \u2192 {entry.to_status}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {safeDate(entry.changed_at)} {entry.changed_by ? `by ${entry.changed_by}` : ''}
-                        </p>
-                        {entry.notes && (
-                          <p className="text-xs text-muted-foreground mt-1 italic">{entry.notes}</p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+      {/* Pickup Information (if applicable) */}
+      {(replacement.pickup_tracking_id || replacement.pickup_not_required) && (
+        <Card>
+          <CardHeader><CardTitle className="font-[Manrope]">Pickup Information</CardTitle></CardHeader>
+          <CardContent>
+            {replacement.pickup_not_required ? (
+              <Badge variant="outline" className="text-gray-600">Pickup Not Required</Badge>
+            ) : (
+              <div className="space-y-3">
+                {replacement.pickup_tracking_id && (
+                  <div>
+                    <span className="text-muted-foreground">Pickup Tracking:</span>
+                    <p className="font-[JetBrains_Mono] font-medium">{replacement.pickup_tracking_id}</p>
+                    {replacement.pickup_courier && (
+                      <p className="text-sm text-muted-foreground">Courier: {replacement.pickup_courier}</p>
+                    )}
+                  </div>
+                )}
+                {replacement.pickup_date && (
+                  <div>
+                    <span className="text-muted-foreground">Pickup Date:</span>
+                    <p>{formatDate(replacement.pickup_date)}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Right Column - Actions */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-[Manrope]">Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {actions.map((action, idx) => (
-                <Button
-                  key={idx}
-                  className="w-full"
-                  variant={idx === 0 ? 'default' : 'outline'}
-                  onClick={() => {
-                    if (action.needsTracking || action.needsNotes) {
-                      setSelectedAction(action);
-                      setShowActionModal(true);
-                    } else {
-                      setSelectedAction(action);
-                      // Direct update
-                      const params = { new_status: action.status };
-                      setUpdating(true);
-                      api.patch(`/replacement-requests/${id}/status`, null, { params })
-                        .then(() => {
-                          toast.success(`Status updated to: ${action.status}`);
-                          fetchReplacement();
-                        })
-                        .catch(err => toast.error(err.response?.data?.detail || 'Failed to update'))
-                        .finally(() => setUpdating(false));
-                    }
-                  }}
-                  disabled={updating}
-                >
-                  <ChevronRight className="w-4 h-4 mr-2" />{action.label}
-                </Button>
-              ))}
-
-              <Button variant="outline" className="w-full" onClick={() => navigate(`/orders/${replacement.order_id}`)}>
-                <Package className="w-4 h-4 mr-2" />View Order
-              </Button>
-
-              {isTerminal && (
-                <div className={`p-3 rounded-lg border text-center ${
-                  replacement.replacement_status === 'Issue Resolved'
-                    ? 'bg-green-50 border-green-200'
-                    : 'bg-red-50 border-red-200'
-                }`}>
-                  {replacement.replacement_status === 'Issue Resolved'
-                    ? <CheckCircle2 className="w-6 h-6 text-green-600 mx-auto mb-1" />
-                    : <X className="w-6 h-6 text-red-600 mx-auto mb-1" />
-                  }
-                  <p className={`text-sm font-medium ${
-                    replacement.replacement_status === 'Issue Resolved' ? 'text-green-800' : 'text-red-800'
-                  }`}>
-                    {replacement.replacement_status}
-                  </p>
+      {/* New Shipment / Parts Information */}
+      {(replacement.new_tracking_id || replacement.parts_tracking_id) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="font-[Manrope]">
+              {replacement.replacement_type === 'partial_replacement' ? 'Parts Shipment' : 'New Product Shipment'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {replacement.new_tracking_id && (
+                <div>
+                  <span className="text-muted-foreground">Tracking Number:</span>
+                  <p className="font-[JetBrains_Mono] font-medium">{replacement.new_tracking_id}</p>
+                  {replacement.new_courier && (
+                    <p className="text-sm text-muted-foreground">Courier: {replacement.new_courier}</p>
+                  )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+              {replacement.parts_tracking_id && (
+                <div>
+                  <span className="text-muted-foreground">Parts Tracking:</span>
+                  <p className="font-[JetBrains_Mono] font-medium">{replacement.parts_tracking_id}</p>
+                  {replacement.parts_courier && (
+                    <p className="text-sm text-muted-foreground">Courier: {replacement.parts_courier}</p>
+                  )}
+                </div>
+              )}
+              {replacement.items_sent_description && (
+                <div>
+                  <span className="text-muted-foreground">Items Sent:</span>
+                  <p className="mt-1 p-3 bg-gray-50 rounded-md">{replacement.items_sent_description}</p>
+                </div>
+              )}
+              {replacement.parts_description && (
+                <div>
+                  <span className="text-muted-foreground">Parts Description:</span>
+                  <p className="mt-1 p-3 bg-gray-50 rounded-md">{replacement.parts_description}</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-          {/* Timeline Quick View */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-[Manrope] text-sm">Timeline</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <TimelineItem label="Requested" date={replacement.requested_date} />
-              <TimelineItem label="Priority Review" date={replacement.priority_review_date} />
-              <TimelineItem label="Shipped" date={replacement.ship_date} />
-              <TimelineItem label="Tracking Added" date={replacement.tracking_added_date} />
-              <TimelineItem label="Delivered" date={replacement.delivered_date} />
-              <TimelineItem label="Resolved" date={replacement.resolved_date} />
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Action Modal */}
-      {showActionModal && selectedAction && (
+      {/* Advance Workflow Modal */}
+      {showAdvanceModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-md">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <CardHeader>
-              <CardTitle className="font-[Manrope]">{selectedAction.label}</CardTitle>
+              <CardTitle className="font-[Manrope]">Advance Workflow</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {selectedAction.needsTracking && (
+              <div>
+                <label className="text-sm font-medium">Select Next Status *</label>
+                <select
+                  value={selectedNextStatus}
+                  onChange={e => setSelectedNextStatus(e.target.value)}
+                  className="w-full p-2 border rounded-md mt-1"
+                >
+                  <option value="">-- Select --</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="pickup_scheduled">Pickup Scheduled</option>
+                  <option value="pickup_not_required">Pickup Not Required</option>
+                  <option value="warehouse_received">Warehouse Received</option>
+                  <option value="new_shipment_dispatched">New Shipment Dispatched</option>
+                  <option value="parts_shipped">Parts Shipped</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="resolved">Resolved</option>
+                </select>
+              </div>
+
+              {/* Context-specific fields */}
+              {selectedNextStatus === 'pickup_scheduled' && (
                 <>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Tracking Number *</label>
+                    <label className="text-sm font-medium">Pickup Date</label>
                     <Input
-                      value={trackingNumber}
-                      onChange={(e) => setTrackingNumber(e.target.value)}
-                      placeholder="Enter tracking number"
+                      type="date"
+                      value={advanceForm.pickup_date}
+                      onChange={e => setAdvanceForm({ ...advanceForm, pickup_date: e.target.value })}
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground">Courier Partner</label>
+                    <label className="text-sm font-medium">Pickup Tracking ID</label>
                     <Input
-                      value={courierPartner}
-                      onChange={(e) => setCourierPartner(e.target.value)}
-                      placeholder="Delhivery, BlueDart, etc."
+                      value={advanceForm.pickup_tracking_id}
+                      onChange={e => setAdvanceForm({ ...advanceForm, pickup_tracking_id: e.target.value })}
+                      placeholder="Enter tracking ID"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Pickup Courier</label>
+                    <Input
+                      value={advanceForm.pickup_courier}
+                      onChange={e => setAdvanceForm({ ...advanceForm, pickup_courier: e.target.value })}
+                      placeholder="e.g., Blue Dart, Delhivery"
                     />
                   </div>
                 </>
               )}
-              {selectedAction.needsNotes && (
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Resolution Notes</label>
-                  <textarea
-                    value={resolutionNotes}
-                    onChange={(e) => setResolutionNotes(e.target.value)}
-                    placeholder="Describe the resolution outcome..."
-                    className="w-full p-2 border rounded-md min-h-[100px] text-sm"
-                  />
-                </div>
+
+              {selectedNextStatus === 'warehouse_received' && (
+                <>
+                  <div>
+                    <label className="text-sm font-medium">Received Condition</label>
+                    <select
+                      value={advanceForm.received_condition}
+                      onChange={e => setAdvanceForm({ ...advanceForm, received_condition: e.target.value })}
+                      className="w-full p-2 border rounded-md mt-1"
+                    >
+                      <option value="">-- Select --</option>
+                      <option value="mint">Mint Condition</option>
+                      <option value="damaged">Damaged Condition</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Condition Notes</label>
+                    <textarea
+                      value={advanceForm.condition_notes}
+                      onChange={e => setAdvanceForm({ ...advanceForm, condition_notes: e.target.value })}
+                      placeholder="Describe the condition..."
+                      className="w-full p-2 border rounded-md mt-1 min-h-[80px]"
+                    />
+                  </div>
+                </>
               )}
-              <div className="flex gap-3 pt-2">
-                <Button variant="outline" className="flex-1" onClick={() => {
-                  setShowActionModal(false);
-                  setSelectedAction(null);
-                  setTrackingNumber('');
-                  setCourierPartner('');
-                  setResolutionNotes('');
-                }}>
+
+              {selectedNextStatus === 'new_shipment_dispatched' && (
+                <>
+                  <div>
+                    <label className="text-sm font-medium">New Tracking ID *</label>
+                    <Input
+                      value={advanceForm.new_tracking_id}
+                      onChange={e => setAdvanceForm({ ...advanceForm, new_tracking_id: e.target.value })}
+                      placeholder="Enter tracking ID"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Courier</label>
+                    <Input
+                      value={advanceForm.new_courier}
+                      onChange={e => setAdvanceForm({ ...advanceForm, new_courier: e.target.value })}
+                      placeholder="e.g., Blue Dart, Delhivery"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Items Being Sent</label>
+                    <textarea
+                      value={advanceForm.items_sent_description}
+                      onChange={e => setAdvanceForm({ ...advanceForm, items_sent_description: e.target.value })}
+                      placeholder="Describe what's being sent..."
+                      className="w-full p-2 border rounded-md mt-1 min-h-[80px]"
+                    />
+                  </div>
+                </>
+              )}
+
+              {selectedNextStatus === 'parts_shipped' && (
+                <>
+                  <div>
+                    <label className="text-sm font-medium">Parts Tracking ID *</label>
+                    <Input
+                      value={advanceForm.parts_tracking_id}
+                      onChange={e => setAdvanceForm({ ...advanceForm, parts_tracking_id: e.target.value })}
+                      placeholder="Enter tracking ID"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Parts Courier</label>
+                    <Input
+                      value={advanceForm.parts_courier}
+                      onChange={e => setAdvanceForm({ ...advanceForm, parts_courier: e.target.value })}
+                      placeholder="e.g., Blue Dart, Delhivery"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Parts Description</label>
+                    <textarea
+                      value={advanceForm.parts_description}
+                      onChange={e => setAdvanceForm({ ...advanceForm, parts_description: e.target.value })}
+                      placeholder="Describe the parts being sent..."
+                      className="w-full p-2 border rounded-md mt-1 min-h-[80px]"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label className="text-sm font-medium">Notes (Optional)</label>
+                <textarea
+                  value={advanceForm.notes}
+                  onChange={e => setAdvanceForm({ ...advanceForm, notes: e.target.value })}
+                  placeholder="Add any additional notes..."
+                  className="w-full p-2 border rounded-md mt-1 min-h-[60px]"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowAdvanceModal(false);
+                    setSelectedNextStatus('');
+                  }}
+                  className="flex-1"
+                >
                   Cancel
                 </Button>
                 <Button
+                  onClick={handleAdvanceWorkflow}
+                  disabled={!selectedNextStatus || updating}
                   className="flex-1"
-                  onClick={handleStatusUpdate}
-                  disabled={updating || (selectedAction.needsTracking && !trackingNumber)}
                 >
-                  {updating ? 'Updating...' : 'Confirm'}
+                  {updating ? 'Updating...' : 'Advance'}
                 </Button>
               </div>
             </CardContent>
@@ -460,18 +570,4 @@ export const ReplacementDetail = () => {
   );
 };
 
-const InfoField = ({ label, value, mono }) => (
-  <div>
-    <p className="text-xs text-muted-foreground">{label}</p>
-    <p className={`text-sm font-medium ${mono ? 'font-[JetBrains_Mono]' : ''}`}>{value || '-'}</p>
-  </div>
-);
-
-const TimelineItem = ({ label, date }) => (
-  <div className="flex justify-between items-center">
-    <span className="text-muted-foreground">{label}</span>
-    <span className={`text-xs ${date ? 'font-medium' : 'text-muted-foreground'}`}>
-      {date ? format(new Date(date), 'MMM dd, HH:mm') : '-'}
-    </span>
-  </div>
-);
+export default ReplacementDetail;
