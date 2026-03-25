@@ -59,33 +59,47 @@ export const Orders = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [dispatchedTodayFilter, setDispatchedTodayFilter] = useState(false);
   const [confirmedFilter, setConfirmedFilter] = useState('all'); // 'all', 'confirmed', 'unconfirmed'
+  const [filtersApplied, setFiltersApplied] = useState(false);
   const navigate = useNavigate();
 
-  // Apply filters from navigation state (from dashboard tiles)
+  // Apply filters from navigation state (from dashboard tiles) - ONCE
   useEffect(() => {
-    if (location.state) {
+    if (location.state && !filtersApplied) {
+      let updated = false;
+      
       if (location.state.filterStatus) {
         setStatusFilter(location.state.filterStatus);
+        updated = true;
       }
       if (location.state.filterDispatchedToday) {
         setDispatchedTodayFilter(true);
         setShowAdvancedFilters(true);
+        updated = true;
       }
       if (location.state.filterConfirmed === false) {
         setConfirmedFilter('unconfirmed');
         setShowAdvancedFilters(true);
+        updated = true;
       }
       if (location.state.filterDispatchToday) {
         setDispatchedTodayFilter(true);
         setShowAdvancedFilters(true);
+        updated = true;
+      }
+      
+      if (updated) {
+        setFiltersApplied(true);
       }
     }
-  }, [location.state]);
+  }, [location.state, filtersApplied]);
 
   useEffect(() => {
     fetchOrders();
-    fetchFilterOptions();
   }, [statusFilter, channelFilter, masterSkuFilter, cityFilter, stateFilter, minPrice, maxPrice, currentPage, dispatchedTodayFilter, confirmedFilter]);
+
+  useEffect(() => {
+    fetchFilterOptions();
+  }, []);
 
   const fetchFilterOptions = async () => {
     try {

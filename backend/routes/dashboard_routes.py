@@ -23,13 +23,26 @@ async def get_dashboard_stats(
     pending_tasks = await db.tasks.count_documents({"status": "pending"})
     
     # Pending Confirmation = orders that are:
-    # 1. NOT dispatched (status = pending)
-    # 2. NOT confirmed (confirmed != True)
-    # 3. Expected dispatch is TODAY or PAST (not future) - urgency increases with past dates
+    # 1. Status = pending (not dispatched)
+    # 2. NOT confirmed (unconfirmed or missing confirmed field)
+    # 3. Expected dispatch is TODAY or PAST (or field doesn't exist)
     pending_confirmation = await db.orders.count_documents({
-        "status": "pending",
-        "confirmed": {"$ne": True},
-        "expected_dispatch_date": {"$lte": today}  # Today or past (excludes future)
+        "$and": [
+            {"status": "pending"},
+            {
+                "$or": [
+                    {"confirmed": {"$exists": False}},
+                    {"confirmed": False},
+                    {"confirmed": None}
+                ]
+            },
+            {
+                "$or": [
+                    {"expected_dispatch_date": {"$lte": today}},
+                    {"expected_dispatch_date": {"$exists": False}}
+                ]
+            }
+        ]
     })
     
     low_stock_items = await db.products.count_documents({
@@ -95,25 +108,26 @@ async def get_revenue_by_period(
     # Calculate date range based on period
     if period == "today":
         start_date = today.date().isoformat()
+        # Order_date is stored as string in YYYY-MM-DD format
         match_query = {
-            "order_date": {"$gte": start_date},
-            "status": {"$nin": ["cancelled", "returned"]}
+            "order_date": start_date,  # Exact match for today
+            "status": {"$nin": ["cancelled"]}
         }
     elif period == "30days":
-        start_date = (today - timedelta(days=30)).isoformat()
+        start_date = (today - timedelta(days=30)).date().isoformat()
         match_query = {
             "order_date": {"$gte": start_date},
-            "status": {"$nin": ["cancelled", "returned"]}
+            "status": {"$nin": ["cancelled"]}
         }
     elif period == "year":
-        start_date = today.replace(month=1, day=1).isoformat()
+        start_date = today.replace(month=1, day=1).date().isoformat()
         match_query = {
             "order_date": {"$gte": start_date},
-            "status": {"$nin": ["cancelled", "returned"]}
+            "status": {"$nin": ["cancelled"]}
         }
     else:  # lifetime
         match_query = {
-            "status": {"$nin": ["cancelled", "returned"]}
+            "status": {"$nin": ["cancelled"]}
         }
     
     # Aggregate revenue and units

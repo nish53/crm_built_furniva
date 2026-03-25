@@ -95,7 +95,7 @@ export const Dashboard = () => {
     {
       title: 'Pending Confirmation',
       value: stats.pending_calls,
-      subtitle: 'Needs confirmation today',
+      subtitle: 'Needs confirmation urgently',
       icon: Phone,
       color: 'text-red-600',
       bgColor: 'bg-red-100',
@@ -103,16 +103,7 @@ export const Dashboard = () => {
       onClick: () => navigate('/orders', { state: { filterStatus: 'pending', filterConfirmed: false, filterDispatchToday: true } }),
       clickable: true,
     },
-    {
-      title: 'Total Orders',
-      value: stats.total_orders,
-      icon: Package,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-      gradient: 'from-primary/5 to-primary/10',
-      onClick: () => navigate('/orders'),
-      clickable: true,
-    },
+    // REMOVED: Total Orders tile
     {
       title: 'Dispatched Today',
       value: stats.dispatched_today,
