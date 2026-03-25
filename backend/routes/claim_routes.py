@@ -14,13 +14,13 @@ async def create_claim(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    # Validate that the order exists
+    # Validate that the order exists (check by order_number, not id)
     if claim_data.order_id:
-        order = await db.orders.find_one({"id": claim_data.order_id}, {"_id": 0})
+        order = await db.orders.find_one({"order_number": claim_data.order_id}, {"_id": 0})
         if not order:
             raise HTTPException(
                 status_code=404, 
-                detail=f"Order ID '{claim_data.order_id}' does not exist. Please verify the order ID and try again."
+                detail=f"Order Number '{claim_data.order_id}' does not exist. Please verify the order number and try again."
             )
     
     claim_dict = claim_data.model_dump()

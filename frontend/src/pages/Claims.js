@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -56,6 +57,7 @@ const statusIcons = {
 };
 
 export const Claims = () => {
+  const location = useLocation();
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -68,6 +70,13 @@ export const Claims = () => {
   const [selectedClaim, setSelectedClaim] = useState(null);
   const [analytics, setAnalytics] = useState({ byType: [], byStatus: [] });
   const [showAnalytics, setShowAnalytics] = useState(false);
+  
+  // Apply filter from navigation state
+  useEffect(() => {
+    if (location.state?.filterStatus) {
+      setStatusFilter(location.state.filterStatus);
+    }
+  }, [location.state]);
   
   // Create form
   const [createForm, setCreateForm] = useState({

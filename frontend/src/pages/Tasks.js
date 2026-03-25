@@ -10,13 +10,16 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { CheckSquare, Plus, Calendar, User, AlertCircle, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useLocation } from 'react-router-dom';
 
 export const Tasks = () => {
+  const location = useLocation();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -27,14 +30,25 @@ export const Tasks = () => {
     order_details: '',
   });
 
+  // Apply filter from navigation state
+  useEffect(() => {
+    if (location.state?.filterStatus) {
+      setStatusFilter(location.state.filterStatus);
+    }
+  }, [location.state]);
+
   useEffect(() => {
     fetchTasks();
     fetchUsers();
-  }, []);
+  }, [statusFilter]);
 
   const fetchTasks = async () => {
     try {
-      const response = await api.get('/tasks/');
+      const params = {};
+      if (statusFilter !== 'all') {
+        params.status = statusFilter;
+      }
+      const response = await api.get('/tasks/', { params });
       setTasks(response.data);
     } catch (error) {
       toast.error('Failed to fetch tasks');

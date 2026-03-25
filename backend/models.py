@@ -858,7 +858,9 @@ class DashboardStats(BaseModel):
     pending_orders: int
     dispatched_today: int
     pending_tasks: int
-    pending_calls: int
+    pending_calls: int  # Now represents "Pending Confirmation"
     low_stock_items: int
     pending_claims: int
     revenue_today: float
+    open_returns: int = 0
+    open_replacements: int = 0

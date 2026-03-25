@@ -22,10 +22,14 @@ async def get_dashboard_stats(
     
     pending_tasks = await db.tasks.count_documents({"status": "pending"})
     
-    # Pending calls = orders that are pending AND not confirmed yet
-    pending_calls = await db.orders.count_documents({
+    # Pending Confirmation = orders that are:
+    # 1. NOT dispatched (status = pending)
+    # 2. NOT confirmed (confirmed != True)
+    # 3. Need to be shipped TODAY (expected_dispatch_date = today)
+    pending_confirmation = await db.orders.count_documents({
         "status": "pending",
-        "confirmed": {"$ne": True}
+        "confirmed": {"$ne": True},
+        "expected_dispatch_date": {"$lte": today}
     })
     
     low_stock_items = await db.products.count_documents({
@@ -33,6 +37,10 @@ async def get_dashboard_stats(
     })
     
     pending_claims = await db.claims.count_documents({"status": "filed"})
+    
+    # Open returns and replacements count
+    open_returns = await db.return_requests.count_documents({"return_status": {"$ne": "closed"}})
+    open_replacements = await db.replacement_requests.count_documents({"replacement_status": {"$ne": "resolved"}})
     
     revenue_pipeline = [
         {
@@ -57,10 +65,12 @@ async def get_dashboard_stats(
         pending_orders=pending_orders,
         dispatched_today=dispatched_today_count,
         pending_tasks=pending_tasks,
-        pending_calls=pending_calls,
+        pending_calls=pending_confirmation,  # Renamed but keeping field name for compatibility
         low_stock_items=low_stock_items,
         pending_claims=pending_claims,
-        revenue_today=revenue_today
+        revenue_today=revenue_today,
+        open_returns=open_returns,
+        open_replacements=open_replacements
     )
 
 @router.get("/recent-orders")

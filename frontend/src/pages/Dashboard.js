@@ -13,6 +13,8 @@ export const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [revenuePeriod, setRevenuePeriod] = useState('today'); // today, 30days, year, lifetime
+  const [revenueMetric, setRevenueMetric] = useState('amount'); // amount, units
 
   useEffect(() => {
     fetchDashboardData();
@@ -35,75 +37,107 @@ export const Dashboard = () => {
 
   const statCards = stats ? [
     {
-      title: 'Total Orders',
-      value: stats.total_orders,
+      title: 'Revenue Today',
+      value: `₹${stats.revenue_today.toLocaleString()}`,
+      icon: TrendingUp,
+      color: 'text-green-600',
+      bgColor: 'bg-green-100',
+      gradient: 'from-green-50 to-green-100',
+      clickable: false,
+      hasDropdown: true, // Special handling for revenue
+    },
+    {
+      title: 'Open Returns',
+      value: stats.open_returns || 0,
       icon: Package,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-      onClick: () => navigate('/orders'),
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-100',
+      gradient: 'from-orange-50 to-orange-100',
+      onClick: () => navigate('/returns'),
+      clickable: true,
+    },
+    {
+      title: 'Open Replacements',
+      value: stats.open_replacements || 0,
+      icon: Package,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-100',
+      gradient: 'from-blue-50 to-blue-100',
+      onClick: () => navigate('/replacements'),
       clickable: true,
     },
     {
       title: 'Pending Orders',
       value: stats.pending_orders,
+      subtitle: 'Not yet dispatched',
       icon: Clock,
-      color: 'text-accent',
-      bgColor: 'bg-accent/10',
-      onClick: () => navigate('/orders?status=pending'),
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-100',
+      gradient: 'from-amber-50 to-amber-100',
+      onClick: () => navigate('/orders', { state: { filterStatus: 'pending' } }),
+      clickable: true,
+    },
+    {
+      title: 'Pending Confirmation',
+      value: stats.pending_calls,
+      subtitle: 'Needs confirmation today',
+      icon: Phone,
+      color: 'text-red-600',
+      bgColor: 'bg-red-100',
+      gradient: 'from-red-50 to-red-100',
+      onClick: () => navigate('/orders', { state: { filterStatus: 'pending', filterConfirmed: false, filterDispatchToday: true } }),
+      clickable: true,
+    },
+    {
+      title: 'Total Orders',
+      value: stats.total_orders,
+      icon: Package,
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
+      gradient: 'from-primary/5 to-primary/10',
+      onClick: () => navigate('/orders'),
       clickable: true,
     },
     {
       title: 'Dispatched Today',
       value: stats.dispatched_today,
       icon: TrendingUp,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-      onClick: () => navigate('/orders?dispatched_today=true'),
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-100',
+      gradient: 'from-emerald-50 to-emerald-100',
+      onClick: () => navigate('/orders', { state: { filterDispatchedToday: true } }),
       clickable: true,
     },
     {
       title: 'Pending Tasks',
       value: stats.pending_tasks,
       icon: FileText,
-      color: 'text-muted-foreground',
-      bgColor: 'bg-muted',
-      onClick: () => navigate('/tasks'),
-      clickable: true,
-    },
-    {
-      title: 'Pending Calls',
-      value: stats.pending_calls,
-      icon: Phone,
-      color: 'text-accent',
-      bgColor: 'bg-accent/10',
-      onClick: () => navigate('/orders?status=pending&confirmed=false'),
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-100',
+      gradient: 'from-purple-50 to-purple-100',
+      onClick: () => navigate('/tasks', { state: { filterStatus: 'pending' } }),
       clickable: true,
     },
     {
       title: 'Low Stock Items',
       value: stats.low_stock_items,
+      subtitle: 'Below reorder level',
       icon: Archive,
-      color: 'text-destructive',
-      bgColor: 'bg-destructive/10',
-      onClick: () => navigate('/products?low_stock=true'),
+      color: 'text-rose-600',
+      bgColor: 'bg-rose-100',
+      gradient: 'from-rose-50 to-rose-100',
+      onClick: () => navigate('/products', { state: { filterLowStock: true } }),
       clickable: true,
     },
     {
       title: 'Pending Claims',
       value: stats.pending_claims,
       icon: AlertCircle,
-      color: 'text-destructive',
-      bgColor: 'bg-destructive/10',
-      onClick: () => navigate('/claims'),
+      color: 'text-violet-600',
+      bgColor: 'bg-violet-100',
+      gradient: 'from-violet-50 to-violet-100',
+      onClick: () => navigate('/claims', { state: { filterStatus: 'filed' } }),
       clickable: true,
-    },
-    {
-      title: 'Revenue Today',
-      value: `₹${stats.revenue_today.toLocaleString()}`,
-      icon: TrendingUp,
-      color: 'text-primary',
-      bgColor: 'bg-primary/10',
-      clickable: false, // No redirection for revenue
     },
   ] : [];
 
@@ -126,26 +160,33 @@ export const Dashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {statCards.map((stat, index) => {
           const Icon = stat.icon;
           return (
             <Card 
               key={index} 
-              className={`border-border/60 hover:shadow-md transition-shadow duration-200 ${stat.clickable ? 'cursor-pointer hover:border-primary/50' : ''}`}
+              className={`border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br ${stat.gradient} ${stat.clickable ? 'cursor-pointer hover:scale-105 hover:border-2 hover:border-primary/30' : ''}`}
               data-testid={`stat-card-${index}`}
               onClick={stat.clickable ? stat.onClick : undefined}
             >
-              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {stat.title}
-                </CardTitle>
-                <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-                  <Icon className={`h-4 w-4 ${stat.color}`} />
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-muted-foreground mb-1">
+                      {stat.title}
+                    </p>
+                    <div className="text-3xl font-bold font-[Manrope] mt-2 mb-1" style={{ color: stat.color.replace('text-', '') }}>
+                      {stat.value}
+                    </div>
+                    {stat.subtitle && (
+                      <p className="text-xs text-muted-foreground mt-1">{stat.subtitle}</p>
+                    )}
+                  </div>
+                  <div className={`p-3 rounded-xl ${stat.bgColor} shadow-sm`}>
+                    <Icon className={`h-6 w-6 ${stat.color}`} />
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold font-[Manrope]">{stat.value}</div>
               </CardContent>
             </Card>
           );

@@ -30,9 +30,10 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 export const Orders = () => {
+  const location = useLocation();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,6 +58,23 @@ export const Orders = () => {
   });
   const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
+
+  // Apply filters from navigation state (from dashboard tiles)
+  useEffect(() => {
+    if (location.state) {
+      if (location.state.filterStatus) {
+        setStatusFilter(location.state.filterStatus);
+      }
+      if (location.state.filterDispatchedToday) {
+        // Handle dispatched today filter
+        setShowAdvancedFilters(true);
+      }
+      if (location.state.filterConfirmed === false) {
+        // Handle unconfirmed filter
+        setShowAdvancedFilters(true);
+      }
+    }
+  }, [location.state]);
 
   useEffect(() => {
     fetchOrders();
