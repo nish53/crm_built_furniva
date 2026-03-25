@@ -495,11 +495,40 @@ async def import_historical_orders(
                     "review_conf": parse_bool(row.get("Review Conf")),
                     
                     "pickup_status": pickup_status,
-                    "cancellation_reason": row.get("Reason for Cancellation/Replacement", ""),
+                    "cancellation_reason": "",  # Will be set below based on mapping
                     "internal_notes": f"Imported from historical data. Original status: {live_status}",
                     "created_at": datetime.now(timezone.utc).isoformat(),
                     "is_historical": True
                 }
+                
+                # NEW: Map "Reason for Cancellation/Replacement" to correct cancellation_reason
+                reason_from_csv = row.get("Reason for Cancellation/Replacement", "").strip()
+                
+                # Only map if order is cancelled
+                if status == "cancelled":
+                    reason_mapping = {
+                        # Map to context-dependent reason values
+                        "": "no_status",  # Empty/blank
+                        "Status Pending": "no_status",
+                        "PFC": "did_not_specify",
+                        "PFC (DNPC)": "did_not_specify",
+                        "Damage": "damage",
+                        "Customer Issues (Except Quality)": "customer_issues_except_quality",
+                        "Hardware Missing": "hardware_missing",
+                        "Defective Product": "defective_product",
+                        "Fraud Customer": "fraud_customer",
+                        "Wrong Product Sent": "wrong_product_sent",
+                        "Customer Quality Issues": "customer_quality_issues",
+                        "Product Delayed & Customer Accepted": "product_delayed_customer_accepted"
+                    }
+                    order["cancellation_reason"] = reason_mapping.get(reason_from_csv, "did_not_specify")
+                
+                # For delivered orders with cancellation reason, mark as resolved
+                elif status == "delivered" and reason_from_csv:
+                    resolved_keywords = ["Part Damage", "Full Damage", "Hardware Missing", "Minimal Installation Issue"]
+                    if any(keyword in reason_from_csv for keyword in resolved_keywords):
+                        order["cancellation_reason"] = "resolved"  # Special marker for Resolved Orders page
+                        order["internal_notes"] += f" | Resolved issue: {reason_from_csv}"
                 
                 await db.orders.insert_one(order)
                 imported_count += 1
@@ -520,3 +549,132 @@ async def import_historical_orders(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+
+
+
+# NEW ENDPOINTS FOR CANCELLED ORDERS AND RESOLVED ORDERS
+
+@router.get("/cancelled-orders/")
+async def get_cancelled_orders(
+    reason: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Get all cancelled orders, optionally filtered by cancellation reason.
+    Groups orders by their cancellation reason for the Cancelled Orders page.
+    """
+    query = {"status": "cancelled"}
+    
+    # Filter by specific reason if provided
+    if reason:
+        query["cancellation_reason"] = reason
+    
+    orders = await db.orders.find(query, {"_id": 0}).skip(skip).limit(limit).sort("order_date", -1).to_list(None)
+    
+    return {
+        "orders": orders,
+        "total": await db.orders.count_documents(query)
+    }
+
+@router.get("/cancelled-orders/stats")
+async def get_cancelled_orders_stats(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Get statistics of cancelled orders grouped by cancellation reason.
+    Returns counts for each reason group for the Cancelled Orders page tabs.
+    """
+    pipeline = [
+        {"$match": {"status": "cancelled"}},
+        {
+            "$group": {
+                "_id": "$cancellation_reason",
+                "count": {"$sum": 1},
+                "orders": {"$push": {"order_number": "$order_number", "customer_name": "$customer_name", "order_date": "$order_date"}}
+            }
+        },
+        {"$sort": {"count": -1}}
+    ]
+    
+    result = await db.orders.aggregate(pipeline).to_list(None)
+    
+    # Group by reason with proper labels
+    reason_groups = {
+        "no_status": {"label": "No Status", "count": 0, "orders": []},
+        "damage": {"label": "Damage", "count": 0, "orders": []},
+        "customer_issues_except_quality": {"label": "Customer Issues (Except Quality)", "count": 0, "orders": []},
+        "hardware_missing": {"label": "Hardware Missing", "count": 0, "orders": []},
+        "defective_product": {"label": "Defective Product", "count": 0, "orders": []},
+        "fraud_customer": {"label": "Fraud Customer", "count": 0, "orders": []},
+        "wrong_product_sent": {"label": "Wrong Product Sent", "count": 0, "orders": []},
+        "customer_quality_issues": {"label": "Customer Quality Issues", "count": 0, "orders": []},
+        "product_delayed_customer_accepted": {"label": "Product Delayed & Customer Accepted", "count": 0, "orders": []},
+        "did_not_specify": {"label": "Did Not Specify", "count": 0, "orders": []},
+        "pre_dispatch": {"label": "Pre-Dispatch Cancellations", "count": 0, "orders": []},
+        "in_transit": {"label": "In-Transit Cancellations", "count": 0, "orders": []}
+    }
+    
+    for group in result:
+        reason = group["_id"] or "no_status"
+        if reason in reason_groups:
+            reason_groups[reason]["count"] = group["count"]
+            reason_groups[reason]["orders"] = group["orders"][:5]  # First 5 orders only
+    
+    total_cancelled = sum(g["count"] for g in reason_groups.values())
+    
+    return {
+        "total_cancelled": total_cancelled,
+        "by_reason": reason_groups
+    }
+
+@router.get("/resolved-orders/")
+async def get_resolved_orders(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Get all resolved orders (delivered orders where issues were resolved).
+    These are orders marked with cancellation_reason = 'resolved' from historical imports.
+    """
+    query = {
+        "status": "delivered",
+        "cancellation_reason": "resolved"
+    }
+    
+    orders = await db.orders.find(query, {"_id": 0}).skip(skip).limit(limit).sort("order_date", -1).to_list(None)
+    
+    return {
+        "orders": orders,
+        "total": await db.orders.count_documents(query)
+    }
+
+@router.get("/resolved-orders/stats")
+async def get_resolved_orders_stats(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Get statistics for resolved orders.
+    Shows total resolved orders and breakdown by resolution type (if available).
+    """
+    query = {
+        "status": "delivered",
+        "cancellation_reason": "resolved"
+    }
+    
+    total_resolved = await db.orders.count_documents(query)
+    
+    # Get recent resolved orders
+    recent_orders = await db.orders.find(query, {"_id": 0}).sort("order_date", -1).limit(10).to_list(None)
+    
+    return {
+        "total_resolved": total_resolved,
+        "recent_orders": recent_orders,
+        "message": f"Total {total_resolved} orders with resolved issues"
+    }

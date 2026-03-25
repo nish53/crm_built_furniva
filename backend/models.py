@@ -431,8 +431,36 @@ class ProcurementBatchCreate(BaseModel):
     notes: Optional[str] = None
 
 # Return Management Models
+# Context-dependent cancellation/return reason enums
+class PostDeliveryReturnReason(str, Enum):
+    """Reasons for returns after order is delivered"""
+    DAMAGE = "damage"
+    CUSTOMER_ISSUES_EXCEPT_QUALITY = "customer_issues_except_quality"
+    HARDWARE_MISSING = "hardware_missing"
+    DEFECTIVE_PRODUCT = "defective_product"
+    FRAUD_CUSTOMER = "fraud_customer"
+    WRONG_PRODUCT_SENT = "wrong_product_sent"
+    CUSTOMER_QUALITY_ISSUES = "customer_quality_issues"
+    PRODUCT_DELAYED_CUSTOMER_ACCEPTED = "product_delayed_customer_accepted"
+
+class InTransitCancelReason(str, Enum):
+    """Reasons for cancellation when order is in transit (RTO)"""
+    CUSTOMER_REFUSED_DOORSTEP = "customer_refused_doorstep"
+    CUSTOMER_UNAVAILABLE = "customer_unavailable"
+    DELAY = "delay"
+
+class PreDispatchCancelReason(str, Enum):
+    """Reasons for cancellation before order is dispatched"""
+    CHANGE_OF_MIND = "change_of_mind"
+    FOUND_BETTER_PRICING = "found_better_pricing"
+    ORDERED_MISTAKENLY = "ordered_mistakenly"
+    WANTS_TO_CUSTOMIZE = "wants_to_customize"
+    DID_NOT_SPECIFY = "did_not_specify"
+    CUSTOMER_NOT_AVAILABLE = "customer_not_available"
+
+# Legacy enum for backward compatibility
 class ReturnReason(str, Enum):
-    # For NEW return requests (8 reasons only)
+    """DEPRECATED - Use context-dependent enums above"""
     DAMAGE = "Damage"
     CUSTOMER_REFUSED = "Customer Refused at Doorstep"
     FRAUD = "Fraud"
@@ -447,25 +475,33 @@ class ReturnType(str, Enum):
     REPLACEMENT = "replacement"
 
 class ReturnStatus(str, Enum):
-    # New 12-stage workflow
+    """Status for 3-type return workflow"""
+    # Core statuses
     REQUESTED = "requested"
+    APPROVED = "approved"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    CLOSED = "closed"
+    # In-transit RTO specific
+    RTO_IN_TRANSIT = "rto_in_transit"
+    # Post-delivery pickup specific
+    PICKUP_SCHEDULED = "pickup_scheduled"
+    PICKUP_IN_TRANSIT = "pickup_in_transit"
+    PICKUP_NOT_REQUIRED = "pickup_not_required"
+    # Warehouse phase
+    WAREHOUSE_RECEIVED = "warehouse_received"
+    CONDITION_CHECKED = "condition_checked"
+    # Legacy statuses (backward compatibility)
     FEEDBACK_CHECK = "feedback_check"
     CLAIM_FILED = "claim_filed"
     AUTHORIZED = "authorized"
     RETURN_INITIATED = "return_initiated"
     IN_TRANSIT = "in_transit"
-    WAREHOUSE_RECEIVED = "warehouse_received"
     QC_INSPECTION = "qc_inspection"
     CLAIM_FILING = "claim_filing"
     CLAIM_STATUS = "claim_status"
     REFUND_PROCESSED = "refund_processed"
-    CLOSED = "closed"
-    # Terminal statuses
-    REJECTED = "rejected"
     CANCELLED = "cancelled"
-    # Legacy statuses (backward compatibility)
-    APPROVED = "approved"
-    PICKUP_SCHEDULED = "pickup_scheduled"
     RECEIVED = "received"
     INSPECTED = "inspected"
     REFUNDED = "refunded"
@@ -570,6 +606,24 @@ class ReturnRequest(BaseModel):
     closure_notes: Optional[str] = None
     resolution_summary: Optional[str] = None
     
+    # NEW FIELDS FOR 3-TYPE WORKFLOW
+    return_type: Optional[str] = None  # "pre_dispatch" | "in_transit" | "post_delivery"
+    cancellation_reason: Optional[str] = None  # Actual reason value from appropriate enum
+    notes: Optional[str] = None  # Additional notes from user
+    
+    # Pickup phase fields (post-delivery only)
+    pickup_not_required: bool = False  # Skip pickup for severely damaged items
+    pickup_tracking_id: Optional[str] = None
+    pickup_courier: Optional[str] = None
+    
+    # Condition check fields (post-delivery only)
+    received_condition: Optional[str] = None  # "mint" | "damaged"
+    condition_notes: Optional[str] = None
+    
+    # RTO phase fields (in-transit only)
+    rto_tracking_number: Optional[str] = None
+    rto_courier: Optional[str] = None
+    
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -585,16 +639,35 @@ class ReturnRequestCreate(BaseModel):
 
 # Replacement Request Models (Separate from Return)
 class ReplacementReason(str, Enum):
-    DAMAGE = "Damage"
-    QUALITY_ISSUE = "Quality Issue"
+    """Reasons for filing a replacement request"""
+    DAMAGED = "damaged"
+    QUALITY = "quality"
+    WRONG_PRODUCT_SENT = "wrong_product_sent"
+    CUSTOMER_CHANGE_OF_MIND = "customer_change_of_mind"
+
+class ReplacementType(str, Enum):
+    """Type of replacement requested"""
+    FULL = "full_replacement"
+    PARTIAL = "partial_replacement"
 
 class ReplacementStatus(str, Enum):
+    """Status for replacement workflow"""
+    REQUESTED = "requested"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PICKUP_SCHEDULED = "pickup_scheduled"
+    PICKUP_IN_TRANSIT = "pickup_in_transit"
+    PICKUP_NOT_REQUIRED = "pickup_not_required"
+    WAREHOUSE_RECEIVED = "warehouse_received"
+    NEW_SHIPMENT_DISPATCHED = "new_shipment_dispatched"
+    PARTS_SHIPPED = "parts_shipped"  # For partial replacement
+    DELIVERED = "delivered"
+    RESOLVED = "resolved"
+    # Legacy statuses for backward compatibility
     PENDING = "Replacement Pending"
     PRIORITY_REVIEW = "Priority Review"
     SHIP_REPLACEMENT = "Ship Replacement"
     TRACKING_ADDED = "Tracking Added"
-    DELIVERED = "Delivered"
-    RESOLVED = "Issue Resolved"
     NOT_RESOLVED = "Issue Not Resolved"
 
 class ReplacementRequest(BaseModel):
@@ -624,12 +697,42 @@ class ReplacementRequest(BaseModel):
     created_by: str
     created_at: datetime
     updated_at: Optional[datetime] = None
+    
+    # NEW FIELDS FOR FULL/PARTIAL REPLACEMENT WORKFLOW
+    replacement_type: Optional[str] = None  # "full_replacement" | "partial_replacement"
+    difference_amount: Optional[float] = None  # For customer change of mind (upsell)
+    notes: Optional[str] = None  # Additional notes
+    
+    # Pickup phase fields
+    pickup_not_required: bool = False  # Skip pickup for severe damage
+    pickup_date: Optional[datetime] = None
+    pickup_tracking_id: Optional[str] = None
+    pickup_courier: Optional[str] = None
+    warehouse_received_date: Optional[datetime] = None
+    received_condition: Optional[str] = None  # "mint" | "damaged"
+    condition_notes: Optional[str] = None
+    
+    # New shipment phase fields
+    new_tracking_id: Optional[str] = None
+    new_courier: Optional[str] = None
+    items_sent_description: Optional[str] = None  # What's being sent
+    
+    # Partial replacement specific fields
+    parts_description: Optional[str] = None  # What parts are being sent
+    parts_tracking_id: Optional[str] = None
+    parts_courier: Optional[str] = None
+    
+    # Delivery confirmation
+    delivery_confirmed: bool = False
 
 class ReplacementRequestCreate(BaseModel):
     order_id: str
     replacement_reason: ReplacementReason
+    replacement_type: str  # "full_replacement" | "partial_replacement"
     damage_description: str  # Required detailed description
     damage_images: List[str]  # Mandatory image URLs
+    notes: Optional[str] = None  # Additional notes
+    difference_amount: Optional[float] = None  # For customer change of mind
 
 # Channel Management Models
 class Channel(BaseModel):

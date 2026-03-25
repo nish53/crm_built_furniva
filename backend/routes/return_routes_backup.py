@@ -37,57 +37,29 @@ def classify_return_category(return_reason: str, status: str, delivery_date: str
     # Default to refunded for all other return cases
     return "refunded"
 
-# Workflow transition map for 3-type return workflow
-# Each return_type has its own allowed transitions
+# Workflow transition map - defines allowed next statuses for each status
 WORKFLOW_TRANSITIONS = {
-    "pre_dispatch": {
-        "requested": ["approved", "closed", "rejected"],
-        "approved": ["closed"],
-        "rejected": [],
-        "closed": []
-    },
-    "in_transit": {
-        "requested": ["approved", "closed", "rejected"],
-        "approved": ["rto_in_transit", "closed"],
-        "rto_in_transit": ["warehouse_received"],
-        "warehouse_received": ["closed"],
-        "rejected": [],
-        "closed": []
-    },
-    "post_delivery": {
-        "requested": ["accepted", "closed", "rejected"],
-        "accepted": ["pickup_scheduled", "pickup_not_required"],
-        "pickup_scheduled": ["pickup_in_transit"],
-        "pickup_in_transit": ["warehouse_received"],
-        "pickup_not_required": ["closed"],  # Skip directly to closed
-        "warehouse_received": ["condition_checked"],
-        "condition_checked": ["closed"],
-        "rejected": [],
-        "closed": []
-    },
-    # Legacy transitions for backward compatibility with old 12-stage workflow
-    "legacy": {
-        "requested": ["feedback_check", "authorized", "approved", "rejected", "closed", "cancelled"],
-        "feedback_check": ["claim_filed", "authorized", "approved", "rejected", "closed", "cancelled"],
-        "claim_filed": ["authorized", "approved", "rejected", "closed", "cancelled"],
-        "authorized": ["return_initiated", "closed", "cancelled"],
-        "return_initiated": ["in_transit", "closed", "cancelled"],
-        "in_transit": ["warehouse_received", "closed"],
-        "warehouse_received": ["qc_inspection", "closed"],
-        "qc_inspection": ["claim_filing", "refund_processed", "closed"],
-        "claim_filing": ["claim_status", "closed"],
-        "claim_status": ["refund_processed", "closed"],
-        "refund_processed": ["closed"],
-        "closed": [],
-        "rejected": [],
-        "cancelled": [],
-        "approved": ["pickup_scheduled", "return_initiated", "closed", "cancelled"],
-        "pickup_scheduled": ["in_transit", "closed", "cancelled"],
-        "received": ["inspected", "qc_inspection", "closed"],
-        "inspected": ["refunded", "refund_processed", "replaced", "closed"],
-        "refunded": ["closed"],
-        "replaced": ["closed"],
-    }
+    "requested": ["feedback_check", "authorized", "approved", "rejected", "closed", "cancelled"],
+    "feedback_check": ["claim_filed", "authorized", "approved", "rejected", "closed", "cancelled"],
+    "claim_filed": ["authorized", "approved", "rejected", "closed", "cancelled"],
+    "authorized": ["return_initiated", "closed", "cancelled"],
+    "return_initiated": ["in_transit", "closed", "cancelled"],
+    "in_transit": ["warehouse_received", "closed"],
+    "warehouse_received": ["qc_inspection", "closed"],
+    "qc_inspection": ["claim_filing", "refund_processed", "closed"],
+    "claim_filing": ["claim_status", "closed"],
+    "claim_status": ["refund_processed", "closed"],
+    "refund_processed": ["closed"],
+    "closed": [],
+    "rejected": [],
+    "cancelled": [],
+    # Legacy transitions for backward compatibility
+    "approved": ["pickup_scheduled", "return_initiated", "closed", "cancelled"],
+    "pickup_scheduled": ["in_transit", "closed", "cancelled"],
+    "received": ["inspected", "qc_inspection", "closed"],
+    "inspected": ["refunded", "refund_processed", "replaced", "closed"],
+    "refunded": ["closed"],
+    "replaced": ["closed"],
 }
 
 # Stage-specific field mappings
@@ -114,49 +86,19 @@ STAGE_DATE_FIELDS = {
 @router.post("/", response_model=ReturnRequest)
 async def create_return_request(
     return_req: ReturnRequestCreate,
-    cancellation_reason: str = None,  # NEW: Actual reason value from frontend
-    notes: Optional[str] = None,  # NEW: Additional notes
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """
-    Create a new return request with 3-type workflow support.
-    Automatically determines return_type based on order status:
-    - pre_dispatch: order status is pending or confirmed
-    - in_transit: order status is dispatched or in_transit  
-    - post_delivery: order status is delivered
-    """
+    """Create a new return request"""
     # Get order details
     order = await db.orders.find_one({"id": return_req.order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
-    order_status = order.get("status", "pending")
-    
-    # CONTEXT-DEPENDENT: Determine return_type based on order status
-    if order_status in ["pending", "confirmed"]:
-        return_type = "pre_dispatch"
-    elif order_status in ["dispatched", "in_transit"]:
-        return_type = "in_transit"
-    elif order_status == "delivered":
-        return_type = "post_delivery"
-    else:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Cannot create return for order with status '{order_status}'"
-        )
-    
-    # Validate cancellation_reason is provided
-    if not cancellation_reason:
-        raise HTTPException(
-            status_code=400,
-            detail="cancellation_reason is required"
-        )
-    
-    # Classify the return category for loss calculation
+    # Classify the return category
     category = classify_return_category(
-        return_reason=cancellation_reason,
-        status=order_status,
+        return_reason=return_req.return_reason,
+        status=order.get("status", ""),
         delivery_date=order.get("delivery_date")
     )
     
@@ -170,35 +112,25 @@ async def create_return_request(
     return_dict["return_status"] = ReturnStatus.REQUESTED
     return_dict["requested_date"] = datetime.now(timezone.utc).isoformat()
     return_dict["created_at"] = datetime.now(timezone.utc).isoformat()
-    return_dict["category"] = "in_progress"
-    
-    # NEW FIELDS for 3-type workflow
-    return_dict["return_type"] = return_type
-    return_dict["cancellation_reason"] = cancellation_reason
-    return_dict["notes"] = notes
-    return_dict["pickup_not_required"] = False
-    
+    return_dict["category"] = "in_progress"  # New returns default to in_progress
     return_dict["status_history"] = [{
         "from_status": None,
         "to_status": ReturnStatus.REQUESTED,
         "changed_at": datetime.now(timezone.utc).isoformat(),
-        "changed_by": current_user.email,
-        "return_type": return_type,
-        "notes": notes
+        "changed_by": current_user.email
     }]
     
     await db.return_requests.insert_one(return_dict)
     
-    # Update order - sync to cancellation_reason
+    # Update order - sync return_reason to cancellation_reason as well
     await db.orders.update_one(
         {"id": return_req.order_id},
         {"$set": {
             "return_requested": True,
-            "return_reason": cancellation_reason,
-            "cancellation_reason": cancellation_reason,
+            "return_reason": return_req.return_reason,
+            "cancellation_reason": return_req.return_reason,  # Sync to cancellation_reason
             "return_date": datetime.now(timezone.utc).isoformat(),
-            "loss_category": category,
-            "status": "cancelled"  # Mark order as cancelled when return is requested
+            "loss_category": category  # Also set loss category on order
         }}
     )
     
@@ -363,75 +295,47 @@ async def undo_return_status(
 async def advance_return_workflow(
     return_id: str,
     next_status: str,
-    # NEW: Common fields for all types
-    notes: Optional[str] = None,
-    # Pre-dispatch fields
-    approved_by: Optional[str] = None,
-    # In-transit RTO fields
-    rto_tracking_number: Optional[str] = None,
-    rto_courier: Optional[str] = None,
-    # Post-delivery pickup fields
-    pickup_date: Optional[str] = None,
-    pickup_tracking_id: Optional[str] = None,
-    pickup_courier: Optional[str] = None,
-    pickup_not_required: Optional[bool] = None,
-    # Warehouse fields (both in-transit and post-delivery)
-    warehouse_received_date: Optional[str] = None,
-    # Post-delivery condition check fields
-    received_condition: Optional[str] = None,  # "mint" or "damaged"
-    condition_notes: Optional[str] = None,
-    # Legacy fields for backward compatibility
+    # Stage-specific optional fields
     tracking_number: Optional[str] = None,
     courier_partner: Optional[str] = None,
+    notes: Optional[str] = None,
     refund_amount: Optional[float] = None,
+    pickup_date: Optional[str] = None,
+    feedback_outcome: Optional[str] = None,
+    claim_reference: Optional[str] = None,
+    claim_platform: Optional[str] = None,
+    claim_amount: Optional[float] = None,
+    return_method: Optional[str] = None,
+    qc_result: Optional[str] = None,
+    qc_damage_found: Optional[str] = None,
+    claim_status_result: Optional[str] = None,
+    claim_approved_amount: Optional[float] = None,
+    refund_method: Optional[str] = None,
+    refund_transaction_id: Optional[str] = None,
+    resolution_summary: Optional[str] = None,
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """
-    Advance return through 3-type workflow with context-aware validation.
-    - pre_dispatch: requested → approved/rejected → closed
-    - in_transit: requested → approved → rto_in_transit → warehouse_received → closed
-    - post_delivery: requested → accepted → pickup_scheduled/pickup_not_required → warehouse_received → condition_checked → closed
-    """
+    """Advance return through workflow stages with validation"""
     return_req = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
     if not return_req:
         raise HTTPException(status_code=404, detail="Return request not found")
     
     current_status = return_req.get("return_status", "requested")
-    return_type = return_req.get("return_type", "legacy")
     
-    # Get allowed transitions for this return type
-    if return_type in WORKFLOW_TRANSITIONS:
-        allowed = WORKFLOW_TRANSITIONS[return_type].get(current_status, [])
-    else:
-        # Fallback to legacy workflow for old return requests
-        allowed = WORKFLOW_TRANSITIONS["legacy"].get(current_status, [])
-    
+    # Validate transition is allowed
+    allowed = WORKFLOW_TRANSITIONS.get(current_status, [])
     if next_status not in allowed:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot transition from '{current_status}' to '{next_status}' for {return_type} return. Allowed: {allowed}"
+            detail=f"Cannot transition from '{current_status}' to '{next_status}'. Allowed: {allowed}"
         )
     
-    # Context-aware validation based on return_type and next_status
-    if return_type == "in_transit":
-        if next_status == "rto_in_transit" and not rto_tracking_number:
-            raise HTTPException(
-                status_code=400,
-                detail="rto_tracking_number is required for RTO in-transit status"
-            )
-    
-    elif return_type == "post_delivery":
-        if next_status == "pickup_scheduled" and not (pickup_date or pickup_tracking_id):
-            raise HTTPException(
-                status_code=400,
-                detail="pickup_date and pickup_tracking_id are required for pickup_scheduled status"
-            )
-        if next_status == "condition_checked" and not received_condition:
-            raise HTTPException(
-                status_code=400,
-                detail="received_condition ('mint' or 'damaged') is required for condition_checked status"
-            )
+    # Validate required fields for specific stages
+    if next_status == "in_transit" and not tracking_number:
+        raise HTTPException(status_code=400, detail="Tracking number is required for in_transit status")
+    if next_status == "pickup_scheduled" and not pickup_date:
+        raise HTTPException(status_code=400, detail="Pickup date is required for pickup_scheduled status")
     
     # Build update data
     now = datetime.now(timezone.utc).isoformat()
@@ -441,77 +345,140 @@ async def advance_return_workflow(
         "updated_at": now
     }
     
-    # Set status-specific fields based on return_type
-    if return_type == "pre_dispatch":
-        if next_status == "approved":
-            update_data["approved_date"] = now
-            update_data["approved_by"] = approved_by or current_user.email
+    # Set stage-specific date
+    date_field = STAGE_DATE_FIELDS.get(next_status)
+    if date_field:
+        update_data[date_field] = now
     
-    elif return_type == "in_transit":
-        if next_status == "approved":
-            update_data["approved_date"] = now
-            update_data["approved_by"] = current_user.email
-        elif next_status == "rto_in_transit":
-            update_data["rto_tracking_number"] = rto_tracking_number
-            update_data["rto_courier"] = rto_courier
-        elif next_status == "warehouse_received":
-            update_data["warehouse_received_date"] = warehouse_received_date or now
+    # Set stage-specific fields
+    if next_status == "feedback_check":
+        if notes:
+            update_data["feedback_check_notes"] = notes
+        if feedback_outcome:
+            update_data["feedback_check_outcome"] = feedback_outcome
     
-    elif return_type == "post_delivery":
-        if next_status == "accepted":
-            update_data["approved_date"] = now
-            update_data["approved_by"] = current_user.email
-        elif next_status == "pickup_not_required":
-            update_data["pickup_not_required"] = True
-            # Skip directly to closed
-            update_data["return_status"] = "closed"
-            update_data["closed_date"] = now
-            update_data["closed_by"] = current_user.email
-        elif next_status == "pickup_scheduled":
+    elif next_status == "claim_filed":
+        if claim_reference:
+            update_data["claim_reference"] = claim_reference
+        if claim_platform:
+            update_data["claim_platform"] = claim_platform
+        if claim_amount:
+            update_data["claim_amount"] = claim_amount
+    
+    elif next_status == "authorized":
+        update_data["authorized_by"] = current_user.email
+        if notes:
+            update_data["authorization_notes"] = notes
+    
+    elif next_status == "return_initiated":
+        if return_method:
+            update_data["return_method"] = return_method
+    
+    elif next_status == "in_transit":
+        update_data["return_tracking_number"] = tracking_number
+        if courier_partner:
+            update_data["courier_partner"] = courier_partner
+    
+    elif next_status == "warehouse_received":
+        update_data["warehouse_received_by"] = current_user.email
+        if notes:
+            update_data["warehouse_notes"] = notes
+    
+    elif next_status == "qc_inspection":
+        update_data["qc_inspector"] = current_user.email
+        if qc_result:
+            update_data["qc_result"] = qc_result
+        if qc_damage_found:
+            update_data["qc_damage_found"] = qc_damage_found
+        if notes:
+            update_data["qc_notes"] = notes
+    
+    elif next_status == "claim_filing":
+        if claim_reference:
+            update_data["claim_filing_reference"] = claim_reference
+        if claim_platform:
+            update_data["claim_filing_platform"] = claim_platform
+        if claim_amount:
+            update_data["claim_filing_amount"] = claim_amount
+        if notes:
+            update_data["claim_filing_notes"] = notes
+    
+    elif next_status == "claim_status":
+        if claim_status_result:
+            update_data["claim_status_result"] = claim_status_result
+        if claim_approved_amount:
+            update_data["claim_approved_amount"] = claim_approved_amount
+        if notes:
+            update_data["claim_status_notes"] = notes
+    
+    elif next_status == "refund_processed":
+        if refund_amount:
+            update_data["refund_processed_amount"] = refund_amount
+        if refund_method:
+            update_data["refund_processed_method"] = refund_method
+        if refund_transaction_id:
+            update_data["refund_transaction_id"] = refund_transaction_id
+    
+    elif next_status == "closed":
+        update_data["closed_by"] = current_user.email
+        if notes:
+            update_data["closure_notes"] = notes
+        if resolution_summary:
+            update_data["resolution_summary"] = resolution_summary
+        # Reclassify category on close
+        order = await db.orders.find_one({"id": return_req["order_id"]}, {"_id": 0})
+        if order:
+            final_category = classify_return_category(
+                return_reason=return_req.get("return_reason", ""),
+                status=order.get("status", ""),
+                delivery_date=order.get("delivery_date")
+            )
+            update_data["category"] = final_category
+    
+    elif next_status == "rejected":
+        if notes:
+            update_data["closure_notes"] = notes
+        update_data["category"] = "rejected"
+    
+    elif next_status == "approved":
+        update_data["authorized_by"] = current_user.email
+        if notes:
+            update_data["authorization_notes"] = notes
+    
+    # Legacy status fields
+    elif next_status == "pickup_scheduled":
+        if pickup_date:
             update_data["pickup_date"] = pickup_date
-            update_data["pickup_tracking_id"] = pickup_tracking_id
-            update_data["pickup_courier"] = pickup_courier
-        elif next_status == "warehouse_received":
-            update_data["warehouse_received_date"] = warehouse_received_date or now
-        elif next_status == "condition_checked":
-            update_data["received_condition"] = received_condition
-            update_data["condition_notes"] = condition_notes
+    elif next_status == "refunded":
+        if refund_amount:
+            update_data["refund_amount"] = refund_amount
     
-    # Add notes if provided
-    if notes:
-        update_data["notes"] = notes
+    # Generic notes
+    if notes and next_status not in ["feedback_check", "authorized", "warehouse_received", "qc_inspection", "claim_filing", "claim_status", "closed"]:
+        update_data["qc_notes"] = notes
     
-    # Update status history
-    status_history = return_req.get("status_history", [])
-    status_history.append({
+    # Record in status history
+    history_entry = {
         "from_status": current_status,
         "to_status": next_status,
         "changed_at": now,
         "changed_by": current_user.email,
-        "notes": notes,
-        "return_type": return_type
-    })
-    update_data["status_history"] = status_history
+        "notes": notes
+    }
     
-    # Update return request
     await db.return_requests.update_one(
         {"id": return_id},
-        {"$set": update_data}
+        {"$set": update_data, "$push": {"status_history": history_entry}}
     )
     
-    # If closed, update order status
-    if next_status == "closed" or update_data.get("return_status") == "closed":
-        await db.orders.update_one(
-            {"id": return_req["order_id"]},
-            {"$set": {
-                "status": "cancelled",
-                "return_status": "closed"
-            }}
-        )
+    # Update order return_status
+    await db.orders.update_one(
+        {"id": return_req["order_id"]},
+        {"$set": {"return_status": next_status}}
+    )
     
-    # Fetch and return updated return request
-    updated_return = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
-    return ReturnRequest(**updated_return)
+    updated = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
+    return updated
 
 @router.get("/{return_id}/workflow-stages")
 async def get_workflow_stages(
@@ -519,51 +486,19 @@ async def get_workflow_stages(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """Get allowed next workflow stages for a return request based on return_type"""
+    """Get allowed next workflow stages for a return request"""
     return_req = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
     if not return_req:
         raise HTTPException(status_code=404, detail="Return request not found")
     
     current_status = return_req.get("return_status", "requested")
-    return_type = return_req.get("return_type", "legacy")
-    
-    # Get allowed transitions for this return type
-    if return_type in WORKFLOW_TRANSITIONS:
-        allowed = WORKFLOW_TRANSITIONS[return_type].get(current_status, [])
-    else:
-        # Fallback to legacy workflow
-        allowed = WORKFLOW_TRANSITIONS["legacy"].get(current_status, [])
+    allowed = WORKFLOW_TRANSITIONS.get(current_status, [])
     
     return {
-        "return_id": return_id,
-        "return_type": return_type,
         "current_status": current_status,
         "allowed_transitions": allowed,
-        "is_terminal": len(allowed) == 0,
-        "workflow_description": _get_workflow_description(return_type)
+        "is_terminal": len(allowed) == 0
     }
-
-def _get_workflow_description(return_type: str) -> dict:
-    """Get human-readable workflow description"""
-    descriptions = {
-        "pre_dispatch": {
-            "name": "Pre-Dispatch Cancellation",
-            "flow": "requested → approved/rejected → closed"
-        },
-        "in_transit": {
-            "name": "In-Transit RTO (Return to Origin)",
-            "flow": "requested → approved → rto_in_transit → warehouse_received → closed"
-        },
-        "post_delivery": {
-            "name": "Post-Delivery Return",
-            "flow": "requested → accepted → pickup_scheduled/pickup_not_required → warehouse_received → condition_checked → closed"
-        },
-        "legacy": {
-            "name": "Legacy 12-Stage Workflow",
-            "flow": "requested → ... → closed"
-        }
-    }
-    return descriptions.get(return_type, {"name": "Unknown", "flow": "Unknown"})
 
 @router.patch("/{return_id}/qc-images")
 async def add_qc_images(
