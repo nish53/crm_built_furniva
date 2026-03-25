@@ -8,7 +8,7 @@ import requests
 import json
 
 # Configuration
-BASE_URL = "https://order-workflow-hub-1.preview.emergentagent.com/api"
+BASE_URL = "https://crm-bug-tracker-2.preview.emergentagent.com/api"
 TEST_EMAIL = "furniva.test@example.com" 
 TEST_PASSWORD = "FurnivaTest2024!"
 
