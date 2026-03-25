@@ -22,9 +22,10 @@ async def get_dashboard_stats(
     
     pending_tasks = await db.tasks.count_documents({"status": "pending"})
     
+    # Pending calls = orders that are pending AND not confirmed yet
     pending_calls = await db.orders.count_documents({
-        "dc1_called": False,
-        "status": "confirmed"
+        "status": "pending",
+        "confirmed": {"$ne": True}
     })
     
     low_stock_items = await db.products.count_documents({

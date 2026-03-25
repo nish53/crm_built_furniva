@@ -215,13 +215,13 @@ export const Claims = () => {
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Total Filed</p>
-            <p className="text-2xl font-bold font-[JetBrains_Mono]">\u20B9{totalAmount.toLocaleString()}</p>
+            <p className="text-2xl font-bold font-[JetBrains_Mono]">₹{totalAmount.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Approved</p>
-            <p className="text-2xl font-bold text-green-600 font-[JetBrains_Mono]">\u20B9{approvedAmount.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-green-600 font-[JetBrains_Mono]">₹{approvedAmount.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
@@ -249,7 +249,7 @@ export const Claims = () => {
                       <span className="capitalize">{(item._id || 'Unknown').replace(/_/g, ' ')}</span>
                       <div className="flex items-center gap-3">
                         <Badge variant="outline">{item.count}</Badge>
-                        <span className="font-[JetBrains_Mono] text-xs">\u20B9{(item.total_amount || 0).toLocaleString()}</span>
+                        <span className="font-[JetBrains_Mono] text-xs">₹{(item.total_amount || 0).toLocaleString()}</span>
                       </div>
                     </div>
                   ))}
@@ -271,7 +271,7 @@ export const Claims = () => {
                       </Badge>
                       <div className="flex items-center gap-3">
                         <span className="font-medium">{item.count}</span>
-                        <span className="font-[JetBrains_Mono] text-xs">\u20B9{(item.total_amount || 0).toLocaleString()}</span>
+                        <span className="font-[JetBrains_Mono] text-xs">₹{(item.total_amount || 0).toLocaleString()}</span>
                       </div>
                     </div>
                   ))}
@@ -362,9 +362,9 @@ export const Claims = () => {
                         <p className="text-sm text-muted-foreground truncate">{claim.description}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="font-[JetBrains_Mono] font-medium">\u20B9{(claim.amount || 0).toLocaleString()}</p>
+                        <p className="font-[JetBrains_Mono] font-medium">₹{(claim.amount || 0).toLocaleString()}</p>
                         {claim.approved_amount > 0 && (
-                          <p className="text-xs text-green-600">Approved: \u20B9{claim.approved_amount.toLocaleString()}</p>
+                          <p className="text-xs text-green-600">Approved: ₹{claim.approved_amount.toLocaleString()}</p>
                         )}
                       </div>
                       <div className="text-xs text-muted-foreground flex-shrink-0 w-24 text-right">
@@ -513,7 +513,7 @@ export const Claims = () => {
                 </Select>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Amount (\u20B9) *</label>
+                <label className="text-xs font-medium text-muted-foreground">Amount (₹) *</label>
                 <Input type="number" step="0.01" value={createForm.amount} onChange={e => setCreateForm({...createForm, amount: e.target.value})} placeholder="Claim amount" />
               </div>
               <div>

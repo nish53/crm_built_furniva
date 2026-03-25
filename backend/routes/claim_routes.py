@@ -14,6 +14,15 @@ async def create_claim(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
+    # Validate that the order exists
+    if claim_data.order_id:
+        order = await db.orders.find_one({"id": claim_data.order_id}, {"_id": 0})
+        if not order:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Order ID '{claim_data.order_id}' does not exist. Please verify the order ID and try again."
+            )
+    
     claim_dict = claim_data.model_dump()
     claim_dict["id"] = str(uuid.uuid4())
     claim_dict["created_at"] = datetime.now(timezone.utc).isoformat()

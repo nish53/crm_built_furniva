@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Package, Clock, TrendingUp, AlertCircle, Phone, Archive, FileText } from 'lucide-react';
@@ -8,6 +9,7 @@ import { PriorityCards } from '../components/PriorityCards';
 
 export const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,8 @@ export const Dashboard = () => {
       icon: Package,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
+      onClick: () => navigate('/orders'),
+      clickable: true,
     },
     {
       title: 'Pending Orders',
@@ -45,6 +49,8 @@ export const Dashboard = () => {
       icon: Clock,
       color: 'text-accent',
       bgColor: 'bg-accent/10',
+      onClick: () => navigate('/orders?status=pending'),
+      clickable: true,
     },
     {
       title: 'Dispatched Today',
@@ -52,6 +58,8 @@ export const Dashboard = () => {
       icon: TrendingUp,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
+      onClick: () => navigate('/orders?dispatched_today=true'),
+      clickable: true,
     },
     {
       title: 'Pending Tasks',
@@ -59,6 +67,8 @@ export const Dashboard = () => {
       icon: FileText,
       color: 'text-muted-foreground',
       bgColor: 'bg-muted',
+      onClick: () => navigate('/tasks'),
+      clickable: true,
     },
     {
       title: 'Pending Calls',
@@ -66,6 +76,8 @@ export const Dashboard = () => {
       icon: Phone,
       color: 'text-accent',
       bgColor: 'bg-accent/10',
+      onClick: () => navigate('/orders?status=pending&confirmed=false'),
+      clickable: true,
     },
     {
       title: 'Low Stock Items',
@@ -73,6 +85,8 @@ export const Dashboard = () => {
       icon: Archive,
       color: 'text-destructive',
       bgColor: 'bg-destructive/10',
+      onClick: () => navigate('/products?low_stock=true'),
+      clickable: true,
     },
     {
       title: 'Pending Claims',
@@ -80,6 +94,8 @@ export const Dashboard = () => {
       icon: AlertCircle,
       color: 'text-destructive',
       bgColor: 'bg-destructive/10',
+      onClick: () => navigate('/claims'),
+      clickable: true,
     },
     {
       title: 'Revenue Today',
@@ -87,6 +103,7 @@ export const Dashboard = () => {
       icon: TrendingUp,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
+      clickable: false, // No redirection for revenue
     },
   ] : [];
 
@@ -113,7 +130,12 @@ export const Dashboard = () => {
         {statCards.map((stat, index) => {
           const Icon = stat.icon;
           return (
-            <Card key={index} className="border-border/60 hover:shadow-md transition-shadow duration-200" data-testid={`stat-card-${index}`}>
+            <Card 
+              key={index} 
+              className={`border-border/60 hover:shadow-md transition-shadow duration-200 ${stat.clickable ? 'cursor-pointer hover:border-primary/50' : ''}`}
+              data-testid={`stat-card-${index}`}
+              onClick={stat.clickable ? stat.onClick : undefined}
+            >
               <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   {stat.title}
@@ -145,8 +167,9 @@ export const Dashboard = () => {
               {recentOrders.map((order) => (
                 <div
                   key={order.id}
-                  className="flex items-center justify-between p-4 border border-border/40 rounded-lg hover:bg-secondary/30 transition-colors duration-150"
+                  className="flex items-center justify-between p-4 border border-border/40 rounded-lg hover:bg-secondary/30 transition-colors duration-150 cursor-pointer"
                   data-testid={`order-item-${order.id}`}
+                  onClick={() => navigate(`/orders/${order.id}`)}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-3">

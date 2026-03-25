@@ -148,7 +148,8 @@ export const ReplacementDetail = () => {
 
   const getShipmentProgress = () => {
     if (!replacement) return -1;
-    const shipmentStatuses = ['requested', 'approved', 'new_shipment_dispatched', 'parts_shipped', 'delivered', 'resolved'];
+    // Match the SHIPMENT_STAGES array exactly (no 'requested')
+    const shipmentStatuses = ['approved', 'new_shipment_dispatched', 'parts_shipped', 'delivered', 'resolved'];
     return shipmentStatuses.indexOf(replacement.replacement_status);
   };
 
