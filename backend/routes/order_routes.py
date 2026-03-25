@@ -125,7 +125,19 @@ async def update_order(
     # Only update provided fields
     update_data = order_update.model_dump(exclude_unset=True)
     
+    # Validate cancellation_reason is required when status is cancelled
+    if update_data.get("status") == "cancelled":
+        if not update_data.get("cancellation_reason") and not existing.get("cancellation_reason"):
+            raise HTTPException(
+                status_code=400, 
+                detail="Cancellation reason is required when changing status to cancelled"
+            )
+    
     if update_data:
+        # Track previous status for undo functionality
+        if "status" in update_data and update_data["status"] != existing.get("status"):
+            update_data["previous_status"] = existing.get("status")
+        
         # Track changes before updating
         await track_order_changes(
             order_id=order_id,
@@ -143,6 +155,99 @@ async def update_order(
     
     updated_order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     return Order(**updated_order)
+
+@router.patch("/{order_id}/undo-status")
+async def undo_order_status(
+    order_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Undo the last status change on an order"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    previous_status = order.get("previous_status")
+    if not previous_status:
+        raise HTTPException(status_code=400, detail="No previous status to revert to")
+    
+    # Track the change
+    await track_order_changes(
+        order_id=order_id,
+        old_order=order,
+        new_data={"status": previous_status},
+        user_email=current_user.email,
+        edit_reason="Status undo",
+        db=db
+    )
+    
+    # Revert to previous status
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": previous_status,
+            "previous_status": None,
+            "last_updated": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    updated_order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return {
+        "message": f"Status reverted to {previous_status}",
+        "order": Order(**updated_order)
+    }
+
+@router.patch("/{order_id}/cancel")
+async def cancel_order(
+    order_id: str,
+    cancellation_reason: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Cancel an order (pre-dispatch only) with mandatory reason"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Only allow cancellation for pre-dispatch orders
+    current_status = order.get("status", "")
+    if current_status not in ["pending", "confirmed"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot cancel order with status '{current_status}'. Only pending or confirmed orders can be cancelled."
+        )
+    
+    if not cancellation_reason or not cancellation_reason.strip():
+        raise HTTPException(status_code=400, detail="Cancellation reason is required")
+    
+    # Track the change
+    await track_order_changes(
+        order_id=order_id,
+        old_order=order,
+        new_data={"status": "cancelled", "cancellation_reason": cancellation_reason},
+        user_email=current_user.email,
+        edit_reason=f"Order cancelled: {cancellation_reason}",
+        db=db
+    )
+    
+    # Cancel the order
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": "cancelled",
+            "previous_status": current_status,
+            "cancellation_reason": cancellation_reason,
+            "cancelled_at": datetime.now(timezone.utc).isoformat(),
+            "cancelled_by": current_user.email,
+            "last_updated": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    updated_order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return {
+        "message": "Order cancelled successfully",
+        "order": Order(**updated_order)
+    }
 
 @router.delete("/{order_id}")
 async def delete_order(

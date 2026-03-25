@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import {
   ArrowLeft, Package, User, Calendar, Truck,
   CheckCircle, RefreshCcw, DollarSign, X, FileText, AlertTriangle,
-  XCircle, AlertCircle, Phone, MapPin, Edit
+  XCircle, AlertCircle, Phone, MapPin, Edit, Undo2, Calculator, History
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -25,8 +25,14 @@ export const OrderDetail = () => {
   const [showReplacementModal, setShowReplacementModal] = useState(false);
   const [showFinancialModal, setShowFinancialModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
   const [financials, setFinancials] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [lossData, setLossData] = useState(null);
+  const [loadingLoss, setLoadingLoss] = useState(false);
+  const [editHistory, setEditHistory] = useState([]);
+  const [showEditHistory, setShowEditHistory] = useState(false);
 
   const [returnForm, setReturnForm] = useState({
     return_reason: '',
@@ -46,7 +52,7 @@ export const OrderDetail = () => {
     installation_cost: '', marketplace_commission_rate: '15'
   });
 
-  useEffect(() => { fetchOrder(); }, [id]);
+  useEffect(() => { fetchOrder(); fetchLossData(); fetchEditHistory(); }, [id]);
 
   const fetchOrder = async () => {
     try {
@@ -56,6 +62,74 @@ export const OrderDetail = () => {
       catch { setFinancials(null); }
     } catch { toast.error('Failed to fetch order'); }
     finally { setLoading(false); }
+  };
+
+  const fetchLossData = async () => {
+    try {
+      // Loss data is stored directly on the order, so we just read from order
+      // But we can also call the loss calculation endpoint if needed
+    } catch (err) {
+      console.error('Failed to fetch loss data');
+    }
+  };
+
+  const fetchEditHistory = async () => {
+    try {
+      const res = await api.get(`/edit-history/order/${id}`);
+      setEditHistory(res.data || []);
+    } catch (err) {
+      setEditHistory([]);
+    }
+  };
+
+  const handleCalculateLoss = async () => {
+    setLoadingLoss(true);
+    try {
+      const res = await api.post(`/loss/calculate/${id}`);
+      setLossData(res.data);
+      toast.success('Loss calculated successfully');
+      fetchOrder(); // Refresh to get updated loss fields
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to calculate loss');
+    } finally {
+      setLoadingLoss(false);
+    }
+  };
+
+  const handleUndoStatus = async () => {
+    if (!order?.previous_status) {
+      toast.error('No previous status to revert to');
+      return;
+    }
+    setUpdating(true);
+    try {
+      await api.patch(`/orders/${id}/undo-status`);
+      toast.success('Status reverted successfully');
+      fetchOrder();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to undo status');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!cancellationReason) {
+      toast.error('Please select a cancellation reason');
+      return;
+    }
+    setUpdating(true);
+    try {
+      await api.patch(`/orders/${id}/cancel?cancellation_reason=${encodeURIComponent(cancellationReason)}`);
+      toast.success('Order cancelled successfully');
+      setShowCancelModal(false);
+      setCancellationReason('');
+      fetchOrder();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to cancel order');
+    } finally {
+      setUpdating(false);
+    }
   };
 
   const updateOrderStatus = async (status) => {
@@ -423,6 +497,19 @@ export const OrderDetail = () => {
                 <Edit className="w-4 h-4 mr-2" />Edit Order
               </Button>
               
+              {/* Undo Status Button - shows when previous_status exists */}
+              {order.previous_status && (
+                <Button 
+                  variant="outline" 
+                  className="w-full border-yellow-300 text-yellow-700 hover:bg-yellow-50" 
+                  onClick={handleUndoStatus} 
+                  disabled={updating}
+                  data-testid="undo-status-button"
+                >
+                  <Undo2 className="w-4 h-4 mr-2" />Undo Status (Revert to {order.previous_status})
+                </Button>
+              )}
+              
               {order.status === 'pending' && (
                 <Button className="w-full" onClick={() => updateOrderStatus('confirmed')} disabled={updating} data-testid="confirm-order-button">
                   <CheckCircle className="w-4 h-4 mr-2" />Confirm Order
@@ -439,17 +526,33 @@ export const OrderDetail = () => {
                 </Button>
               )}
 
-              {/* Return and Replacement Actions - Separate buttons */}
-              {!order.return_requested && !order.replacement_requested && (
-                <>
-                  <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => setShowReturnModal(true)} data-testid="create-return-button">
-                    <RefreshCcw className="w-4 h-4 mr-2" />Create Return Request
-                  </Button>
-                  <Button variant="outline" className="w-full border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => setShowReplacementModal(true)} data-testid="create-replacement-button">
-                    <Package className="w-4 h-4 mr-2" />Create Replacement Request
-                  </Button>
-                </>
+              {/* Cancel Order Button - Only for pending or confirmed orders */}
+              {(order.status === 'pending' || order.status === 'confirmed') && !order.return_requested && (
+                <Button 
+                  variant="outline" 
+                  className="w-full border-red-300 text-red-700 hover:bg-red-50" 
+                  onClick={() => setShowCancelModal(true)} 
+                  disabled={updating}
+                  data-testid="cancel-order-button"
+                >
+                  <XCircle className="w-4 h-4 mr-2" />Cancel Order
+                </Button>
               )}
+
+              {/* Return Request Button - Only for dispatched or delivered orders */}
+              {(order.status === 'dispatched' || order.status === 'delivered') && !order.return_requested && !order.replacement_requested && (
+                <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => setShowReturnModal(true)} data-testid="create-return-button">
+                  <RefreshCcw className="w-4 h-4 mr-2" />Create Return Request
+                </Button>
+              )}
+
+              {/* Replacement Request Button - Only for dispatched or delivered orders */}
+              {(order.status === 'dispatched' || order.status === 'delivered') && !order.return_requested && !order.replacement_requested && (
+                <Button variant="outline" className="w-full border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => setShowReplacementModal(true)} data-testid="create-replacement-button">
+                  <Package className="w-4 h-4 mr-2" />Create Replacement Request
+                </Button>
+              )}
+
               {order.return_requested && (
                 <div className="space-y-2">
                   <Badge variant="outline" className="text-orange-600 border-orange-400">Return Requested</Badge>
@@ -516,6 +619,112 @@ export const OrderDetail = () => {
                 <InfoField label="Return Tracking" value={order.return_tracking_number || '-'} mono />
                 {order.refund_amount && <InfoField label="Refund" value={`₹${order.refund_amount}`} />}
               </CardContent>
+            </Card>
+          )}
+
+          {/* Loss Calculation Card */}
+          {(order.status === 'cancelled' || order.status === 'returned' || order.return_requested || order.loss_category) && (
+            <Card data-testid="loss-calculation-card">
+              <CardHeader>
+                <CardTitle className="font-[Manrope] flex items-center gap-2 text-sm">
+                  <Calculator className="w-4 h-4" />Loss Calculation
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {order.loss_category ? (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted-foreground">Category</span>
+                      <Badge className={`text-xs ${
+                        order.loss_category === 'pfc' ? 'bg-green-100 text-green-800' :
+                        order.loss_category === 'resolved' ? 'bg-yellow-100 text-yellow-800' :
+                        order.loss_category === 'refunded' ? 'bg-orange-100 text-orange-800' :
+                        order.loss_category === 'fraud' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {order.loss_category?.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Outbound Logistics</p>
+                        <p className="font-medium font-[JetBrains_Mono]">₹{order.logistics_cost_outbound || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Return Logistics</p>
+                        <p className="font-medium font-[JetBrains_Mono]">₹{order.logistics_cost_return || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Product Cost</p>
+                        <p className="font-medium font-[JetBrains_Mono]">₹{order.product_cost || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Replacement Parts</p>
+                        <p className="font-medium font-[JetBrains_Mono]">₹{order.replacement_parts_cost || 0}</p>
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Total Loss</span>
+                        <span className="font-bold text-red-600 font-[JetBrains_Mono]">₹{order.total_loss || 0}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {order.loss_calculation_method === 'manual' ? 'Manually edited' : 'Auto-calculated'}
+                        {order.loss_edited_by && ` by ${order.loss_edited_by}`}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground text-center py-2">
+                    Loss not calculated yet
+                  </p>
+                )}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full" 
+                  onClick={handleCalculateLoss}
+                  disabled={loadingLoss}
+                >
+                  <Calculator className="w-3 h-3 mr-2" />
+                  {loadingLoss ? 'Calculating...' : (order.loss_category ? 'Recalculate' : 'Calculate Loss')}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Edit History Card */}
+          {editHistory.length > 0 && (
+            <Card data-testid="edit-history-card">
+              <CardHeader className="cursor-pointer" onClick={() => setShowEditHistory(!showEditHistory)}>
+                <CardTitle className="font-[Manrope] flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <History className="w-4 h-4" />Edit History
+                  </div>
+                  <Badge variant="outline" className="text-xs">{editHistory.length} changes</Badge>
+                </CardTitle>
+              </CardHeader>
+              {showEditHistory && (
+                <CardContent className="space-y-3 max-h-64 overflow-y-auto">
+                  {editHistory.slice(0, 10).map((entry, idx) => (
+                    <div key={idx} className="text-xs border-l-2 border-primary/20 pl-3 py-1">
+                      <p className="text-muted-foreground">
+                        {safeDate(entry.edited_at)} by {entry.edited_by}
+                      </p>
+                      <div className="mt-1 space-y-1">
+                        {entry.changes?.map((change, cIdx) => (
+                          <div key={cIdx} className="flex gap-2">
+                            <span className="font-medium">{change.field_name}:</span>
+                            <span className="text-red-600 line-through">{String(change.old_value || '-')}</span>
+                            <span>→</span>
+                            <span className="text-green-600">{String(change.new_value || '-')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              )}
             </Card>
           )}
 
@@ -808,6 +1017,65 @@ export const OrderDetail = () => {
                   <Button type="submit" className="flex-1" disabled={updating}>Save Changes</Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ===== CANCEL ORDER MODAL ===== */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="cancel-order-modal">
+          <Card className="w-full max-w-md">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="font-[Manrope] text-red-700 flex items-center gap-2">
+                <XCircle className="w-5 h-5" />
+                Cancel Order
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowCancelModal(false)}><X className="w-4 h-4" /></Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-red-50 p-3 rounded-md border border-red-200">
+                <p className="text-sm text-red-800">
+                  <span className="font-medium">Order:</span> {order?.order_number}
+                </p>
+                <p className="text-xs text-red-600 mt-1">
+                  This action will cancel the order. A cancellation reason is required.
+                </p>
+              </div>
+              
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Cancellation Reason *</label>
+                <Select value={cancellationReason} onValueChange={setCancellationReason}>
+                  <SelectTrigger data-testid="cancellation-reason-select">
+                    <SelectValue placeholder="Select a reason" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Customer Request">Customer Request</SelectItem>
+                    <SelectItem value="Pre Fulfillment Cancel">Pre Fulfillment Cancel (PFC)</SelectItem>
+                    <SelectItem value="Out of Stock">Out of Stock</SelectItem>
+                    <SelectItem value="Pricing Error">Pricing Error</SelectItem>
+                    <SelectItem value="Address Issue">Address Issue</SelectItem>
+                    <SelectItem value="Customer Unreachable">Customer Unreachable</SelectItem>
+                    <SelectItem value="Duplicate Order">Duplicate Order</SelectItem>
+                    <SelectItem value="Fraud Suspected">Fraud Suspected</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex gap-3">
+                <Button type="button" variant="outline" onClick={() => { setShowCancelModal(false); setCancellationReason(''); }} className="flex-1">
+                  Back
+                </Button>
+                <Button 
+                  onClick={handleCancelOrder} 
+                  className="flex-1 bg-red-600 hover:bg-red-700" 
+                  disabled={!cancellationReason || updating}
+                  data-testid="confirm-cancel-btn"
+                >
+                  {updating ? 'Cancelling...' : 'Confirm Cancel'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

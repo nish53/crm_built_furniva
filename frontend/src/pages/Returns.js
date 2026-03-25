@@ -309,13 +309,26 @@ export const Returns = () => {
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex items-center justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => navigate(`/orders/${ret.id}`)}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
+                          {/* View Return Details - for return_requests */}
+                          {ret.return_request_id ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/returns/${ret.return_request_id}`)}
+                              title="View Return Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/orders/${ret.id}`)}
+                              title="View Order"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          )}
                           {ret.smart_flags?.includes('pending_action') && (
                             <Button
                               variant="outline"

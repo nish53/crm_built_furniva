@@ -8,6 +8,35 @@ import uuid
 
 router = APIRouter(prefix="/return-requests", tags=["return-requests"])
 
+def classify_return_category(return_reason: str, status: str, delivery_date: str = None) -> str:
+    """
+    Classify return into categories: pfc, resolved, refunded, or fraud
+    Never returns 'unknown'
+    """
+    reason_lower = (return_reason or "").lower()
+    
+    # Check for fraud indicators first (highest priority)
+    if "fraud" in reason_lower or "cancelled and delivered" in reason_lower:
+        return "fraud"
+    
+    # Check for Pre-Fulfillment Cancel (PFC)
+    # PFC: Order was cancelled before delivery (no delivery_date and cancelled/returned status)
+    if "pre fulfillment" in reason_lower or "pfc" in reason_lower:
+        return "pfc"
+    
+    # If cancelled without delivery, it's likely PFC
+    if status in ["cancelled", "returned"] and not delivery_date:
+        if "fraud" not in reason_lower:  # Exclude fraud cases
+            return "pfc"
+    
+    # Resolved: Issues that were resolved (damage fixed, replacement provided)
+    resolved_keywords = ["resolved", "replaced", "fixed", "repaired", "hardware", "quality"]
+    if any(kw in reason_lower for kw in resolved_keywords):
+        return "resolved"
+    
+    # Default to refunded for all other return cases
+    return "refunded"
+
 @router.post("/", response_model=ReturnRequest)
 async def create_return_request(
     return_req: ReturnRequestCreate,
@@ -20,6 +49,13 @@ async def create_return_request(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
+    # Classify the return category
+    category = classify_return_category(
+        return_reason=return_req.return_reason,
+        status=order.get("status", ""),
+        delivery_date=order.get("delivery_date")
+    )
+    
     # Create return request
     return_dict = return_req.model_dump()
     return_dict["id"] = str(uuid.uuid4())
@@ -30,16 +66,25 @@ async def create_return_request(
     return_dict["return_status"] = ReturnStatus.REQUESTED
     return_dict["requested_date"] = datetime.now(timezone.utc).isoformat()
     return_dict["created_at"] = datetime.now(timezone.utc).isoformat()
+    return_dict["category"] = category  # Add classified category
+    return_dict["status_history"] = [{
+        "from_status": None,
+        "to_status": ReturnStatus.REQUESTED,
+        "changed_at": datetime.now(timezone.utc).isoformat(),
+        "changed_by": current_user.email
+    }]
     
     await db.return_requests.insert_one(return_dict)
     
-    # Update order
+    # Update order - sync return_reason to cancellation_reason as well
     await db.orders.update_one(
         {"id": return_req.order_id},
         {"$set": {
             "return_requested": True,
             "return_reason": return_req.return_reason,
-            "return_date": datetime.now(timezone.utc).isoformat()
+            "cancellation_reason": return_req.return_reason,  # Sync to cancellation_reason
+            "return_date": datetime.now(timezone.utc).isoformat(),
+            "loss_category": category  # Also set loss category on order
         }}
     )
     
