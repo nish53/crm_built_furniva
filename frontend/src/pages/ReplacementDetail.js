@@ -11,13 +11,19 @@ import {
   CheckCircle, XCircle, Clock, ChevronRight, Box
 } from 'lucide-react';
 
-// Replacement Workflow Stages
-const WORKFLOW_STAGES = [
-  { key: 'requested', label: 'Requested', icon: Clock },
-  { key: 'approved', label: 'Approved', icon: CheckCircle },
+// Replacement Workflow - DUAL TIMELINE STAGES
+const PICKUP_STAGES = [
+  { key: 'pickup_scheduled', label: 'Pickup Scheduled', icon: Clock },
   { key: 'picked_up', label: 'Picked Up', icon: Truck },
+  { key: 'pickup_in_transit', label: 'In Transit', icon: Truck },
   { key: 'warehouse_received', label: 'Warehouse', icon: Package },
-  { key: 'new_shipment_dispatched', label: 'New Shipment', icon: Truck },
+  { key: 'condition_checked', label: 'Condition Check', icon: CheckCircle }
+];
+
+const SHIPMENT_STAGES = [
+  { key: 'approved', label: 'Approved', icon: CheckCircle },
+  { key: 'new_shipment_dispatched', label: 'Dispatched', icon: Truck },
+  { key: 'parts_shipped', label: 'Parts Shipped', icon: Box },
   { key: 'delivered', label: 'Delivered', icon: CheckCircle },
   { key: 'resolved', label: 'Resolved', icon: XCircle }
 ];
@@ -130,7 +136,32 @@ export const ReplacementDetail = () => {
 
   const getCurrentStageIndex = () => {
     if (!replacement) return 0;
-    return WORKFLOW_STAGES.findIndex(s => s.key === replacement.replacement_status);
+    // This is kept for backward compatibility but not used in dual timeline
+    return 0;
+  };
+
+  const getPickupProgress = () => {
+    if (!replacement) return -1;
+    const pickupStatuses = ['pickup_scheduled', 'picked_up', 'pickup_in_transit', 'warehouse_received', 'condition_checked'];
+    return pickupStatuses.indexOf(replacement.replacement_status);
+  };
+
+  const getShipmentProgress = () => {
+    if (!replacement) return -1;
+    const shipmentStatuses = ['requested', 'approved', 'new_shipment_dispatched', 'parts_shipped', 'delivered', 'resolved'];
+    return shipmentStatuses.indexOf(replacement.replacement_status);
+  };
+
+  const isPickupPhase = () => {
+    if (!replacement) return false;
+    const pickupStatuses = ['pickup_scheduled', 'picked_up', 'pickup_in_transit', 'warehouse_received', 'condition_checked'];
+    return pickupStatuses.includes(replacement.replacement_status);
+  };
+
+  const isShipmentPhase = () => {
+    if (!replacement) return false;
+    const shipmentStatuses = ['requested', 'approved', 'new_shipment_dispatched', 'parts_shipped', 'delivered', 'resolved'];
+    return shipmentStatuses.includes(replacement.replacement_status);
   };
 
   const formatDate = (dateString) => {
@@ -191,48 +222,119 @@ export const ReplacementDetail = () => {
         </Badge>
       </div>
 
-      {/* Workflow Progress */}
+      {/* Dual Timeline Workflow Progress */}
       <Card>
         <CardHeader>
-          <CardTitle className="font-[Manrope]">Replacement Workflow Progress</CardTitle>
+          <CardTitle className="font-[Manrope]">Replacement Workflow - Dual Timeline</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Two parallel processes: Old product pickup & New product shipment
+          </p>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between mb-4">
-            {WORKFLOW_STAGES.map((stage, index) => {
-              const Icon = stage.icon;
-              const isCompleted = index < currentStageIndex;
-              const isCurrent = index === currentStageIndex;
+        <CardContent className="space-y-6">
+          {/* Track 1: Old Product Pickup */}
+          <div className="border-l-4 border-orange-400 pl-4">
+            <h3 className="font-semibold text-orange-700 mb-3 flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Track 1: Old Product Return
+            </h3>
+            <div className="flex items-center gap-2 overflow-x-auto pb-2">
+              {PICKUP_STAGES.map((stage, index) => {
+                const Icon = stage.icon;
+                const pickupIndex = getPickupProgress();
+                const isCompleted = pickupIndex >= index && pickupIndex !== -1;
+                const isCurrent = pickupIndex === index;
 
-              return (
-                <React.Fragment key={stage.key}>
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        isCompleted
-                          ? 'bg-green-500 text-white'
-                          : isCurrent
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-gray-200 text-gray-400'
-                      }`}
-                    >
-                      <Icon className="w-6 h-6" />
+                return (
+                  <React.Fragment key={stage.key}>
+                    <div className="flex flex-col items-center min-w-[80px]">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          isCompleted
+                            ? 'bg-orange-500 text-white'
+                            : isCurrent
+                            ? 'bg-orange-400 text-white ring-2 ring-orange-300'
+                            : 'bg-gray-200 text-gray-400'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <span className={`text-xs mt-1 text-center ${isCurrent ? 'font-bold text-orange-700' : ''}`}>
+                        {stage.label}
+                      </span>
                     </div>
-                    <span className={`text-xs mt-2 text-center ${isCurrent ? 'font-bold' : ''}`}>
-                      {stage.label}
-                    </span>
-                  </div>
-                  {index < WORKFLOW_STAGES.length - 1 && (
-                    <ChevronRight
-                      className={`w-6 h-6 ${isCompleted ? 'text-green-500' : 'text-gray-300'}`}
-                    />
-                  )}
-                </React.Fragment>
-              );
-            })}
+                    {index < PICKUP_STAGES.length - 1 && (
+                      <ChevronRight
+                        className={`w-5 h-5 flex-shrink-0 ${isCompleted ? 'text-orange-500' : 'text-gray-300'}`}
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+            {replacement.pickup_tracking_id && (
+              <div className="mt-3 bg-orange-50 p-2 rounded text-sm">
+                <span className="font-medium">Pickup Tracking:</span> {replacement.pickup_tracking_id}
+                {replacement.pickup_courier && ` • ${replacement.pickup_courier}`}
+              </div>
+            )}
+          </div>
+
+          {/* Track 2: New Product Shipment */}
+          <div className="border-l-4 border-green-400 pl-4">
+            <h3 className="font-semibold text-green-700 mb-3 flex items-center gap-2">
+              <Truck className="w-5 h-5" />
+              Track 2: Replacement Shipment
+            </h3>
+            <div className="flex items-center gap-2 overflow-x-auto pb-2">
+              {SHIPMENT_STAGES.map((stage, index) => {
+                const Icon = stage.icon;
+                const shipmentIndex = getShipmentProgress();
+                const isCompleted = shipmentIndex >= index && shipmentIndex !== -1;
+                const isCurrent = shipmentIndex === index;
+
+                return (
+                  <React.Fragment key={stage.key}>
+                    <div className="flex flex-col items-center min-w-[80px]">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          isCompleted
+                            ? 'bg-green-500 text-white'
+                            : isCurrent
+                            ? 'bg-green-400 text-white ring-2 ring-green-300'
+                            : 'bg-gray-200 text-gray-400'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <span className={`text-xs mt-1 text-center ${isCurrent ? 'font-bold text-green-700' : ''}`}>
+                        {stage.label}
+                      </span>
+                    </div>
+                    {index < SHIPMENT_STAGES.length - 1 && (
+                      <ChevronRight
+                        className={`w-5 h-5 flex-shrink-0 ${isCompleted ? 'text-green-500' : 'text-gray-300'}`}
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+            {replacement.new_tracking_id && (
+              <div className="mt-3 bg-green-50 p-2 rounded text-sm">
+                <span className="font-medium">Shipment Tracking:</span> {replacement.new_tracking_id}
+                {replacement.new_courier && ` • ${replacement.new_courier}`}
+              </div>
+            )}
+            {replacement.parts_tracking_id && (
+              <div className="mt-2 bg-green-50 p-2 rounded text-sm">
+                <span className="font-medium">Parts Tracking:</span> {replacement.parts_tracking_id}
+                {replacement.parts_courier && ` • ${replacement.parts_courier}`}
+              </div>
+            )}
           </div>
 
           {replacement.replacement_status !== 'resolved' && replacement.replacement_status !== 'rejected' && (
-            <Button onClick={() => setShowAdvanceModal(true)} className="w-full">
+            <Button onClick={() => setShowAdvanceModal(true)} className="w-full mt-4">
               Advance Workflow
             </Button>
           )}

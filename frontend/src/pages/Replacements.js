@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import api from '../lib/api';
 import { toast } from 'sonner';
-import { Package, Clock, CheckCircle2, Truck, AlertTriangle, X } from 'lucide-react';
+import { Package, Clock, CheckCircle2, Truck, AlertTriangle, X, Trash2, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Replacements = () => {
@@ -37,6 +37,20 @@ export const Replacements = () => {
       toast.error('Failed to fetch replacements');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (replacementId) => {
+    if (!window.confirm('Are you sure you want to delete this replacement request? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/replacement-requests/${replacementId}`);
+      toast.success('Replacement request deleted successfully');
+      fetchReplacements();
+    } catch (error) {
+      toast.error('Failed to delete replacement request');
     }
   };
 
@@ -264,9 +278,11 @@ export const Replacements = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => navigate(`/orders/${replacement.order_id}`)}
+                        onClick={() => navigate(`/replacements/${replacement.id}`)}
+                        className="flex items-center gap-2"
                       >
-                        View Order
+                        <Eye className="w-4 h-4" />
+                        View Details
                       </Button>
                       
                       {getNextActions(replacement).map((action, idx) => (
@@ -285,6 +301,16 @@ export const Replacements = () => {
                           {action.label}
                         </Button>
                       ))}
+                      
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(replacement.id)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </Button>
                     </div>
                   </div>
                 </div>

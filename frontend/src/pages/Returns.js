@@ -9,7 +9,8 @@ import {
   RefreshCcw, 
   Package, 
   Filter,
-  Eye
+  Eye,
+  Trash2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,6 +35,20 @@ export const Returns = () => {
       toast.error('Failed to fetch open returns');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (returnId) => {
+    if (!window.confirm('Are you sure you want to delete this return request? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/return-requests/${returnId}`);
+      toast.success('Return request deleted successfully');
+      fetchReturns();
+    } catch (error) {
+      toast.error('Failed to delete return request');
     }
   };
 
@@ -165,6 +180,15 @@ export const Returns = () => {
                             title="View Return Details"
                           >
                             <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(ret.id)}
+                            title="Delete Return Request"
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </td>
