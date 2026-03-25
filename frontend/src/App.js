@@ -78,14 +78,14 @@ function App() {
             <Route path="orders/:id" element={<OrderDetail />} />
             <Route path="orders/import" element={<ImportWizard />} />
             <Route path="orders/import-historical" element={<HistoricalImport />} />
-            <Route path="master-sku" element={<MasterSKU />} />
+            <Route path="master-sku" element={<Navigate to="/inventory" replace />} />
             <Route path="returns" element={<Returns />} />
             <Route path="returns/:id" element={<ReturnDetail />} />
             <Route path="channels" element={<Channels />} />
             <Route path="costing" element={<Costing />} />
             <Route path="whatsapp" element={<WhatsAppCRM />} />
             <Route path="tasks" element={<Tasks />} />
-            <Route path="inventory" element={<Inventory />} />
+            <Route path="inventory" element={<MasterSKU />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="settings" element={<Settings />} />
             <Route

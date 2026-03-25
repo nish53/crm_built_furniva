@@ -499,6 +499,154 @@ class ReturnRequestCreate(BaseModel):
     is_installation_related: bool = False
     damage_images: Optional[List[str]] = []
 
+
+
+class ReplacementStatus(str, Enum):
+    REQUESTED = "requested"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    PARTS_ARRANGED = "parts_arranged"
+    DISPATCHED = "dispatched"
+    IN_TRANSIT = "in_transit"
+    DELIVERED = "delivered"
+    INSTALLED = "installed"
+    RESOLVED = "resolved"
+    CANCELLED = "cancelled"
+
+class ReplacementRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    order_id: str
+    order_number: str
+    return_id: Optional[str] = None  # Link to parent return request
+    customer_id: str
+    customer_name: str
+    phone: str
+    
+    # Replacement details
+    replacement_type: str  # full_product, parts, repair
+    damage_description: str
+    damage_images: Optional[List[str]] = []
+    parts_needed: Optional[List[str]] = []  # List of part names/SKUs
+    
+    # Status tracking
+    replacement_status: ReplacementStatus
+    previous_status: Optional[str] = None
+    status_history: List[Dict[str, Any]] = []
+    
+    # Workflow stages
+    requested_date: datetime
+    approved_date: Optional[datetime] = None
+    approved_by: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    
+    parts_arranged_date: Optional[datetime] = None
+    parts_cost: Optional[float] = None
+    
+    dispatch_date: Optional[datetime] = None
+    tracking_number: Optional[str] = None
+    courier_partner: Optional[str] = None
+    
+    delivery_date: Optional[datetime] = None
+    installation_date: Optional[datetime] = None
+    installer_name: Optional[str] = None
+    installation_notes: Optional[str] = None
+    
+    resolved_date: Optional[datetime] = None
+    resolution_notes: Optional[str] = None
+    customer_satisfied: Optional[bool] = None
+    
+    # Costs
+    replacement_cost: Optional[float] = None
+    logistics_cost: Optional[float] = None
+    installation_cost: Optional[float] = None
+    total_cost: Optional[float] = None
+    
+    internal_notes: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+class ReplacementRequestCreate(BaseModel):
+    order_id: str
+    return_id: Optional[str] = None
+    replacement_type: str
+    damage_description: str
+    parts_needed: Optional[List[str]] = []
+
+class ClaimStatus(str, Enum):
+    DRAFT = "draft"
+    FILED = "filed"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    PARTIALLY_APPROVED = "partially_approved"
+    REJECTED = "rejected"
+    APPEALED = "appealed"
+    CLOSED = "closed"
+
+class ClaimType(str, Enum):
+    COURIER_DAMAGE = "courier_damage"
+    MARKETPLACE_AZ = "marketplace_a_to_z"
+    MARKETPLACE_SAFET = "marketplace_safe_t"
+    INSURANCE = "insurance"
+    WARRANTY = "warranty"
+    OTHER = "other"
+
+class Claim(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    
+    # Related entities
+    order_id: Optional[str] = None
+    order_number: Optional[str] = None
+    return_id: Optional[str] = None
+    replacement_id: Optional[str] = None
+    
+    # Claim details
+    claim_type: ClaimType
+    claim_against: str  # Courier name, marketplace, insurance company
+    claim_amount: float
+    claim_description: str
+    claim_reference: Optional[str] = None  # External claim ID/ticket number
+    
+    # Status
+    claim_status: ClaimStatus
+    previous_status: Optional[str] = None
+    status_history: List[Dict[str, Any]] = []
+    
+    # Dates
+    filed_date: datetime
+    expected_resolution_date: Optional[datetime] = None
+    resolution_date: Optional[datetime] = None
+    
+    # Resolution
+    approved_amount: Optional[float] = None
+    rejection_reason: Optional[str] = None
+    appeal_notes: Optional[str] = None
+    
+    # Documents
+    supporting_documents: Optional[List[str]] = []
+    evidence_images: Optional[List[str]] = []
+    correspondence: Optional[List[Dict[str, Any]]] = []
+    
+    # Assignment
+    assigned_to: Optional[str] = None
+    filed_by: str
+    
+    internal_notes: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+class ClaimCreate(BaseModel):
+    order_id: Optional[str] = None
+    return_id: Optional[str] = None
+    replacement_id: Optional[str] = None
+    claim_type: ClaimType
+    claim_against: str
+    claim_amount: float
+    claim_description: str
+    claim_reference: Optional[str] = None
+    expected_resolution_date: Optional[datetime] = None
+
 # Channel Management Models
 class Channel(BaseModel):
     model_config = ConfigDict(extra="ignore")

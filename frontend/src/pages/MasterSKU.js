@@ -235,8 +235,9 @@ export const MasterSKU = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Category</label>
+                      <label className="block text-sm font-medium mb-1">Category *</label>
                       <Input
+                        required
                         value={formData.category}
                         onChange={(e) => setFormData({...formData, category: e.target.value})}
                         placeholder="e.g., Furniture, Decor"
