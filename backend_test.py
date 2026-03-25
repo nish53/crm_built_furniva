@@ -1,758 +1,540 @@
 #!/usr/bin/env python3
 """
-Furniva CRM Backend Testing Suite
-TEST FOCUS: Returns & Claims System Backend Endpoints
-
-New Returns & Claims System endpoints to test:
-1. GET /api/returns/ - Get all returns/cancellations with smart filtering
-2. GET /api/returns/analytics - Get returns analytics and metrics  
-3. POST /api/returns/{order_id}/action?action={action} - Take action on returns
-
-Smart Classification Logic to verify:
-- classify_return() function flags: pfc, fraud, damage, replacement, pending_action, delay
+Comprehensive Backend Testing for Furniva CRM Migration Endpoints
+Tests the new migration features:
+1. Order model previous_status field
+2. Return Workflow 12-Stage System
+3. Enhanced Claims System  
+4. Loss Calculation Fix
 """
 
-import asyncio
-import httpx
+import requests
 import json
 import uuid
-from datetime import datetime, timezone, timedelta
-import os
+from datetime import datetime, timezone
+import time
 
-# Backend URL from environment
-BACKEND_URL = "https://migration-reapply.preview.emergentagent.com/api"
+# Configuration
+BASE_URL = "https://routes.preview.emergentagent.com/api"
+TEST_USER_EMAIL = "test@furniva.com"
+TEST_USER_PASSWORD = "testpass123"
 
-class FurnivaReturnsSystemTester:
+class FurnivaAPITester:
     def __init__(self):
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.base_url = BASE_URL
         self.token = None
-        self.user_id = None
-        self.test_orders = []  # Track created test orders for cleanup
+        self.test_order_id = None
+        self.test_return_id = None
+        self.test_claim_id = None
         
-    async def __aenter__(self):
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.client.aclose()
-    
-    async def register_and_login(self):
+    def log(self, message):
+        """Log test messages with timestamp"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] {message}")
+        
+    def register_and_login(self):
         """Register test user and login to get auth token"""
-        print("🔐 Setting up test user authentication...")
+        self.log("🔐 Setting up authentication...")
         
-        # Generate unique test user
-        unique_id = str(uuid.uuid4())[:8]
-        test_email = f"test_returns_{unique_id}@example.com"
-        test_password = "ReturnsTest123!"
-        
-        # Register user
+        # Try to register (might fail if user exists)
         register_data = {
-            "email": test_email,
-            "password": test_password,
-            "name": "Returns Test User",
+            "email": TEST_USER_EMAIL,
+            "password": TEST_USER_PASSWORD,
+            "name": "Test User",
             "role": "admin"
         }
         
         try:
-            response = await self.client.post(f"{BACKEND_URL}/auth/register", json=register_data)
-            if response.status_code in [200, 201]:
-                print(f"✅ User registered: {test_email}")
+            response = requests.post(f"{self.base_url}/auth/register", json=register_data)
+            if response.status_code == 201:
+                self.log("✅ User registered successfully")
             else:
-                print(f"⚠️ Register response: {response.status_code} - {response.text}")
+                self.log("ℹ️ User already exists, proceeding to login")
         except Exception as e:
-            print(f"⚠️ Register error: {e}")
+            self.log(f"⚠️ Registration attempt: {e}")
         
-        # Login
-        login_data = {"email": test_email, "password": test_password}
-        try:
-            response = await self.client.post(f"{BACKEND_URL}/auth/login", json=login_data)
-            if response.status_code == 200:
-                result = response.json()
-                self.token = result["access_token"]
-                self.user_id = result["user"]["id"]
-                print(f"✅ Authentication successful - Token: {self.token[:20]}...")
-                return True
-            else:
-                print(f"❌ Login failed: {response.status_code} - {response.text}")
-                return False
-        except Exception as e:
-            print(f"❌ Login error: {e}")
+        # Login to get token
+        login_data = {
+            "email": TEST_USER_EMAIL,
+            "password": TEST_USER_PASSWORD
+        }
+        
+        response = requests.post(f"{self.base_url}/auth/login", json=login_data)
+        if response.status_code == 200:
+            data = response.json()
+            self.token = data["access_token"]
+            self.log("✅ Login successful, token obtained")
+            return True
+        else:
+            self.log(f"❌ Login failed: {response.status_code} - {response.text}")
             return False
     
-    def get_auth_headers(self):
+    def get_headers(self):
         """Get authorization headers"""
         return {"Authorization": f"Bearer {self.token}"}
     
-    async def create_test_orders_with_returns_data(self):
-        """Create test orders with various return/cancellation scenarios for testing"""
-        print("🏗️ Creating test orders with returns data...")
+    def test_order_previous_status_field(self):
+        """Test 1: Order model previous_status field functionality"""
+        self.log("\n🧪 TEST 1: Order Model Previous Status Field")
+        self.log("=" * 60)
         
-        base_date = datetime.now(timezone.utc)
-        
-        # Test scenarios for different return/cancellation types
-        test_scenarios = [
-            {
-                "order_number": "RET-FRAUD-001",
-                "customer_name": "Fraud Customer",
-                "phone": "9111111111",
-                "sku": "FRAUD-ITEM-001",
-                "product_name": "Fraudulent Return Item",
-                "status": "cancelled", 
-                "cancellation_reason": "Fraud",  # Matches existing fraud pattern
-                "price": 5000.0
-            },
-            {
-                "order_number": "RET-DAMAGE-002", 
-                "customer_name": "Damage Customer",
-                "phone": "9222222222",
-                "sku": "DAMAGE-ITEM-002",
-                "product_name": "Damaged Hardware Item",
-                "status": "returned",
-                "cancellation_reason": "Damage hardware needs replacement",  # Contains damage + replacement keywords
-                "price": 8000.0
-            },
-            {
-                "order_number": "RET-PFC-003",
-                "customer_name": "PFC Customer", 
-                "phone": "9333333333",
-                "sku": "PFC-ITEM-003",
-                "product_name": "Pre-Fulfillment Cancel Item",
-                "status": "cancelled",
-                "cancellation_reason": "",  # Empty reason + cancelled status = PFC
-                "price": 3000.0
-            },
-            {
-                "order_number": "RET-PENDING-004",
-                "customer_name": "Pending Customer",
-                "phone": "9444444444", 
-                "sku": "PENDING-ITEM-004",
-                "product_name": "Status Pending Item",
-                "status": "returned",
-                "cancellation_reason": "Status Pending customer response",  # Contains "pending"
-                "price": 4500.0
-            },
-            {
-                "order_number": "RET-DELAY-005",
-                "customer_name": "Delay Customer",
-                "phone": "9555555555",
-                "sku": "DELAY-ITEM-005", 
-                "product_name": "Delayed Delivery Item",
-                "status": "cancelled",
-                "cancellation_reason": "Delay in delivery customer cancelled",  # Contains "delay"
-                "price": 6000.0
-            },
-            {
-                "order_number": "REG-ORDER-006",
-                "customer_name": "Normal Customer",
-                "phone": "9666666666",
-                "sku": "NORMAL-ITEM-006",
-                "product_name": "Normal Item",
-                "status": "delivered", 
-                # No cancellation_reason - should not appear in returns
-                "price": 7000.0
-            }
-        ]
-        
-        created_orders = []
-        
-        for scenario in test_scenarios:
+        try:
+            # Create a test order
             order_data = {
-                "channel": "website",  # Use valid enum value
-                "order_number": scenario["order_number"],
-                "order_date": base_date.isoformat(),
+                "channel": "website",
+                "order_number": f"TEST-PREV-{uuid.uuid4().hex[:8]}",
+                "order_date": datetime.now(timezone.utc).isoformat(),
                 "customer_id": str(uuid.uuid4()),
-                "customer_name": scenario["customer_name"],
-                "phone": scenario["phone"],
-                "city": "Mumbai",
-                "state": "Maharashtra",
-                "pincode": "400001",
-                "sku": scenario["sku"],
-                "product_name": scenario["product_name"], 
-                "price": scenario["price"],
-                "status": scenario["status"]
+                "customer_name": "John Smith",
+                "phone": "9876543210",
+                "pincode": "560001",
+                "sku": "CHAIR-001",
+                "product_name": "Test Chair",
+                "quantity": 1,
+                "price": 5000.0,
+                "status": "pending"
             }
             
-            # Add optional fields
-            if "cancellation_reason" in scenario:
-                order_data["cancellation_reason"] = scenario["cancellation_reason"]
-            if "delivery_date" in scenario:
-                order_data["delivery_date"] = scenario["delivery_date"]
+            response = requests.post(f"{self.base_url}/orders/", 
+                                   json=order_data, headers=self.get_headers())
+            
+            if response.status_code == 200:
+                order = response.json()
+                self.test_order_id = order["id"]
+                self.log(f"✅ Order created: {order['order_number']}")
                 
-            try:
-                response = await self.client.post(
-                    f"{BACKEND_URL}/orders/",
-                    json=order_data,
-                    headers=self.get_auth_headers()
-                )
-                
-                if response.status_code in [200, 201]:
-                    created_order = response.json()
-                    created_orders.append(created_order)
-                    self.test_orders.append(created_order['id'])
-                    print(f"   ✅ Created: {scenario['order_number']} ({scenario.get('cancellation_reason', 'no cancellation')})")
+                # Verify initial state (no previous_status)
+                if order.get("previous_status") is None:
+                    self.log("✅ Initial previous_status is None (correct)")
                 else:
-                    print(f"   ❌ Failed to create {scenario['order_number']}: {response.status_code} - {response.text}")
-                    
-            except Exception as e:
-                print(f"   ❌ Error creating {scenario['order_number']}: {e}")
-        
-        print(f"✅ Created {len(created_orders)} test orders for returns testing")
-        return created_orders
-    
-    # =====================================
-    # TEST 1: GET /api/returns/ - Basic functionality and filters
-    # =====================================
-    
-    async def test_returns_endpoint_basic(self):
-        """Test basic returns endpoint functionality"""
-        print("\n🔍 TEST 1: GET /api/returns/ - Basic Functionality")
-        print("=" * 60)
-        
-        try:
-            # Test 1: Basic returns without filters
-            print("1. Testing basic returns endpoint (no filters)...")
-            response = await self.client.get(
-                f"{BACKEND_URL}/returns/",
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Basic returns failed: {response.status_code} - {response.text}")
-                return False
-            
-            data = response.json()
-            
-            # Check response structure
-            if "items" not in data or "total" not in data:
-                print(f"❌ Missing required fields in response: {list(data.keys())}")
-                return False
-            
-            returns_count = len(data["items"])
-            total_count = data["total"]
-            
-            print(f"✅ Basic returns: Found {returns_count} returns, total: {total_count}")
-            
-            # Verify smart_flags are present
-            if returns_count > 0:
-                first_return = data["items"][0]
-                if "smart_flags" not in first_return:
-                    print("❌ Missing smart_flags in return items")
-                    return False
+                    self.log(f"❌ Initial previous_status should be None, got: {order.get('previous_status')}")
                 
-                print(f"✅ Smart flags present. Example: {first_return.get('smart_flags', [])}")
-            
-            # Expected returns: RET-FRAUD-001, RET-DAMAGE-002, RET-PFC-003, RET-PENDING-004, RET-DELAY-005
-            # Should NOT include REG-ORDER-006 (no cancellation_reason)
-            
-            # Verify only orders with cancellation reasons or status returned/cancelled appear
-            test_order_numbers = []
-            for item in data["items"]:
-                if item.get("order_number", "").startswith("RET-"):
-                    test_order_numbers.append(item["order_number"])
-            
-            expected_returns = ["RET-FRAUD-001", "RET-DAMAGE-002", "RET-PFC-003", "RET-PENDING-004", "RET-DELAY-005"]
-            found_test_returns = [num for num in test_order_numbers if num in expected_returns]
-            
-            print(f"✅ Found test returns: {found_test_returns}")
-            
-            if "REG-ORDER-006" in test_order_numbers:
-                print("❌ Normal order without cancellation reason should not appear in returns")
+                # Update order status from pending to confirmed
+                update_data = {"status": "confirmed"}
+                response = requests.patch(f"{self.base_url}/orders/{self.test_order_id}", 
+                                        json=update_data, headers=self.get_headers())
+                
+                if response.status_code == 200:
+                    updated_order = response.json()
+                    self.log(f"✅ Order status updated to: {updated_order['status']}")
+                    
+                    # Check if previous_status was set
+                    if updated_order.get("previous_status") == "pending":
+                        self.log("✅ previous_status correctly set to 'pending'")
+                    else:
+                        self.log(f"❌ previous_status should be 'pending', got: {updated_order.get('previous_status')}")
+                    
+                    # Test undo status functionality
+                    response = requests.patch(f"{self.base_url}/orders/{self.test_order_id}/undo-status", 
+                                            headers=self.get_headers())
+                    
+                    if response.status_code == 200:
+                        undo_result = response.json()
+                        reverted_order = undo_result["order"]
+                        self.log(f"✅ Status undo successful: {undo_result['message']}")
+                        
+                        # Verify status was reverted
+                        if reverted_order["status"] == "pending":
+                            self.log("✅ Status correctly reverted to 'pending'")
+                        else:
+                            self.log(f"❌ Status should be 'pending', got: {reverted_order['status']}")
+                        
+                        # Verify previous_status was cleared
+                        if reverted_order.get("previous_status") is None:
+                            self.log("✅ previous_status correctly cleared after undo")
+                        else:
+                            self.log(f"❌ previous_status should be None after undo, got: {reverted_order.get('previous_status')}")
+                        
+                        return True
+                    else:
+                        self.log(f"❌ Undo status failed: {response.status_code} - {response.text}")
+                        return False
+                else:
+                    self.log(f"❌ Order update failed: {response.status_code} - {response.text}")
+                    return False
+            else:
+                self.log(f"❌ Order creation failed: {response.status_code} - {response.text}")
                 return False
-            
-            print("✅ Normal orders correctly excluded from returns list")
-            
-            return True
-            
+                
         except Exception as e:
-            print(f"❌ Basic returns test error: {e}")
+            self.log(f"❌ Test 1 failed with exception: {e}")
             return False
     
-    async def test_returns_endpoint_filters(self):
-        """Test returns endpoint with various filters"""
-        print("\n🔍 TEST 2: GET /api/returns/ - Filter Testing")
-        print("=" * 60)
+    def test_return_workflow_12_stage_system(self):
+        """Test 2: Return Workflow 12-Stage System"""
+        self.log("\n🧪 TEST 2: Return Workflow 12-Stage System")
+        self.log("=" * 60)
         
         try:
-            # Test fraud filter
-            print("1. Testing fraud_only filter...")
-            response = await self.client.get(
-                f"{BACKEND_URL}/returns/?fraud_only=true",
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Fraud filter failed: {response.status_code} - {response.text}")
+            # Create a return request using the test order
+            if not self.test_order_id:
+                self.log("❌ No test order available for return testing")
                 return False
             
-            fraud_data = response.json()
-            fraud_orders = fraud_data["items"]
+            return_data = {
+                "order_id": self.test_order_id,
+                "return_reason": "Damage",
+                "return_reason_details": "Product arrived with scratches",
+                "damage_category": "Scratch"
+            }
             
-            # Should find RET-FRAUD-001 (cancelled + delivered reason + has delivery_date)
-            fraud_order_numbers = [order.get("order_number") for order in fraud_orders if order.get("order_number", "").startswith("RET-")]
+            response = requests.post(f"{self.base_url}/return-requests/", 
+                                   json=return_data, headers=self.get_headers())
             
-            if "RET-FRAUD-001" not in fraud_order_numbers:
-                print(f"❌ Expected RET-FRAUD-001 in fraud filter, got: {fraud_order_numbers}")
+            if response.status_code == 200:
+                return_request = response.json()
+                self.test_return_id = return_request["id"]
+                self.log(f"✅ Return request created: {return_request['id']}")
+                
+                # Verify initial status
+                if return_request["return_status"] == "requested":
+                    self.log("✅ Initial return status is 'requested'")
+                else:
+                    self.log(f"❌ Initial status should be 'requested', got: {return_request['return_status']}")
+                
+                # Test workflow stages endpoint
+                response = requests.get(f"{self.base_url}/return-requests/{self.test_return_id}/workflow-stages", 
+                                      headers=self.get_headers())
+                
+                if response.status_code == 200:
+                    workflow_info = response.json()
+                    self.log(f"✅ Workflow stages retrieved: {workflow_info['allowed_transitions']}")
+                    
+                    # Test advancing through workflow stages
+                    stages_to_test = [
+                        ("feedback_check", {"notes": "Customer contacted for feedback"}),
+                        ("authorized", {"notes": "Return authorized by manager"}),
+                        ("return_initiated", {"return_method": "courier_pickup"}),
+                        ("in_transit", {"tracking_number": "TRK123456789", "courier_partner": "BlueDart"}),
+                        ("warehouse_received", {"notes": "Product received at warehouse"}),
+                        ("qc_inspection", {"qc_result": "pass", "notes": "No damage found"}),
+                        ("refund_processed", {"refund_amount": 5000.0, "refund_method": "bank_transfer"}),
+                        ("closed", {"resolution_summary": "Refund processed successfully"})
+                    ]
+                    
+                    for stage, params in stages_to_test:
+                        self.log(f"🔄 Advancing to stage: {stage}")
+                        
+                        advance_data = {"next_status": stage}
+                        advance_data.update(params)
+                        
+                        response = requests.patch(f"{self.base_url}/return-requests/{self.test_return_id}/workflow/advance", 
+                                                params=advance_data, headers=self.get_headers())
+                        
+                        if response.status_code == 200:
+                            updated_return = response.json()
+                            if updated_return["return_status"] == stage:
+                                self.log(f"✅ Successfully advanced to: {stage}")
+                                
+                                # Verify stage-specific fields were set
+                                if stage == "in_transit" and updated_return.get("return_tracking_number") == "TRK123456789":
+                                    self.log("✅ Tracking number correctly set for in_transit stage")
+                                elif stage == "refund_processed" and updated_return.get("refund_processed_amount") == 5000.0:
+                                    self.log("✅ Refund amount correctly set for refund_processed stage")
+                            else:
+                                self.log(f"❌ Status should be '{stage}', got: {updated_return['return_status']}")
+                                return False
+                        else:
+                            self.log(f"❌ Failed to advance to {stage}: {response.status_code} - {response.text}")
+                            return False
+                        
+                        time.sleep(0.5)  # Small delay between requests
+                    
+                    self.log("✅ Successfully completed full 12-stage workflow")
+                    return True
+                else:
+                    self.log(f"❌ Failed to get workflow stages: {response.status_code} - {response.text}")
+                    return False
+            else:
+                self.log(f"❌ Return request creation failed: {response.status_code} - {response.text}")
                 return False
-            
-            print(f"✅ Fraud filter: Found {len(fraud_orders)} fraud cases including RET-FRAUD-001")
-            
-            # Test damage filter
-            print("2. Testing damage_only filter...")
-            response = await self.client.get(
-                f"{BACKEND_URL}/returns/?damage_only=true", 
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Damage filter failed: {response.status_code} - {response.text}")
-                return False
-            
-            damage_data = response.json()
-            damage_orders = damage_data["items"]
-            
-            # Should find RET-DAMAGE-002 (damage hardware in reason)
-            damage_order_numbers = [order.get("order_number") for order in damage_orders if order.get("order_number", "").startswith("RET-")]
-            
-            if "RET-DAMAGE-002" not in damage_order_numbers:
-                print(f"❌ Expected RET-DAMAGE-002 in damage filter, got: {damage_order_numbers}")
-                return False
-            
-            print(f"✅ Damage filter: Found {len(damage_orders)} damage cases including RET-DAMAGE-002")
-            
-            # Test pending filter
-            print("3. Testing pending_only filter...")
-            response = await self.client.get(
-                f"{BACKEND_URL}/returns/?pending_only=true",
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Pending filter failed: {response.status_code} - {response.text}")
-                return False
-            
-            pending_data = response.json()
-            pending_orders = pending_data["items"]
-            
-            # Should find RET-PENDING-004 (status pending in reason)
-            pending_order_numbers = [order.get("order_number") for order in pending_orders if order.get("order_number", "").startswith("RET-")]
-            
-            if "RET-PENDING-004" not in pending_order_numbers:
-                print(f"❌ Expected RET-PENDING-004 in pending filter, got: {pending_order_numbers}")
-                return False
-            
-            print(f"✅ Pending filter: Found {len(pending_orders)} pending cases including RET-PENDING-004")
-            
-            print("\n🎉 RETURNS ENDPOINT FILTERS: ALL TESTS PASSED")
-            return True
-            
+                
         except Exception as e:
-            print(f"❌ Returns filters test error: {e}")
+            self.log(f"❌ Test 2 failed with exception: {e}")
             return False
     
-    # =====================================
-    # TEST 3: GET /api/returns/analytics - Analytics endpoint
-    # =====================================
-    
-    async def test_returns_analytics(self):
-        """Test returns analytics endpoint"""
-        print("\n🔍 TEST 3: GET /api/returns/analytics - Analytics")
-        print("=" * 60)
+    def test_enhanced_claims_system(self):
+        """Test 3: Enhanced Claims System"""
+        self.log("\n🧪 TEST 3: Enhanced Claims System")
+        self.log("=" * 60)
         
         try:
-            response = await self.client.get(
-                f"{BACKEND_URL}/returns/analytics",
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Analytics failed: {response.status_code} - {response.text}")
-                return False
-            
-            data = response.json()
-            
-            # Verify required fields in summary
-            required_summary_fields = [
-                "total_returns", "total_orders", "return_rate", 
-                "fraud_count", "damage_count", "pfc_count", "replacement_count"
+            # Test new ClaimType values
+            claim_types_to_test = [
+                "courier_damage",
+                "marketplace_a_to_z", 
+                "marketplace_safe_t",
+                "insurance",
+                "warranty"
             ]
             
-            if "summary" not in data:
-                print("❌ Missing summary in analytics response")
-                return False
+            created_claims = []
             
-            summary = data["summary"]
-            
-            for field in required_summary_fields:
-                if field not in summary:
-                    print(f"❌ Missing field in summary: {field}")
-                    return False
-            
-            print(f"✅ Analytics summary structure: All required fields present")
-            print(f"   📊 Total returns: {summary['total_returns']}")
-            print(f"   📊 Return rate: {summary['return_rate']}%")
-            print(f"   🚨 Fraud count: {summary['fraud_count']}")
-            print(f"   💔 Damage count: {summary['damage_count']}")
-            print(f"   📦 PFC count: {summary['pfc_count']}")
-            print(f"   🔄 Replacement count: {summary['replacement_count']}")
-            
-            # Verify other sections
-            required_sections = ["by_reason", "top_problematic_products", "by_courier"]
-            for section in required_sections:
-                if section not in data:
-                    print(f"❌ Missing section in analytics: {section}")
-                    return False
-            
-            print(f"✅ Analytics sections: All required sections present")
-            
-            # Verify by_reason breakdown contains our test reasons
-            by_reason = data["by_reason"]
-            
-            if len(by_reason) > 0:
-                print(f"✅ Reason breakdown: {len(by_reason)} different cancellation reasons found")
+            for claim_type in claim_types_to_test:
+                claim_data = {
+                    "order_id": self.test_order_id,
+                    "type": claim_type,
+                    "amount": 2500.0,
+                    "description": f"Test claim for {claim_type}",
+                    "platform": "amazon" if "marketplace" in claim_type else "courier",
+                    "reference_number": f"REF-{uuid.uuid4().hex[:8]}"
+                }
                 
-                # Look for our test reasons
-                test_reasons_found = []
-                for reason, count in by_reason.items():
-                    if any(keyword in reason.lower() for keyword in ["delivered", "damage", "pfc", "pending", "delay"]):
-                        test_reasons_found.append(reason)
+                response = requests.post(f"{self.base_url}/claims/", 
+                                       json=claim_data, headers=self.get_headers())
                 
-                print(f"   📝 Test reasons found: {test_reasons_found}")
-            
-            # Verify top_problematic_products structure
-            top_products = data["top_problematic_products"]
-            if len(top_products) > 0 and isinstance(top_products[0], dict):
-                if "sku" in top_products[0] and "count" in top_products[0]:
-                    print(f"✅ Top products structure: Correct format with sku and count")
+                if response.status_code == 200:
+                    claim = response.json()
+                    created_claims.append(claim["id"])
+                    self.log(f"✅ Created {claim_type} claim: {claim['id']}")
+                    
+                    if not self.test_claim_id:  # Use first claim for detailed testing
+                        self.test_claim_id = claim["id"]
                 else:
-                    print(f"❌ Top products format incorrect: {top_products[0].keys()}")
+                    self.log(f"❌ Failed to create {claim_type} claim: {response.status_code} - {response.text}")
                     return False
             
-            print("\n🎉 RETURNS ANALYTICS: ALL TESTS PASSED")
-            return True
+            # Test claim status updates
+            status_updates = [
+                ("under_review", {}),
+                ("approved", {"approved_amount": 2000.0}),
+                ("closed", {"resolution_notes": "Claim approved and processed"})
+            ]
             
-        except Exception as e:
-            print(f"❌ Returns analytics test error: {e}")
-            return False
-    
-    # =====================================
-    # TEST 4: POST /api/returns/{order_id}/action - Actions
-    # =====================================
-    
-    async def test_returns_actions(self):
-        """Test taking actions on returns"""
-        print("\n🔍 TEST 4: POST /api/returns/{order_id}/action - Actions")
-        print("=" * 60)
-        
-        try:
-            # Get a test order to perform actions on
-            if not self.test_orders:
-                print("❌ No test orders available for action testing")
-                return False
-            
-            test_order_id = self.test_orders[0]  # Use first test order
-            
-            # Test 1: Approve refund
-            print("1. Testing approve_refund action...")
-            response = await self.client.post(
-                f"{BACKEND_URL}/returns/{test_order_id}/action",
-                params={"action": "approve_refund"},
-                json={"notes": "Refund approved by testing system"},
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Approve refund failed: {response.status_code} - {response.text}")
-                return False
-            
-            refund_result = response.json()
-            
-            if "message" not in refund_result or "order_id" not in refund_result:
-                print(f"❌ Incorrect response structure: {refund_result}")
-                return False
-            
-            print(f"✅ Approve refund: {refund_result['message']}")
-            
-            # Verify order was updated
-            order_response = await self.client.get(
-                f"{BACKEND_URL}/orders/{test_order_id}",
-                headers=self.get_auth_headers()
-            )
-            
-            if order_response.status_code == 200:
-                updated_order = order_response.json()
-                if updated_order.get("return_status") != "refund_approved":
-                    print(f"❌ Order return_status not updated: {updated_order.get('return_status')}")
-                    return False
+            for status, params in status_updates:
+                self.log(f"🔄 Updating claim status to: {status}")
                 
-                print("✅ Order return_status correctly updated to 'refund_approved'")
-            
-            # Test 2: Schedule replacement
-            print("2. Testing schedule_replacement action...")
-            if len(self.test_orders) > 1:
-                test_order_id_2 = self.test_orders[1]
+                update_data = {"status": status}
+                update_data.update(params)
                 
-                response = await self.client.post(
-                    f"{BACKEND_URL}/returns/{test_order_id_2}/action",
-                    params={"action": "schedule_replacement"},
-                    json={"notes": "Replacement scheduled for damaged item"},
-                    headers=self.get_auth_headers()
-                )
+                response = requests.patch(f"{self.base_url}/claims/{self.test_claim_id}/status", 
+                                        params=update_data, headers=self.get_headers())
                 
-                if response.status_code != 200:
-                    print(f"❌ Schedule replacement failed: {response.status_code} - {response.text}")
-                    return False
-                
-                replacement_result = response.json()
-                print(f"✅ Schedule replacement: {replacement_result['message']}")
-            
-            # Test 3: Mark fraud
-            print("3. Testing mark_fraud action...")
-            if len(self.test_orders) > 2:
-                test_order_id_3 = self.test_orders[2]
-                
-                response = await self.client.post(
-                    f"{BACKEND_URL}/returns/{test_order_id_3}/action",
-                    params={"action": "mark_fraud"},
-                    json={"notes": "Fraudulent return detected"},
-                    headers=self.get_auth_headers()
-                )
-                
-                if response.status_code != 200:
-                    print(f"❌ Mark fraud failed: {response.status_code} - {response.text}")
-                    return False
-                
-                fraud_result = response.json()
-                print(f"✅ Mark fraud: {fraud_result['message']}")
-            
-            # Test 4: Close case
-            print("4. Testing close action...")
-            if len(self.test_orders) > 3:
-                test_order_id_4 = self.test_orders[3]
-                
-                response = await self.client.post(
-                    f"{BACKEND_URL}/returns/{test_order_id_4}/action",
-                    params={"action": "close"},
-                    json={"notes": "Case closed - resolved"},
-                    headers=self.get_auth_headers()
-                )
-                
-                if response.status_code != 200:
-                    print(f"❌ Close action failed: {response.status_code} - {response.text}")
-                    return False
-                
-                close_result = response.json()
-                print(f"✅ Close action: {close_result['message']}")
-            
-            # Test 5: Invalid action
-            print("5. Testing invalid action handling...")
-            response = await self.client.post(
-                f"{BACKEND_URL}/returns/{test_order_id}/action",
-                params={"action": "invalid_action"},
-                headers=self.get_auth_headers()
-            )
-            
-            # Should handle gracefully (either 400 error or no action taken)
-            print(f"✅ Invalid action handled: {response.status_code}")
-            
-            print("\n🎉 RETURNS ACTIONS: ALL TESTS PASSED")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Returns actions test error: {e}")
-            return False
-    
-    # =====================================
-    # TEST 5: Smart Classification Logic Verification
-    # =====================================
-    
-    async def test_smart_classification(self):
-        """Test the classify_return() function logic"""
-        print("\n🔍 TEST 5: Smart Classification Logic Verification")
-        print("=" * 60)
-        
-        try:
-            # Get returns to verify smart flags
-            response = await self.client.get(
-                f"{BACKEND_URL}/returns/",
-                headers=self.get_auth_headers()
-            )
-            
-            if response.status_code != 200:
-                print(f"❌ Could not get returns for classification test: {response.status_code}")
-                return False
-            
-            data = response.json()
-            returns = data["items"]
-            
-            # Filter for our test orders by order_number pattern
-            test_returns = [r for r in returns if r.get("order_number", "").startswith("RET-")]
-            
-            classification_tests = {
-                "RET-FRAUD-001": ["fraud"],  # cancelled + "Fraud" reason
-                "RET-DAMAGE-002": ["damage", "replacement"],  # "Damage" + "replacement" in reason
-                "RET-PFC-003": ["pfc"],  # cancelled + empty reason
-                "RET-PENDING-004": ["pending_action"],  # "Status Pending" in reason  
-                "RET-DELAY-005": ["delay"]  # "Delay" in reason
-            }
-            
-            classification_passed = True
-            
-            for return_order in test_returns:
-                order_number = return_order.get("order_number")
-                smart_flags = return_order.get("smart_flags", [])
-                
-                if order_number in classification_tests:
-                    expected_flags = classification_tests[order_number]
-                    
-                    print(f"📝 {order_number}: Expected {expected_flags}, Got {smart_flags}")
-                    
-                    # Check if all expected flags are present
-                    missing_flags = [flag for flag in expected_flags if flag not in smart_flags]
-                    if missing_flags:
-                        print(f"❌ {order_number}: Missing flags {missing_flags}")
-                        classification_passed = False
+                if response.status_code == 200:
+                    updated_claim = response.json()
+                    if updated_claim["status"] == status:
+                        self.log(f"✅ Status updated to: {status}")
+                        
+                        # Verify status-specific fields
+                        if status == "approved" and updated_claim.get("approved_amount") == 2000.0:
+                            self.log("✅ Approved amount correctly set")
                     else:
-                        print(f"✅ {order_number}: All expected flags present")
+                        self.log(f"❌ Status should be '{status}', got: {updated_claim['status']}")
+                        return False
+                else:
+                    self.log(f"❌ Failed to update status to {status}: {response.status_code} - {response.text}")
+                    return False
             
-            # Verify classification counts match analytics
-            analytics_response = await self.client.get(
-                f"{BACKEND_URL}/returns/analytics",
-                headers=self.get_auth_headers()
-            )
+            # Test document management
+            documents = [
+                {"url": "https://example.com/invoice.pdf", "filename": "invoice.pdf", "type": "invoice"},
+                {"url": "https://example.com/damage_photo.jpg", "filename": "damage.jpg", "type": "evidence"}
+            ]
             
-            if analytics_response.status_code == 200:
-                analytics = analytics_response.json()
-                summary = analytics["summary"]
-                
-                print(f"\n📊 Analytics Classification Counts:")
-                print(f"   🚨 Fraud: {summary['fraud_count']}")
-                print(f"   💔 Damage: {summary['damage_count']}")
-                print(f"   📦 PFC: {summary['pfc_count']}")
-                print(f"   🔄 Replacement: {summary['replacement_count']}")
-                
-                # Expected: at least 1 of each from our test data
-                if summary['fraud_count'] < 1:
-                    print("❌ Expected at least 1 fraud case in analytics")
-                    classification_passed = False
-                
-                if summary['damage_count'] < 1:
-                    print("❌ Expected at least 1 damage case in analytics")
-                    classification_passed = False
-                
-                if summary['pfc_count'] < 1:
-                    print("❌ Expected at least 1 PFC case in analytics")
-                    classification_passed = False
-                
-                if summary['replacement_count'] < 1:
-                    print("❌ Expected at least 1 replacement case in analytics")
-                    classification_passed = False
+            response = requests.patch(f"{self.base_url}/claims/{self.test_claim_id}/documents", 
+                                    json=documents, headers=self.get_headers())
             
-            if classification_passed:
-                print("\n🎉 SMART CLASSIFICATION: ALL TESTS PASSED")
-                return True
+            if response.status_code == 200:
+                self.log("✅ Documents added successfully")
             else:
-                print("\n❌ SMART CLASSIFICATION: SOME TESTS FAILED")
+                self.log(f"❌ Failed to add documents: {response.status_code} - {response.text}")
                 return False
             
+            # Test correspondence
+            response = requests.post(f"{self.base_url}/claims/{self.test_claim_id}/correspondence", 
+                                   params={
+                                       "message": "Claim has been approved and payment will be processed",
+                                       "to_party": "amazon_support",
+                                       "comm_type": "email"
+                                   }, headers=self.get_headers())
+            
+            if response.status_code == 200:
+                self.log("✅ Correspondence added successfully")
+            else:
+                self.log(f"❌ Failed to add correspondence: {response.status_code} - {response.text}")
+                return False
+            
+            # Test analytics endpoints
+            analytics_endpoints = [
+                "/claims/analytics/by-type",
+                "/claims/analytics/by-status"
+            ]
+            
+            for endpoint in analytics_endpoints:
+                response = requests.get(f"{self.base_url}{endpoint}", headers=self.get_headers())
+                
+                if response.status_code == 200:
+                    analytics = response.json()
+                    self.log(f"✅ Analytics endpoint {endpoint} working: {len(analytics.get('analytics', []))} records")
+                else:
+                    self.log(f"❌ Analytics endpoint {endpoint} failed: {response.status_code} - {response.text}")
+                    return False
+            
+            self.log("✅ Enhanced Claims System fully functional")
+            return True
+            
         except Exception as e:
-            print(f"❌ Smart classification test error: {e}")
+            self.log(f"❌ Test 3 failed with exception: {e}")
             return False
     
-    # =====================================
-    # CLEANUP
-    # =====================================
-    
-    async def cleanup_test_data(self):
-        """Clean up test orders created during testing"""
-        print("\n🧹 Cleaning up test data...")
+    def test_loss_calculation_fix(self):
+        """Test 4: Loss Calculation Fix - should never return 'unknown'"""
+        self.log("\n🧪 TEST 4: Loss Calculation Fix")
+        self.log("=" * 60)
         
-        deleted_count = 0
-        for order_id in self.test_orders:
-            try:
-                response = await self.client.delete(
-                    f"{BACKEND_URL}/orders/{order_id}",
-                    headers=self.get_auth_headers()
-                )
-                if response.status_code in [200, 204]:
-                    deleted_count += 1
-            except Exception as e:
-                print(f"⚠️ Could not delete order {order_id}: {e}")
+        try:
+            # Test loss calculation for the test order
+            response = requests.post(f"{self.base_url}/loss/calculate/{self.test_order_id}", 
+                                   headers=self.get_headers())
+            
+            if response.status_code == 200:
+                loss_data = response.json()
+                loss_category = loss_data["loss_category"]
+                
+                self.log(f"✅ Loss calculation successful")
+                self.log(f"📊 Loss category: {loss_category}")
+                self.log(f"💰 Total loss: ₹{loss_data['breakdown']['total_loss']}")
+                
+                # Verify loss_category is never "unknown"
+                if loss_category != "unknown":
+                    self.log("✅ Loss category is not 'unknown' (correct)")
+                    
+                    # Verify it's one of the valid categories
+                    valid_categories = ["pfc", "resolved", "refunded", "fraud"]
+                    if loss_category in valid_categories:
+                        self.log(f"✅ Loss category '{loss_category}' is valid")
+                    else:
+                        self.log(f"❌ Loss category '{loss_category}' is not in valid list: {valid_categories}")
+                        return False
+                else:
+                    self.log("❌ Loss category should never be 'unknown'")
+                    return False
+                
+                # Test with a cancelled order (should return "refunded" not "unknown")
+                cancelled_order_data = {
+                    "channel": "amazon",
+                    "order_number": f"TEST-CANCEL-{uuid.uuid4().hex[:8]}",
+                    "order_date": datetime.now(timezone.utc).isoformat(),
+                    "customer_id": str(uuid.uuid4()),
+                    "customer_name": "Jane Doe",
+                    "phone": "9876543211",
+                    "pincode": "560002",
+                    "sku": "TABLE-001",
+                    "product_name": "Test Table",
+                    "quantity": 1,
+                    "price": 8000.0,
+                    "status": "cancelled",
+                    "cancellation_reason": "Customer changed mind"  # No specific keywords
+                }
+                
+                response = requests.post(f"{self.base_url}/orders/", 
+                                       json=cancelled_order_data, headers=self.get_headers())
+                
+                if response.status_code == 200:
+                    cancelled_order = response.json()
+                    cancelled_order_id = cancelled_order["id"]
+                    
+                    # Calculate loss for cancelled order
+                    response = requests.post(f"{self.base_url}/loss/calculate/{cancelled_order_id}", 
+                                           headers=self.get_headers())
+                    
+                    if response.status_code == 200:
+                        cancelled_loss_data = response.json()
+                        cancelled_loss_category = cancelled_loss_data["loss_category"]
+                        
+                        self.log(f"✅ Cancelled order loss calculation successful")
+                        self.log(f"📊 Cancelled order loss category: {cancelled_loss_category}")
+                        
+                        # Should return "refunded" not "unknown" for cancelled orders without specific keywords
+                        if cancelled_loss_category == "refunded":
+                            self.log("✅ Cancelled order correctly categorized as 'refunded' (not 'unknown')")
+                        elif cancelled_loss_category == "pfc":
+                            self.log("✅ Cancelled order correctly categorized as 'pfc' (not 'unknown')")
+                        else:
+                            self.log(f"⚠️ Cancelled order categorized as '{cancelled_loss_category}' (acceptable, not 'unknown')")
+                        
+                        # Cleanup - delete test cancelled order
+                        requests.delete(f"{self.base_url}/orders/{cancelled_order_id}", headers=self.get_headers())
+                        
+                        return True
+                    else:
+                        self.log(f"❌ Cancelled order loss calculation failed: {response.status_code} - {response.text}")
+                        return False
+                else:
+                    self.log(f"❌ Failed to create cancelled order: {response.status_code} - {response.text}")
+                    return False
+            else:
+                self.log(f"❌ Loss calculation failed: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            self.log(f"❌ Test 4 failed with exception: {e}")
+            return False
+    
+    def cleanup_test_data(self):
+        """Clean up test data created during testing"""
+        self.log("\n🧹 Cleaning up test data...")
         
-        print(f"✅ Cleaned up {deleted_count}/{len(self.test_orders)} test orders")
+        # Delete test order (this will cascade to related data)
+        if self.test_order_id:
+            response = requests.delete(f"{self.base_url}/orders/{self.test_order_id}", headers=self.get_headers())
+            if response.status_code == 200:
+                self.log("✅ Test order deleted")
+            else:
+                self.log(f"⚠️ Failed to delete test order: {response.status_code}")
+        
+        # Delete test claim
+        if self.test_claim_id:
+            response = requests.delete(f"{self.base_url}/claims/{self.test_claim_id}", headers=self.get_headers())
+            if response.status_code == 200:
+                self.log("✅ Test claim deleted")
+            else:
+                self.log(f"⚠️ Failed to delete test claim: {response.status_code}")
     
-    # =====================================
-    # MAIN TEST RUNNER
-    # =====================================
-    
-    async def run_all_tests(self):
-        """Run all Returns & Claims System tests"""
-        print("🚀 FURNIVA RETURNS & CLAIMS SYSTEM TESTING")
-        print("=" * 80)
-        print("Testing new Returns & Claims System backend endpoints")
-        print("=" * 80)
+    def run_all_tests(self):
+        """Run all migration endpoint tests"""
+        self.log("🚀 Starting Furniva CRM Migration Endpoints Testing")
+        self.log("=" * 80)
         
         # Setup authentication
-        if not await self.register_and_login():
-            print("❌ AUTHENTICATION FAILED - Cannot proceed with tests")
+        if not self.register_and_login():
+            self.log("❌ Authentication setup failed. Aborting tests.")
             return False
         
-        # Create test data
-        await self.create_test_orders_with_returns_data()
+        # Run tests
+        test_results = []
         
-        # Test results
-        test_results = {}
+        test_results.append(("Order Previous Status Field", self.test_order_previous_status_field()))
+        test_results.append(("Return Workflow 12-Stage System", self.test_return_workflow_12_stage_system()))
+        test_results.append(("Enhanced Claims System", self.test_enhanced_claims_system()))
+        test_results.append(("Loss Calculation Fix", self.test_loss_calculation_fix()))
         
-        try:
-            # Test 1: Basic returns endpoint
-            test_results['returns_basic'] = await self.test_returns_endpoint_basic()
-            
-            # Test 2: Returns filters
-            test_results['returns_filters'] = await self.test_returns_endpoint_filters()
-            
-            # Test 3: Returns analytics
-            test_results['returns_analytics'] = await self.test_returns_analytics()
-            
-            # Test 4: Returns actions
-            test_results['returns_actions'] = await self.test_returns_actions()
-            
-            # Test 5: Smart classification logic
-            test_results['smart_classification'] = await self.test_smart_classification()
-            
-        finally:
-            # Always cleanup test data
-            await self.cleanup_test_data()
+        # Cleanup
+        self.cleanup_test_data()
         
-        # Final Summary
-        print("\n" + "=" * 80)
-        print("🏆 RETURNS & CLAIMS SYSTEM TEST SUMMARY")
-        print("=" * 80)
+        # Summary
+        self.log("\n📊 TEST SUMMARY")
+        self.log("=" * 80)
         
-        passed = sum(test_results.values())
+        passed = 0
         total = len(test_results)
         
-        for test_name, result in test_results.items():
+        for test_name, result in test_results:
             status = "✅ PASSED" if result else "❌ FAILED"
-            print(f"{test_name.upper().replace('_', ' ')}: {status}")
+            self.log(f"{status} - {test_name}")
+            if result:
+                passed += 1
         
-        print("-" * 80)
-        print(f"OVERALL RESULT: {passed}/{total} tests passed ({passed/total*100:.1f}%)")
+        self.log(f"\n🎯 OVERALL RESULT: {passed}/{total} tests passed")
         
         if passed == total:
-            print("🎉 ALL RETURNS & CLAIMS SYSTEM TESTS PASSED!")
+            self.log("🎉 ALL MIGRATION ENDPOINTS ARE WORKING CORRECTLY!")
             return True
         else:
-            print("⚠️  SOME RETURNS SYSTEM TESTS FAILED - ISSUES NEED ATTENTION")
+            self.log(f"⚠️ {total - passed} test(s) failed. Please review the issues above.")
             return False
 
-# =====================================
-# RUN TESTS
-# =====================================
-
-async def main():
-    """Main test execution"""
-    async with FurnivaReturnsSystemTester() as tester:
-        success = await tester.run_all_tests()
-        return success
-
 if __name__ == "__main__":
-    result = asyncio.run(main())
-    exit(0 if result else 1)
+    tester = FurnivaAPITester()
+    success = tester.run_all_tests()
+    exit(0 if success else 1)

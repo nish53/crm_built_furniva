@@ -63,7 +63,7 @@ async def track_order_changes(
     Internal function to track changes when an order is updated
     Compares old and new values and creates edit history entry
     """
-    if not db:
+    if db is None:
         return
     
     changes = []

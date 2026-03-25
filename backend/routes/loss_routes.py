@@ -161,27 +161,29 @@ async def update_order_loss(
     return {"message": "Order loss updated successfully", "updated_by": current_user.email}
 
 def determine_loss_category(order: dict) -> str:
-    """Determine loss category based on order data"""
+    """Determine loss category based on order data. Never returns 'unknown'."""
     reason = (order.get("cancellation_reason") or "").lower()
     status = order.get("status", "")
+    delivery_date = order.get("delivery_date")
     
-    # PFC
-    if "pfc" in reason and status == "cancelled":
-        return "pfc"
-    
-    # Fraud
+    # Fraud detection (highest priority)
     if "cancelled and delivered" in reason or "fraud" in reason:
         return "fraud"
+    
+    # PFC: Pre-Fulfillment Cancellation
+    if "pfc" in reason or "pre fulfillment" in reason:
+        return "pfc"
+    
+    # PFC: Cancelled without delivery
+    if status == "cancelled" and not delivery_date:
+        return "pfc"
     
     # Resolved (delivered + solution provided)
     if status == "delivered" and any(keyword in reason for keyword in [
         "damage", "damaged and pending", "damaged and replaced",
-        "hardware", "customer issue", "quality"
+        "hardware", "customer issue", "quality", "resolved", "replaced", "fixed"
     ]):
         return "resolved"
     
-    # Refunded (cancelled excluding PFC)
-    if status == "cancelled" and "pfc" not in reason:
-        return "refunded"
-    
-    return "unknown"
+    # Refunded (default for all other return/cancel cases)
+    return "refunded"

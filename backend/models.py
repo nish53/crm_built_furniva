@@ -45,10 +45,26 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 class ClaimType(str, Enum):
+    COURIER_DAMAGE = "courier_damage"
+    MARKETPLACE_A_TO_Z = "marketplace_a_to_z"
+    MARKETPLACE_SAFE_T = "marketplace_safe_t"
+    INSURANCE = "insurance"
+    WARRANTY = "warranty"
+    OTHER = "other"
+    # Legacy types for backward compatibility
     AMAZON_AZ = "amazon_az"
     FLIPKART_DISPUTE = "flipkart_dispute"
-    COURIER_DAMAGE = "courier_damage"
     CUSTOMER_RETURN = "customer_return"
+
+class ClaimStatus(str, Enum):
+    DRAFT = "draft"
+    FILED = "filed"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
+    PARTIALLY_APPROVED = "partially_approved"
+    REJECTED = "rejected"
+    APPEALED = "appealed"
+    CLOSED = "closed"
 
 class UserBase(BaseModel):
     email: str
@@ -200,6 +216,11 @@ class Order(OrderBase):
     loss_edited_by: Optional[str] = None  # User who edited loss
     loss_edited_at: Optional[datetime] = None  # When loss was edited
     loss_notes: Optional[str] = None  # Notes about loss calculation
+    
+    # Status tracking
+    previous_status: Optional[str] = None  # For undo functionality
+    cancelled_at: Optional[datetime] = None  # When order was cancelled
+    cancelled_by: Optional[str] = None  # Who cancelled the order
     
     last_updated: Optional[datetime] = None
 
@@ -426,11 +447,25 @@ class ReturnType(str, Enum):
     REPLACEMENT = "replacement"
 
 class ReturnStatus(str, Enum):
+    # New 12-stage workflow
     REQUESTED = "requested"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    PICKUP_SCHEDULED = "pickup_scheduled"
+    FEEDBACK_CHECK = "feedback_check"
+    CLAIM_FILED = "claim_filed"
+    AUTHORIZED = "authorized"
+    RETURN_INITIATED = "return_initiated"
     IN_TRANSIT = "in_transit"
+    WAREHOUSE_RECEIVED = "warehouse_received"
+    QC_INSPECTION = "qc_inspection"
+    CLAIM_FILING = "claim_filing"
+    CLAIM_STATUS = "claim_status"
+    REFUND_PROCESSED = "refund_processed"
+    CLOSED = "closed"
+    # Terminal statuses
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+    # Legacy statuses (backward compatibility)
+    APPROVED = "approved"
+    PICKUP_SCHEDULED = "pickup_scheduled"
     RECEIVED = "received"
     INSPECTED = "inspected"
     REFUNDED = "refunded"
@@ -461,6 +496,7 @@ class ReturnRequest(BaseModel):
     return_status: ReturnStatus
     previous_status: Optional[str] = None
     status_history: List[Dict[str, Any]] = []
+    category: Optional[str] = None  # pfc, resolved, refunded, fraud
     requested_date: datetime
     approved_date: Optional[datetime] = None
     pickup_date: Optional[datetime] = None
@@ -475,6 +511,65 @@ class ReturnRequest(BaseModel):
     damage_images: Optional[List[str]] = []
     refund_amount: Optional[float] = None
     refund_method: Optional[str] = None
+    
+    # Feedback check stage fields
+    feedback_check_date: Optional[datetime] = None
+    feedback_check_notes: Optional[str] = None
+    feedback_check_outcome: Optional[str] = None  # proceed, resolved_at_feedback
+    customer_feedback: Optional[str] = None
+    
+    # Claim filed stage fields
+    claim_filed_date: Optional[datetime] = None
+    claim_reference: Optional[str] = None
+    claim_platform: Optional[str] = None  # amazon, flipkart, courier
+    claim_amount: Optional[float] = None
+    
+    # Authorization stage fields
+    authorized_date: Optional[datetime] = None
+    authorized_by: Optional[str] = None
+    authorization_notes: Optional[str] = None
+    
+    # Return initiated stage fields
+    return_initiated_date: Optional[datetime] = None
+    return_method: Optional[str] = None  # courier_pickup, customer_drop, reverse_logistics
+    
+    # Warehouse received stage fields
+    warehouse_received_date: Optional[datetime] = None
+    warehouse_received_by: Optional[str] = None
+    warehouse_notes: Optional[str] = None
+    
+    # QC inspection stage fields
+    qc_inspection_date: Optional[datetime] = None
+    qc_inspector: Optional[str] = None
+    qc_result: Optional[str] = None  # pass, fail, partial
+    qc_images: Optional[List[str]] = []
+    qc_damage_found: Optional[str] = None
+    
+    # Claim filing stage fields (post-QC claim to marketplace/courier)
+    claim_filing_date: Optional[datetime] = None
+    claim_filing_reference: Optional[str] = None
+    claim_filing_platform: Optional[str] = None
+    claim_filing_amount: Optional[float] = None
+    claim_filing_notes: Optional[str] = None
+    
+    # Claim status stage fields
+    claim_status_date: Optional[datetime] = None
+    claim_status_result: Optional[str] = None  # approved, rejected, partial
+    claim_approved_amount: Optional[float] = None
+    claim_status_notes: Optional[str] = None
+    
+    # Refund processed stage fields
+    refund_processed_date: Optional[datetime] = None
+    refund_processed_amount: Optional[float] = None
+    refund_processed_method: Optional[str] = None
+    refund_transaction_id: Optional[str] = None
+    
+    # Closure fields
+    closed_date: Optional[datetime] = None
+    closed_by: Optional[str] = None
+    closure_notes: Optional[str] = None
+    resolution_summary: Optional[str] = None
+    
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -563,7 +658,9 @@ class ClaimBase(BaseModel):
     type: ClaimType
     amount: float
     description: str
-    status: str = "filed"
+    status: ClaimStatus = ClaimStatus.FILED
+    platform: Optional[str] = None  # amazon, flipkart, courier company name
+    reference_number: Optional[str] = None  # Platform claim reference
 
 class ClaimCreate(ClaimBase):
     pass
@@ -573,6 +670,28 @@ class Claim(ClaimBase):
     id: str
     created_at: datetime
     filed_by: str
+    updated_at: Optional[datetime] = None
+    
+    # Status tracking
+    status_history: List[Dict[str, Any]] = []
+    
+    # Approval/rejection
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    approved_amount: Optional[float] = None
+    rejection_reason: Optional[str] = None
+    
+    # Documents and evidence
+    documents: List[Dict[str, Any]] = []  # {url, filename, uploaded_at, type}
+    evidence_images: List[str] = []
+    
+    # Correspondence log
+    correspondence: List[Dict[str, Any]] = []  # {date, from, to, message, type}
+    
+    # Resolution
+    resolved_at: Optional[datetime] = None
+    resolution_notes: Optional[str] = None
+    resolution_amount: Optional[float] = None
 
 
 # Loss Calculation Configuration
@@ -635,9 +754,6 @@ class EditHistoryCreate(BaseModel):
     order_id: str
     changes: List[FieldChange]
     edit_reason: Optional[str] = None
-
-    resolved_at: Optional[datetime] = None
-    resolution_notes: Optional[str] = None
 
 class DashboardStats(BaseModel):
     total_orders: int
