@@ -3,20 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import api from '../lib/api';
 import { toast } from 'sonner';
 import { 
   RefreshCcw, 
-  AlertTriangle, 
   Package, 
-  TrendingUp, 
   Filter,
-  Eye,
-  CheckCircle2,
-  XCircle
+  Eye
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 
 export const Returns = () => {
@@ -203,67 +197,6 @@ export const Returns = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Top Problematic Products */}
-      {analytics && analytics.top_products_by_loss && analytics.top_products_by_loss.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-[Manrope] flex items-center gap-2">
-              <TrendingUp className="w-5 h-5" />
-              Top Problematic Products (by Loss)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {analytics.top_products_by_loss.map((product, idx) => (
-                <div key={idx} className="flex items-center justify-between p-3 bg-secondary/20 rounded">
-                  <span className="font-[JetBrains_Mono] text-sm">{product.sku}</span>
-                  <Badge variant="destructive">₹{product.loss.toLocaleString()} loss</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Pincode Analysis */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {analytics && analytics.top_problematic_pincodes && analytics.top_problematic_pincodes.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-[Manrope] text-lg">Top Return Pincodes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {analytics.top_problematic_pincodes.slice(0, 5).map((pincode, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 bg-secondary/20 rounded">
-                    <span className="font-medium">{pincode.pincode}</span>
-                    <Badge>{pincode.count} returns</Badge>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {analytics && analytics.top_damage_pincodes && analytics.top_damage_pincodes.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-[Manrope] text-lg">Top Damage Pincodes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {analytics.top_damage_pincodes.slice(0, 5).map((pincode, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 bg-secondary/20 rounded">
-                    <span className="font-medium">{pincode.pincode}</span>
-                    <Badge variant="destructive">{pincode.damage_count} damaged</Badge>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
     </div>
   );
 };
