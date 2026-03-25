@@ -1,53 +1,41 @@
 # FURNIVA CRM - BUGS & ROADMAP
-**Last Updated:** March 7, 2025
-**Status:** Critical bugs need fixing, major features incomplete
+**Last Updated:** July 2025
+**Status:** WORKFLOW REDESIGN IN PROGRESS — See `/app/WORKFLOW_SPECIFICATION.md` for full spec
+
+> ⚠️ **IMPORTANT:** The old return/replacement workflow described below is SUPERSEDED.
+> The new workflow specification in `WORKFLOW_SPECIFICATION.md` is the SINGLE SOURCE OF TRUTH.
+> All return reasons, statuses, and flows must follow that document.
 
 ---
 
-## 🔴 CRITICAL BUGS (Fix Immediately)
+## CURRENT STATE SUMMARY
 
-### Bug #1: Return Reason Not Saving
-**Problem:** Creating return request through order detail, selecting reason, but dashboard still shows "unspecified cancellations"
+### ✅ Bugs Fixed (from original list)
+- Bug #1: Return reason now syncs to order.cancellation_reason ✅
+- Bug #2: classify_return_category no longer returns "unknown" ✅ (but enum will be replaced per new spec)
+- Bug #3: Loss config exposed to frontend via Settings page ✅
+- Bug #4: Image uploads working via /api/uploads/ ✅
+- Bug #5: Mandatory cancellation reason on cancel ✅
 
-**Root Cause:** 
-- Return request creates entry in `return_requests` collection
-- BUT does NOT update order's `cancellation_reason` field
-- Dashboard checks order.cancellation_reason (which remains null/empty)
+### ✅ Features Implemented
+- Order undo status, cancel endpoint
+- Loss calculation (config, calculate, per-order)
+- Edit history tracking + UI card
+- Settings page with loss config
+- Upload routes (damage images)
+- Claims backend (full CRUD + correspondence + analytics)
+- Claims.js frontend page
+- Basic ReturnDetail.js and ReplacementDetail.js pages
 
-**Fix Required:**
-```python
-# In /app/backend/routes/return_routes.py
-# After creating return request, also update the order:
-await db.orders.update_one(
-    {"id": order_id},
-    {"$set": {
-        "cancellation_reason": return_data.return_reason,
-        "return_requested": True,
-        "return_date": datetime.now()
-    }}
-)
-```
+### 🔴 NEXT PRIORITY: Complete Workflow Redesign
+**See:** `/app/WORKFLOW_SPECIFICATION.md`
 
-**Files to Fix:**
-- `/app/backend/routes/return_routes.py` - create_return_request endpoint
-- Must sync return_reason to order.cancellation_reason
-
----
-
-### Bug #2: Return Classification Still Showing "Unknown"
-**Problem:** Despite classification logic, some returns show as "unknown"
-
-**Root Cause:** Classification logic only checks historical patterns, not new return reasons
-
-**Fix Required:**
-Update `classify_return_category()` in `/app/backend/routes/returns_routes.py`:
-- Add mapping for new 8 return reasons:
-  - "Pre Fulfillment Cancel" → pfc
-  - "Damage" → resolved (if delivered) or refunded (if cancelled)
-  - "Fraud" → fraud
-  - "Customer Refused at Doorstep" → refunded
-  - "Delayed" → refunded
-  - Others → refunded
+The entire return/replacement/cancellation workflow needs to be redesigned per the new specification. This includes:
+1. Context-dependent cancellation reasons (pre-dispatch vs in-transit vs post-delivery)
+2. Three distinct return workflows (pre-dispatch, in-transit RTO, post-delivery)
+3. Replacement workflow with full/partial options and pickup tracking
+4. New "Cancelled Orders" and "Resolved Orders" pages
+5. Historical import mapping updates
 
 ---
 
