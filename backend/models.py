@@ -125,6 +125,11 @@ class Order(OrderBase):
     id: str
     created_at: datetime
     updated_at: Optional[datetime] = None
+    previous_status: Optional[str] = None  # For undo functionality
+    status_changed_at: Optional[datetime] = None
+    status_changed_by: Optional[str] = None
+    cancelled_at: Optional[datetime] = None
+    cancelled_by: Optional[str] = None
     dispatch_date: Optional[datetime] = None
     delivery_date: Optional[datetime] = None
     tracking_number: Optional[str] = None

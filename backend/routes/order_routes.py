@@ -117,6 +117,12 @@ async def update_order(
                 detail="Cancellation reason is required when marking order as cancelled"
             )
     
+    # Track previous status if status is being changed
+    if update_data.get("status") and update_data.get("status") != existing.get("status"):
+        update_data["previous_status"] = existing.get("status")
+        update_data["status_changed_at"] = datetime.now(timezone.utc).isoformat()
+        update_data["status_changed_by"] = current_user.email
+    
     if update_data:
         await db.orders.update_one({"id": order_id}, {"$set": update_data})
     
@@ -124,6 +130,72 @@ async def update_order(
     return Order(**updated_order)
 
 @router.delete("/{order_id}")
+
+@router.patch("/{order_id}/undo-status", response_model=Order)
+async def undo_order_status(
+    order_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Undo the last status change"""
+    existing = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    previous_status = existing.get("previous_status")
+    if not previous_status:
+        raise HTTPException(status_code=400, detail="No previous status to revert to")
+    
+    update_data = {
+        "status": previous_status,
+        "previous_status": None,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+
+@router.patch("/{order_id}/cancel")
+async def cancel_order(
+    order_id: str,
+    cancellation_reason: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Cancel an order (only for pending/confirmed orders)"""
+    existing = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    current_status = existing.get("status")
+    
+    # Only allow cancellation for pre-dispatch orders
+    if current_status not in ["pending", "confirmed"]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot cancel order with status '{current_status}'. Only pending or confirmed orders can be cancelled."
+        )
+    
+    if not cancellation_reason:
+        raise HTTPException(status_code=400, detail="Cancellation reason is required")
+    
+    update_data = {
+        "status": "cancelled",
+        "previous_status": current_status,
+        "cancellation_reason": cancellation_reason,
+        "cancelled_at": datetime.now(timezone.utc).isoformat(),
+        "cancelled_by": current_user.email,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_data})
+    
+    updated_order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return Order(**updated_order)
+
+    updated_order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return Order(**updated_order)
+
 async def delete_order(
     order_id: str,
     current_user: User = Depends(get_current_active_user),

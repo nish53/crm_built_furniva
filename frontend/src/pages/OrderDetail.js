@@ -22,6 +22,8 @@ export const OrderDetail = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
   const [showFinancialModal, setShowFinancialModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [financials, setFinancials] = useState(null);
@@ -167,6 +169,51 @@ export const OrderDetail = () => {
   };
 
   const handleSaveEdit = async (e) => {
+
+  const handleUndoStatus = async () => {
+    if (!order.previous_status) {
+      toast.error('No previous status to undo');
+      return;
+    }
+    
+    if (!confirm(`Undo status change? Will revert from "${order.status}" to "${order.previous_status}"`)) {
+      return;
+    }
+    
+    setUpdating(true);
+    try {
+      await api.patch(`/orders/${id}/undo-status`);
+      toast.success('Status reverted successfully');
+      fetchOrder();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to undo status');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleCancelOrder = async (e) => {
+    e.preventDefault();
+    
+    if (!cancellationReason) {
+      toast.error('Please select a cancellation reason');
+      return;
+    }
+    
+    setUpdating(true);
+    try {
+      await api.patch(`/orders/${id}/cancel?cancellation_reason=${encodeURIComponent(cancellationReason)}`);
+      toast.success('Order cancelled successfully');
+      setShowCancelModal(false);
+      setCancellationReason('');
+      fetchOrder();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to cancel order');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
     e.preventDefault();
     
     // Validation: if status is cancelled, cancellation_reason must be provided
@@ -502,12 +549,27 @@ export const OrderDetail = () => {
                 </Button>
               )}
 
-              {/* Return Actions - Always visible for actionable statuses */}
-              {!order.return_requested && (
+              {/* Return Actions - Only after dispatch/delivery */}
+              {(order.status === 'dispatched' || order.status === 'delivered') && !order.return_requested && (
                 <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => setShowReturnModal(true)} data-testid="create-return-button">
                   <RefreshCcw className="w-4 h-4 mr-2" />Create Return Request
                 </Button>
               )}
+              
+              {/* Cancel button - only for pending/confirmed orders */}
+              {(order.status === 'pending' || order.status === 'confirmed') && (
+                <Button variant="outline" className="w-full border-red-300 text-red-700 hover:bg-red-50" onClick={() => setShowCancelModal(true)} data-testid="cancel-order-button">
+                  <XCircle className="w-4 h-4 mr-2" />Cancel Order
+                </Button>
+              )}
+              
+              {/* Undo button - if there's a previous status */}
+              {order.previous_status && (
+                <Button variant="outline" className="w-full border-yellow-300 text-yellow-700 hover:bg-yellow-50" onClick={handleUndoStatus} disabled={updating}>
+                  <AlertTriangle className="w-4 h-4 mr-2" />Undo (Revert to {order.previous_status})
+                </Button>
+              )}
+              
               {order.return_requested && !order.replacement_order_id && (
                 <Button variant="outline" className="w-full border-orange-300 text-orange-700 hover:bg-orange-50" onClick={() => {
                   setReturnForm({ ...returnForm, return_reason: 'customer_changed_mind' });
@@ -655,6 +717,50 @@ export const OrderDetail = () => {
                   )}
                 </div>
                 <div className="flex gap-3">
+
+
+      {/* ===== CANCEL ORDER MODAL ===== */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="cancel-modal">
+          <Card className="w-full max-w-md">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="font-[Manrope]">Cancel Order</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowCancelModal(false)}><X className="w-4 h-4" /></Button>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleCancelOrder} className="space-y-4">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm">
+                  <p className="text-yellow-800">⚠️ This will mark the order as cancelled. This action can be undone using the "Undo" button.</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Cancellation Reason *</label>
+                  <Select value={cancellationReason} onValueChange={setCancellationReason} required>
+                    <SelectTrigger className="mt-1" data-testid="cancel-reason-select"><SelectValue placeholder="Select reason" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="customer_requested">Customer Requested Cancellation</SelectItem>
+                      <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                      <SelectItem value="pricing_error">Pricing Error</SelectItem>
+                      <SelectItem value="duplicate_order">Duplicate Order</SelectItem>
+                      <SelectItem value="customer_unreachable">Customer Unreachable</SelectItem>
+                      <SelectItem value="delivery_delay">Expected Delivery Delay</SelectItem>
+                      <SelectItem value="payment_issue">Payment Issue</SelectItem>
+                      <SelectItem value="address_issue">Address Issue/Unserviceable</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setShowCancelModal(false)} className="flex-1">Close</Button>
+                  <Button type="submit" variant="destructive" className="flex-1" disabled={!cancellationReason || updating} data-testid="confirm-cancel-btn">
+                    {updating ? 'Cancelling...' : 'Confirm Cancellation'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
                   <Button type="button" variant="outline" onClick={() => setShowReturnModal(false)} className="flex-1">Cancel</Button>
                   <Button type="submit" className="flex-1" disabled={!returnForm.return_reason || uploadingImages} data-testid="submit-return-btn">
                     {uploadingImages ? 'Uploading...' : 'Create Return'}
