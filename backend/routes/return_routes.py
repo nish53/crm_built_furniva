@@ -39,24 +39,24 @@ def classify_return_category(return_reason: str, status: str, delivery_date: str
 
 # Workflow transition map - defines allowed next statuses for each status
 WORKFLOW_TRANSITIONS = {
-    "requested": ["feedback_check", "authorized", "rejected", "cancelled"],
-    "feedback_check": ["claim_filed", "authorized", "rejected", "cancelled"],
-    "claim_filed": ["authorized", "rejected", "cancelled"],
-    "authorized": ["return_initiated", "cancelled"],
-    "return_initiated": ["in_transit", "cancelled"],
-    "in_transit": ["warehouse_received"],
-    "warehouse_received": ["qc_inspection"],
+    "requested": ["feedback_check", "authorized", "approved", "rejected", "closed", "cancelled"],
+    "feedback_check": ["claim_filed", "authorized", "approved", "rejected", "closed", "cancelled"],
+    "claim_filed": ["authorized", "approved", "rejected", "closed", "cancelled"],
+    "authorized": ["return_initiated", "closed", "cancelled"],
+    "return_initiated": ["in_transit", "closed", "cancelled"],
+    "in_transit": ["warehouse_received", "closed"],
+    "warehouse_received": ["qc_inspection", "closed"],
     "qc_inspection": ["claim_filing", "refund_processed", "closed"],
-    "claim_filing": ["claim_status"],
+    "claim_filing": ["claim_status", "closed"],
     "claim_status": ["refund_processed", "closed"],
     "refund_processed": ["closed"],
     "closed": [],
     "rejected": [],
     "cancelled": [],
     # Legacy transitions for backward compatibility
-    "approved": ["pickup_scheduled", "return_initiated", "cancelled"],
-    "pickup_scheduled": ["in_transit", "cancelled"],
-    "received": ["inspected", "qc_inspection"],
+    "approved": ["pickup_scheduled", "return_initiated", "closed", "cancelled"],
+    "pickup_scheduled": ["in_transit", "closed", "cancelled"],
+    "received": ["inspected", "qc_inspection", "closed"],
     "inspected": ["refunded", "refund_processed", "replaced", "closed"],
     "refunded": ["closed"],
     "replaced": ["closed"],
@@ -112,7 +112,7 @@ async def create_return_request(
     return_dict["return_status"] = ReturnStatus.REQUESTED
     return_dict["requested_date"] = datetime.now(timezone.utc).isoformat()
     return_dict["created_at"] = datetime.now(timezone.utc).isoformat()
-    return_dict["category"] = category  # Add classified category
+    return_dict["category"] = "in_progress"  # New returns default to in_progress
     return_dict["status_history"] = [{
         "from_status": None,
         "to_status": ReturnStatus.REQUESTED,
@@ -425,6 +425,25 @@ async def advance_return_workflow(
             update_data["closure_notes"] = notes
         if resolution_summary:
             update_data["resolution_summary"] = resolution_summary
+        # Reclassify category on close
+        order = await db.orders.find_one({"id": return_req["order_id"]}, {"_id": 0})
+        if order:
+            final_category = classify_return_category(
+                return_reason=return_req.get("return_reason", ""),
+                status=order.get("status", ""),
+                delivery_date=order.get("delivery_date")
+            )
+            update_data["category"] = final_category
+    
+    elif next_status == "rejected":
+        if notes:
+            update_data["closure_notes"] = notes
+        update_data["category"] = "rejected"
+    
+    elif next_status == "approved":
+        update_data["authorized_by"] = current_user.email
+        if notes:
+            update_data["authorization_notes"] = notes
     
     # Legacy status fields
     elif next_status == "pickup_scheduled":

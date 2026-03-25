@@ -629,11 +629,56 @@ export const ReturnDetail = () => {
               <CardTitle className="font-[Manrope]">Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {canAdvance && (
+              {/* Quick Action Buttons - Show direct approve/reject/close for early stages */}
+              {allowedTransitions.includes('approved') && (
                 <Button
+                  className="w-full bg-green-600 hover:bg-green-700"
+                  onClick={() => {
+                    setSelectedNextStatus('approved');
+                    setShowAdvanceModal(true);
+                  }}
+                  disabled={updating}
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />Approve Return
+                </Button>
+              )}
+
+              {allowedTransitions.includes('rejected') && (
+                <Button
+                  variant="destructive"
                   className="w-full"
                   onClick={() => {
-                    setSelectedNextStatus(allowedTransitions[0] || '');
+                    setSelectedNextStatus('rejected');
+                    setShowAdvanceModal(true);
+                  }}
+                  disabled={updating}
+                >
+                  <XCircle className="w-4 h-4 mr-2" />Reject Return
+                </Button>
+              )}
+
+              {allowedTransitions.includes('closed') && (
+                <Button
+                  variant="outline"
+                  className="w-full border-gray-400"
+                  onClick={() => {
+                    setSelectedNextStatus('closed');
+                    setShowAdvanceModal(true);
+                  }}
+                  disabled={updating}
+                >
+                  <Lock className="w-4 h-4 mr-2" />Close Return
+                </Button>
+              )}
+
+              {/* Advance Workflow - for all other transitions */}
+              {canAdvance && allowedTransitions.filter(t => !['approved', 'rejected', 'closed'].includes(t)).length > 0 && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    const otherTransitions = allowedTransitions.filter(t => !['approved', 'rejected', 'closed'].includes(t));
+                    setSelectedNextStatus(otherTransitions[0] || '');
                     setShowAdvanceModal(true);
                   }}
                   disabled={updating}
