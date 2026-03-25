@@ -189,7 +189,8 @@ async def create_return_request(
     
     await db.return_requests.insert_one(return_dict)
     
-    # Update order - sync to cancellation_reason
+    # Update order - sync cancellation_reason but DON'T change status yet
+    # Order status should only change when return is closed/completed
     await db.orders.update_one(
         {"id": return_req.order_id},
         {"$set": {
@@ -198,7 +199,8 @@ async def create_return_request(
             "cancellation_reason": cancellation_reason,
             "return_date": datetime.now(timezone.utc).isoformat(),
             "loss_category": category,
-            "status": "cancelled"  # Mark order as cancelled when return is requested
+            "previous_status": order_status  # Save current status for potential reversion
+            # DO NOT SET status to "cancelled" here - only when return is closed
         }}
     )
     
@@ -508,13 +510,31 @@ async def advance_return_workflow(
         {"$set": update_data}
     )
     
-    # If closed, update order status
-    if next_status == "closed" or update_data.get("return_status") == "closed":
+    # Get order to check previous_status
+    order = await db.orders.find_one({"id": return_req["order_id"]}, {"_id": 0})
+    
+    # Handle status changes based on return workflow outcome
+    if next_status == "rejected":
+        # FIX #2: When rejected, revert order status to previous status
+        previous_order_status = order.get("previous_status", "delivered")
+        await db.orders.update_one(
+            {"id": return_req["order_id"]},
+            {"$set": {
+                "status": previous_order_status,  # Revert to original status
+                "return_requested": False,
+                "return_status": "rejected",
+                "return_reason": None,
+                "cancellation_reason": None
+            }}
+        )
+    elif next_status == "closed" or update_data.get("return_status") == "closed":
+        # FIX #1: Only move to cancelled when return is CLOSED (completed)
         await db.orders.update_one(
             {"id": return_req["order_id"]},
             {"$set": {
                 "status": "cancelled",
-                "return_status": "closed"
+                "return_status": "closed",
+                "closed_date": now
             }}
         )
     
@@ -677,3 +697,34 @@ async def get_returns_by_product(
     # Sort and return top
     sorted_products = sorted(sku_counts.values(), key=lambda x: x["return_count"], reverse=True)[:limit]
     return {"products": sorted_products}
+
+# FIX #3: Add DELETE endpoint for returns
+@router.delete("/{return_id}")
+async def delete_return_request(
+    return_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Delete a return request and clean up order references"""
+    return_req = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
+    if not return_req:
+        raise HTTPException(status_code=404, detail="Return request not found")
+    
+    # Clean up order - remove return references
+    await db.orders.update_one(
+        {"id": return_req["order_id"]},
+        {"$set": {
+            "return_requested": False,
+            "return_status": None,
+            "return_reason": None,
+            "cancellation_reason": None
+        }}
+    )
+    
+    # Delete return request
+    result = await db.return_requests.delete_one({"id": return_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Return request not found")
+    
+    return {"message": "Return request deleted successfully", "deleted_count": result.deleted_count}

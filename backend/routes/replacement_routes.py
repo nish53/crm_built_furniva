@@ -362,3 +362,33 @@ async def get_priority_replacements(
         "count": len(replacements),
         "replacements": replacements
     }
+
+# FIX #3: Add DELETE endpoint for replacements
+@router.delete("/{replacement_id}")
+async def delete_replacement_request(
+    replacement_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Delete a replacement request and clean up order references"""
+    replacement = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    if not replacement:
+        raise HTTPException(status_code=404, detail="Replacement request not found")
+    
+    # Clean up order - remove replacement references
+    await db.orders.update_one(
+        {"id": replacement["order_id"]},
+        {"$set": {
+            "replacement_requested": False,
+            "replacement_status": None,
+            "replacement_reason": None
+        }}
+    )
+    
+    # Delete replacement request
+    result = await db.replacement_requests.delete_one({"id": replacement_id})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Replacement request not found")
+    
+    return {"message": "Replacement request deleted successfully", "deleted_count": result.deleted_count}
