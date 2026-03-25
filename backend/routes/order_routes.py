@@ -310,6 +310,7 @@ async def import_historical_orders(
         reader = csv.DictReader(io.StringIO(content_str))
         imported_count = 0
         skipped_count = 0
+        skipped_orders = []
         error_count = 0
         errors = []
         
@@ -318,18 +319,33 @@ async def import_historical_orders(
                 # Skip empty rows
                 if not row or not any(row.values()):
                     skipped_count += 1
+                    skipped_orders.append({
+                        "row": row_num,
+                        "order_number": "N/A",
+                        "reason": "Empty row"
+                    })
                     continue
                 
                 # Parse order data
                 order_id = row.get("Order ID", "").strip()
                 if not order_id:
                     skipped_count += 1
+                    skipped_orders.append({
+                        "row": row_num,
+                        "order_number": "N/A",
+                        "reason": "Missing Order ID"
+                    })
                     continue
                 
                 # Check if order already exists
                 existing = await db.orders.find_one({"order_number": order_id})
                 if existing:
                     skipped_count += 1
+                    skipped_orders.append({
+                        "row": row_num,
+                        "order_number": order_id,
+                        "reason": "Order already exists"
+                    })
                     continue
                 
                 # Parse dates with dd/mm/yyyy format
@@ -439,6 +455,7 @@ async def import_historical_orders(
         return {
             "imported": imported_count,
             "skipped": skipped_count,
+            "skipped_orders": skipped_orders,
             "errors": error_count,
             "error_details": errors,
             "message": f"Import completed: {imported_count} imported, {skipped_count} skipped, {error_count} errors"

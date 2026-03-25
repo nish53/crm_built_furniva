@@ -390,6 +390,7 @@ class ReturnReason(str, Enum):
     OTHER = "other"
 
 class ReturnStatus(str, Enum):
+    # New workflow statuses
     REQUESTED = "requested"  # 1. Customer initiates return
     FEEDBACK_CHECK = "feedback_check"  # 2. Check for negative reviews
     CLAIM_FILED = "claim_filed"  # 3. Customer filed marketplace claim
@@ -404,6 +405,14 @@ class ReturnStatus(str, Enum):
     CLOSED = "closed"  # 12. Return complete
     REJECTED = "rejected"  # Return rejected
     CANCELLED = "cancelled"  # Return cancelled
+    
+    # Legacy statuses (for backward compatibility)
+    APPROVED = "approved"
+    PICKUP_SCHEDULED = "pickup_scheduled"
+    RECEIVED = "received"
+    INSPECTED = "inspected"
+    REFUNDED = "refunded"
+    REPLACED = "replaced"
 
 class DamageCategory(str, Enum):
     SCRATCH = "scratch"

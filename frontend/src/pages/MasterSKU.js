@@ -60,6 +60,16 @@ export const MasterSKU = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validation: At least one marketplace pair must be filled
+    const hasAmazon = formData.amazon_sku && formData.amazon_asin;
+    const hasFlipkart = formData.flipkart_sku && formData.flipkart_fsn;
+    const hasWebsite = formData.website_sku;
+    
+    if (!hasAmazon && !hasFlipkart && !hasWebsite) {
+      toast.error('At least one marketplace listing is required: (Amazon SKU + ASIN) OR (Flipkart SKU + FSN) OR Website SKU');
+      return;
+    }
+    
     try {
       if (editingId) {
         await api.put(`/master-sku/${editingId}`, formData);
@@ -249,7 +259,7 @@ export const MasterSKU = () => {
                 {/* Amazon SKUs */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold text-foreground">Amazon</h3>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-1">Amazon SKU</label>
                       <Input
@@ -264,14 +274,6 @@ export const MasterSKU = () => {
                         value={formData.amazon_asin}
                         onChange={(e) => setFormData({...formData, amazon_asin: e.target.value})}
                         placeholder="B0XXXXXXXX"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">FNSKU</label>
-                      <Input
-                        value={formData.amazon_fnsku}
-                        onChange={(e) => setFormData({...formData, amazon_fnsku: e.target.value})}
-                        placeholder="X00XXXXXXX"
                       />
                     </div>
                   </div>
