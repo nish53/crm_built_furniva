@@ -20,9 +20,19 @@ async def create_replacement_request(
     - For damaged/quality: Can choose full or partial replacement
     - For wrong_product_sent/customer_change_of_mind: Only full replacement
     """
-    # Validate images provided
-    if not replacement_req.damage_images or len(replacement_req.damage_images) == 0:
-        raise HTTPException(status_code=400, detail="At least one damage image is required")
+    # ONLY validate images for 'damaged' reason
+    if replacement_req.replacement_reason == "damaged":
+        if not replacement_req.damage_images or len(replacement_req.damage_images) == 0:
+            raise HTTPException(status_code=400, detail="At least one damage image is required for damaged replacements")
+        if not replacement_req.damage_description or not replacement_req.damage_description.strip():
+            raise HTTPException(status_code=400, detail="Damage description is required for damaged replacements")
+    
+    # For non-damaged reasons, set defaults if not provided
+    if replacement_req.replacement_reason != "damaged":
+        if not replacement_req.damage_description:
+            replacement_req.damage_description = "N/A"
+        if not replacement_req.damage_images:
+            replacement_req.damage_images = []
     
     # Validate replacement_type
     if not replacement_req.replacement_type:
@@ -94,11 +104,16 @@ async def get_replacement_requests(
 ):
     """Get all replacement requests with optional status filter and exclusion"""
     query = {}
-    if status:
-        query["replacement_status"] = status
     
-    # NEW: Exclude resolved replacements for "Open Replacements" page
-    if exclude_status:
+    # Handle both status filter and exclusion properly
+    if status and exclude_status:
+        # Both provided: match status AND exclude specific one
+        query["replacement_status"] = {"$eq": status, "$ne": exclude_status}
+    elif status:
+        # Only status filter
+        query["replacement_status"] = status
+    elif exclude_status:
+        # Only exclusion
         query["replacement_status"] = {"$ne": exclude_status}
     
     replacements = await db.replacement_requests.find(query, {"_id": 0}).sort("requested_date", -1).to_list(None)

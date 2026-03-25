@@ -218,11 +218,15 @@ async def get_return_requests(
     """Get all return requests with option to exclude closed returns"""
     query = {}
     
-    if status:
+    # Handle both status filter and exclusion properly
+    if status and exclude_status:
+        # Both provided: match status AND exclude specific one
+        query["return_status"] = {"$eq": status, "$ne": exclude_status}
+    elif status:
+        # Only status filter
         query["return_status"] = status
-    
-    # NEW: Exclude closed returns for "Open Returns" page
-    if exclude_status:
+    elif exclude_status:
+        # Only exclusion
         query["return_status"] = {"$ne": exclude_status}
     
     if start_date:

@@ -21,44 +21,25 @@ import { useNavigate } from 'react-router-dom';
 
 export const Returns = () => {
   const [returns, setReturns] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchReturns();
-    fetchAnalytics();
-  }, [activeTab]);
+  }, []);
 
   const fetchReturns = async () => {
     try {
-      const params = {};
-      // ONLY fetch open returns (exclude closed status)
-      params.exclude_status = 'closed';
-      
-      if (activeTab === 'pfc') params.category = 'pfc';
-      if (activeTab === 'resolved') params.category = 'resolved';
-      if (activeTab === 'refunded') params.category = 'refunded';
-      if (activeTab === 'fraud') params.category = 'fraud';
-      if (searchTerm) params.reason_filter = searchTerm;
+      const params = { exclude_status: 'closed' };
+      if (searchTerm) params.search = searchTerm;
 
-      const response = await api.get('/returns/', { params });
-      setReturns(response.data.items || []);
+      const response = await api.get('/return-requests/', { params });
+      setReturns(response.data || []);
     } catch (error) {
-      toast.error('Failed to fetch returns');
+      toast.error('Failed to fetch open returns');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchAnalytics = async () => {
-    try {
-      const response = await api.get('/returns/analytics');
-      setAnalytics(response.data);
-    } catch (error) {
-      console.error('Failed to fetch analytics');
     }
   };
 
@@ -102,129 +83,11 @@ export const Returns = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold font-[Manrope]">Open Returns</h1>
-          <p className="text-muted-foreground mt-1">Manage in-progress return requests (closed returns moved to Cancelled/Resolved)</p>
+          <p className="text-muted-foreground mt-1">Manage in-progress return requests (excluding closed returns)</p>
         </div>
-        <Button onClick={() => { fetchReturns(); fetchAnalytics(); }}>
+        <Button onClick={fetchReturns}>
           <RefreshCcw className="w-4 h-4 mr-2" />
           Refresh
-        </Button>
-      </div>
-
-      {/* Analytics Cards */}
-      {analytics && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Returns</p>
-                  <p className="text-2xl font-bold">{analytics.summary.total_returns}</p>
-                </div>
-                <RefreshCcw className="w-8 h-8 text-muted-foreground" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {analytics.summary.return_rate}% of all orders
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">PFC (Pre-Cancel)</p>
-                  <p className="text-2xl font-bold text-green-600">{analytics.summary.pfc_count}</p>
-                </div>
-                <XCircle className="w-8 h-8 text-green-600" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                ₹{analytics.summary.pfc_loss?.toLocaleString()} loss
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Resolved (No Refund)</p>
-                  <p className="text-2xl font-bold text-yellow-600">{analytics.summary.resolved_count}</p>
-                </div>
-                <CheckCircle2 className="w-8 h-8 text-yellow-600" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                ₹{analytics.summary.resolved_cost?.toLocaleString()} cost
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Refunded</p>
-                  <p className="text-2xl font-bold text-orange-600">{analytics.summary.refunded_count}</p>
-                </div>
-                <AlertTriangle className="w-8 h-8 text-orange-600" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                ₹{analytics.summary.refunded_loss?.toLocaleString()} loss
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Fraud/Logistics</p>
-                  <p className="text-2xl font-bold text-red-600">{analytics.summary.fraud_count}</p>
-                </div>
-                <AlertTriangle className="w-8 h-8 text-red-600" />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                ₹{analytics.summary.fraud_loss?.toLocaleString()} loss
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b">
-        <Button
-          variant={activeTab === 'all' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('all')}
-        >
-          All Returns
-        </Button>
-        <Button
-          variant={activeTab === 'pfc' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('pfc')}
-          className="text-green-600"
-        >
-          🟢 PFC (Minimal Loss)
-        </Button>
-        <Button
-          variant={activeTab === 'resolved' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('resolved')}
-          className="text-yellow-600"
-        >
-          🟡 Resolved (No Refund)
-        </Button>
-        <Button
-          variant={activeTab === 'refunded' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('refunded')}
-          className="text-orange-600"
-        >
-          🔴 Refunded (Full Loss)
-        </Button>
-        <Button
-          variant={activeTab === 'fraud' ? 'default' : 'ghost'}
-          onClick={() => setActiveTab('fraud')}
-          className="text-red-600"
-        >
-          ⚫ Fraud/Logistics
         </Button>
       </div>
 
@@ -245,11 +108,7 @@ export const Returns = () => {
       <Card>
         <CardHeader>
           <CardTitle className="font-[Manrope]">
-            {activeTab === 'all' && 'All Returns'}
-            {activeTab === 'pfc' && '🟢 PFC - Pre-Fulfillment Cancellations'}
-            {activeTab === 'resolved' && '🟡 Resolved - No Refund Issued'}
-            {activeTab === 'refunded' && '🔴 Refunded - Full Loss'}
-            {activeTab === 'fraud' && '⚫ Fraud/Logistics Errors'}
+            Open Return Requests
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -271,8 +130,7 @@ export const Returns = () => {
                     <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Customer</th>
                     <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Product</th>
                     <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Reason</th>
-                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Classification</th>
-                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Amount</th>
+                    <th className="text-left py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Status</th>
                     <th className="text-right py-3 px-4 text-xs font-bold text-muted-foreground uppercase">Actions</th>
                   </tr>
                 </thead>
@@ -297,18 +155,12 @@ export const Returns = () => {
                         </div>
                       </td>
                       <td className="py-4 px-4">
-                        <p className="text-sm">{ret.cancellation_reason || 'Not specified'}</p>
+                        <p className="text-sm">{ret.return_reason || ret.cancellation_reason || 'Not specified'}</p>
                       </td>
                       <td className="py-4 px-4">
-                        {getStatusBadge(ret.category)}
-                      </td>
-                      <td className="py-4 px-4">
-                        <div>
-                          <span className="font-medium">₹{(ret.price || 0).toLocaleString()}</span>
-                          <p className="text-xs text-muted-foreground">
-                            Loss: ₹{(ret.refund_loss || 0).toLocaleString()}
-                          </p>
-                        </div>
+                        <Badge variant="outline" className="capitalize">
+                          {ret.return_status?.replace(/_/g, ' ') || 'Pending'}
+                        </Badge>
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex items-center justify-end gap-2">

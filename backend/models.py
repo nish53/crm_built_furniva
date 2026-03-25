@@ -508,15 +508,10 @@ class ReturnStatus(str, Enum):
     REPLACED = "replaced"
 
 class DamageCategory(str, Enum):
-    NO_DAMAGE = "No Damage"
-    SCRATCH = "Scratch"
-    CRACK = "Crack"
     DENT = "Dent"
     BROKEN = "Broken"
-    MISSING_PARTS = "Missing Parts"
-    PACKAGING_DAMAGE = "Packaging Damage"
-    HARDWARE_MISSING = "Hardware Missing"
-    PARTS_MISSING = "Parts Missing"
+    SCRATCHES = "Scratches"
+    CRACK = "Crack"
 
 class ReturnRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -729,8 +724,8 @@ class ReplacementRequestCreate(BaseModel):
     order_id: str
     replacement_reason: ReplacementReason
     replacement_type: str  # "full_replacement" | "partial_replacement"
-    damage_description: str  # Required detailed description
-    damage_images: List[str]  # Mandatory image URLs
+    damage_description: Optional[str] = None  # Optional - only required for damaged reason
+    damage_images: Optional[List[str]] = []  # Optional - only required for damaged reason
     notes: Optional[str] = None  # Additional notes
     difference_amount: Optional[float] = None  # For customer change of mind
 
