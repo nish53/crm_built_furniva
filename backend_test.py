@@ -20,7 +20,7 @@ from datetime import datetime, timezone, timedelta
 import os
 
 # Backend URL from environment
-BACKEND_URL = "https://order-hub-175.preview.emergentagent.com/api"
+BACKEND_URL = "https://migration-reapply.preview.emergentagent.com/api"
 
 class FurnivaReturnsSystemTester:
     def __init__(self):
