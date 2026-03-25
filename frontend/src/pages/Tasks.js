@@ -10,16 +10,16 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import { CheckSquare, Plus, Calendar, User, AlertCircle, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { useLocation } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 export const Tasks = () => {
-  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedTasks, setSelectedTasks] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -30,12 +30,13 @@ export const Tasks = () => {
     order_details: '',
   });
 
-  // Apply filter from navigation state
+  // Apply filter from URL params
   useEffect(() => {
-    if (location.state?.filterStatus) {
-      setStatusFilter(location.state.filterStatus);
+    const statusParam = searchParams.get('status');
+    if (statusParam) {
+      setStatusFilter(statusParam);
     }
-  }, [location.state]);
+  }, []);
 
   useEffect(() => {
     fetchTasks();

@@ -89,7 +89,7 @@ export const Dashboard = () => {
       color: 'text-amber-600',
       bgColor: 'bg-amber-100',
       gradient: 'from-amber-50 to-amber-100',
-      onClick: () => navigate('/orders', { state: { filterStatus: 'pending' } }),
+      onClick: () => navigate('/orders?status=pending'),
       clickable: true,
     },
     {
@@ -100,7 +100,7 @@ export const Dashboard = () => {
       color: 'text-red-600',
       bgColor: 'bg-red-100',
       gradient: 'from-red-50 to-red-100',
-      onClick: () => navigate('/orders', { state: { filterStatus: 'pending', filterConfirmed: false, filterDispatchToday: true } }),
+      onClick: () => navigate('/orders?status=pending&confirmed=false'),
       clickable: true,
     },
     // REMOVED: Total Orders tile
@@ -111,7 +111,7 @@ export const Dashboard = () => {
       color: 'text-emerald-600',
       bgColor: 'bg-emerald-100',
       gradient: 'from-emerald-50 to-emerald-100',
-      onClick: () => navigate('/orders', { state: { filterDispatchedToday: true } }),
+      onClick: () => navigate('/orders?dispatched_today=true'),
       clickable: true,
     },
     {
@@ -121,7 +121,7 @@ export const Dashboard = () => {
       color: 'text-purple-600',
       bgColor: 'bg-purple-100',
       gradient: 'from-purple-50 to-purple-100',
-      onClick: () => navigate('/tasks', { state: { filterStatus: 'pending' } }),
+      onClick: () => navigate('/tasks?status=pending'),
       clickable: true,
     },
     {

@@ -30,14 +30,15 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 
 export const Orders = () => {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
   const [channelFilter, setChannelFilter] = useState('all');
   const [masterSkuFilter, setMasterSkuFilter] = useState('all');
   const [cityFilter, setCityFilter] = useState('all');
@@ -57,41 +58,45 @@ export const Orders = () => {
     total_pages: 0
   });
   const [currentPage, setCurrentPage] = useState(1);
-  const [dispatchedTodayFilter, setDispatchedTodayFilter] = useState(false);
-  const [confirmedFilter, setConfirmedFilter] = useState('all'); // 'all', 'confirmed', 'unconfirmed'
-  const [filtersApplied, setFiltersApplied] = useState(false);
+  const [dispatchedTodayFilter, setDispatchedTodayFilter] = useState(searchParams.get('dispatched_today') === 'true');
+  const [confirmedFilter, setConfirmedFilter] = useState(searchParams.get('confirmed') || 'all');
   const navigate = useNavigate();
 
-  // Apply filters from navigation state (from dashboard tiles) - ONCE
+  // Apply filters from navigation state OR URL params (from dashboard tiles)
   useEffect(() => {
-    if (location.state && !filtersApplied) {
-      let updated = false;
-      
-      if (location.state.filterStatus) {
+    // Check URL params first
+    const statusParam = searchParams.get('status');
+    const dispatchedParam = searchParams.get('dispatched_today');
+    const confirmedParam = searchParams.get('confirmed');
+    
+    if (statusParam) setStatusFilter(statusParam);
+    if (dispatchedParam === 'true') {
+      setDispatchedTodayFilter(true);
+      setShowAdvancedFilters(true);
+    }
+    if (confirmedParam) {
+      setConfirmedFilter(confirmedParam);
+      setShowAdvancedFilters(true);
+    }
+    
+    // Also check location.state for compatibility
+    if (location.state) {
+      if (location.state.filterStatus && !statusParam) {
         setStatusFilter(location.state.filterStatus);
-        updated = true;
+        setSearchParams({ status: location.state.filterStatus });
       }
-      if (location.state.filterDispatchedToday) {
+      if (location.state.filterDispatchedToday && !dispatchedParam) {
         setDispatchedTodayFilter(true);
         setShowAdvancedFilters(true);
-        updated = true;
+        setSearchParams({ dispatched_today: 'true' });
       }
-      if (location.state.filterConfirmed === false) {
-        setConfirmedFilter('unconfirmed');
+      if (location.state.filterConfirmed === false && !confirmedParam) {
+        setConfirmedFilter('false');
         setShowAdvancedFilters(true);
-        updated = true;
-      }
-      if (location.state.filterDispatchToday) {
-        setDispatchedTodayFilter(true);
-        setShowAdvancedFilters(true);
-        updated = true;
-      }
-      
-      if (updated) {
-        setFiltersApplied(true);
+        setSearchParams({ confirmed: 'false' });
       }
     }
-  }, [location.state, filtersApplied]);
+  }, []); // Only run once on mount
 
   useEffect(() => {
     fetchOrders();
