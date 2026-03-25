@@ -1,6 +1,21 @@
 # HANDOFF TO NEXT AGENT - QUICK START GUIDE
-**Created:** July 2025  
+**Created:** March 2026  
 **Purpose:** Quick reference to get the next agent started immediately
+
+---
+
+## 🚨 START HERE - CRITICAL BUGS FIRST!
+
+**STOP!** Before reading anything else, go to:
+### `/app/CRITICAL_BUGS_REMAINING.md`
+
+There are **4 critical bugs** that must be fixed before doing anything else:
+1. DamageCategory enum validation error (blocks return creation)
+2. Failed to fetch replacements (page not loading)
+3. Damage images required for all replacements (backend validation issue)
+4. Open Returns showing historical data (should only show open returns)
+
+**Fix these 4 bugs first (60 mins), THEN come back here for the full roadmap.**
 
 ---
 

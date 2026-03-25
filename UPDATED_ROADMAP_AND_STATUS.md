@@ -1,7 +1,23 @@
 # FURNIVA CRM - COMPLETE STATUS & ROADMAP
-**Last Updated:** July 2025  
+**Last Updated:** March 2026  
 **Purpose:** Comprehensive status of all features and clear roadmap for workflow redesign  
 **CRITICAL:** This document consolidates ALL information for the next agent
+
+---
+
+## 🚨 URGENT: 4 CRITICAL BUGS TO FIX FIRST
+
+**BEFORE doing anything else, read and fix:** `/app/CRITICAL_BUGS_REMAINING.md`
+
+These bugs block the workflow from functioning:
+1. ❌ DamageCategory enum validation error (5 mins to fix)
+2. ❌ Failed to fetch replacements (10 mins to fix)
+3. ❌ Damage images required for all replacement reasons on backend (10 mins to fix)
+4. ❌ Open Returns page shows all historical data + analytics (15 mins to fix)
+
+**Estimated fix time: 60 minutes total**
+
+**After fixing these, continue with the roadmap below.**
 
 ---
 
