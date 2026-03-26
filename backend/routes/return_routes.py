@@ -216,7 +216,8 @@ async def create_return_request(
 @router.get("/", response_model=List[ReturnRequest])
 async def get_return_requests(
     status: Optional[ReturnStatus] = None,
-    exclude_status: Optional[str] = None,  # NEW: exclude certain statuses
+    exclude_status: Optional[str] = None,  # Can be comma-separated: "closed,rejected"
+    open_only: Optional[bool] = None,  # NEW: Quick filter for open returns only
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     skip: int = 0,
@@ -224,19 +225,27 @@ async def get_return_requests(
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
-    """Get all return requests with option to exclude closed returns"""
+    """Get all return requests with option to exclude closed/rejected returns"""
     query = {}
     
+    # Handle open_only flag - excludes both closed and rejected
+    if open_only:
+        query["return_status"] = {"$nin": ["closed", "rejected"]}
     # Handle both status filter and exclusion properly
-    if status and exclude_status:
-        # Both provided: match status AND exclude specific one
-        query["return_status"] = {"$eq": status, "$ne": exclude_status}
+    elif status and exclude_status:
+        # Both provided: match status AND exclude specific ones
+        exclude_list = [s.strip() for s in exclude_status.split(",")]
+        query["return_status"] = {"$eq": status, "$nin": exclude_list}
     elif status:
         # Only status filter
         query["return_status"] = status
     elif exclude_status:
-        # Only exclusion
-        query["return_status"] = {"$ne": exclude_status}
+        # Only exclusion - support comma-separated list
+        exclude_list = [s.strip() for s in exclude_status.split(",")]
+        if len(exclude_list) == 1:
+            query["return_status"] = {"$ne": exclude_list[0]}
+        else:
+            query["return_status"] = {"$nin": exclude_list}
     
     if start_date:
         query["requested_date"] = {"$gte": start_date}
@@ -632,18 +641,52 @@ async def advance_return_workflow(
             "closed_date": now
         }
         
-        # Set cancellation category based on return_type
+        # Get the original return request data to get the cancellation_reason
+        return_data = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
+        original_reason = return_data.get("cancellation_reason", "")
+        
+        # Set cancellation category and reason based on return_type
         if return_type == "in_transit":
             # RTO Pre-Delivery (Excluding PFC) - product was dispatched but returned before delivery
             order_update["rto_category"] = "RTO Pre-Delivery"
             order_update["cancellation_category"] = "RTO Pre-Delivery (Excluding PFC)"
+            # Map to stats-compatible cancellation_reason
+            # Default to "in_transit" for stats grouping if no specific reason
+            if "refuse" in original_reason.lower():
+                order_update["cancellation_reason"] = "customer_refused_doorstep"
+            elif "unavailable" in original_reason.lower():
+                order_update["cancellation_reason"] = "customer_unavailable"
+            elif "delay" in original_reason.lower():
+                order_update["cancellation_reason"] = "delay"
+            else:
+                order_update["cancellation_reason"] = "in_transit"  # Generic in-transit cancellation
         elif return_type == "pre_dispatch":
             order_update["cancellation_category"] = "Pre-Dispatch Cancellation"
+            # Map to stats-compatible cancellation_reason
+            if "mind" in original_reason.lower() or "change" in original_reason.lower():
+                order_update["cancellation_reason"] = "change_of_mind"
+            elif "price" in original_reason.lower() or "pricing" in original_reason.lower():
+                order_update["cancellation_reason"] = "found_better_pricing"
+            else:
+                order_update["cancellation_reason"] = "pre_dispatch"  # Generic pre-dispatch cancellation
         elif return_type == "post_delivery":
             order_update["cancellation_category"] = "Post-Delivery Return"
+            # Map to stats-compatible cancellation_reason based on original reason
+            reason_lower = original_reason.lower() if original_reason else ""
+            if "damage" in reason_lower:
+                order_update["cancellation_reason"] = "damage"
+            elif "quality" in reason_lower:
+                order_update["cancellation_reason"] = "customer_quality_issues"
+            elif "wrong" in reason_lower:
+                order_update["cancellation_reason"] = "wrong_product_sent"
+            elif "defect" in reason_lower:
+                order_update["cancellation_reason"] = "defective_product"
+            elif "hardware" in reason_lower or "missing" in reason_lower:
+                order_update["cancellation_reason"] = "hardware_missing"
+            else:
+                order_update["cancellation_reason"] = original_reason or "post_delivery"
         
         # Add condition info to order if available from return request
-        return_data = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
         if return_data.get("received_condition"):
             order_update["rto_received_condition"] = return_data.get("received_condition")
             order_update["rto_condition_notes"] = return_data.get("condition_notes")

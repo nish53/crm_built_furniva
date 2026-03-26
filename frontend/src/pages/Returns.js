@@ -32,7 +32,8 @@ export const Returns = () => {
 
   const fetchReturns = async () => {
     try {
-      const params = { exclude_status: 'closed' };
+      // Use open_only=true to exclude both closed AND rejected returns
+      const params = { open_only: true };
       if (searchTerm) params.search = searchTerm;
 
       const response = await api.get('/return-requests/', { params });
@@ -59,11 +60,14 @@ export const Returns = () => {
     }
 
     try {
-      await api.delete(`/return-requests/${returnId}`);
+      console.log('Deleting return:', returnId);
+      const response = await api.delete(`/return-requests/${returnId}`);
+      console.log('Delete response:', response.data);
       toast.success('Return request deleted successfully');
       fetchReturns();
     } catch (error) {
-      toast.error('Failed to delete return request');
+      console.error('Delete error:', error.response?.data || error.message);
+      toast.error(error.response?.data?.detail || 'Failed to delete return request');
     }
   };
 

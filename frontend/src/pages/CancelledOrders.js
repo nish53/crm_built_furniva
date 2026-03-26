@@ -50,6 +50,9 @@ const CancelledOrders = () => {
   const reasonTabs = [
     { key: 'all', label: 'All Cancelled', color: 'gray' },
     { key: 'no_status', label: 'No Status', color: 'gray' },
+    { key: 'in_transit', label: 'RTO (In-Transit)', color: 'blue' },
+    { key: 'pre_dispatch', label: 'Pre-Dispatch', color: 'purple' },
+    { key: 'post_delivery', label: 'Post-Delivery', color: 'orange' },
     { key: 'damage', label: 'Damage', color: 'red' },
     { key: 'customer_issues_except_quality', label: 'Customer Issues', color: 'orange' },
     { key: 'hardware_missing', label: 'Hardware Missing', color: 'yellow' },
@@ -140,12 +143,12 @@ const CancelledOrders = () => {
           <Card>
             <CardContent className="pt-6">
               <div className="text-3xl font-bold text-blue-600">
-                {(getReasonCount('customer_refused_doorstep') + getReasonCount('customer_unavailable') + getReasonCount('delay'))}
+                {(getReasonCount('customer_refused_doorstep') + getReasonCount('customer_unavailable') + getReasonCount('delay') + getReasonCount('in_transit'))}
               </div>
               <div className="text-sm text-muted-foreground">RTO Pre-Delivery (Excluding PFC)</div>
               <div className="text-xs text-gray-500 mt-1">
                 {stats.total_cancelled > 0 
-                  ? ((((getReasonCount('customer_refused_doorstep') + getReasonCount('customer_unavailable') + getReasonCount('delay')) / stats.total_cancelled) * 100).toFixed(1))
+                  ? ((((getReasonCount('customer_refused_doorstep') + getReasonCount('customer_unavailable') + getReasonCount('delay') + getReasonCount('in_transit')) / stats.total_cancelled) * 100).toFixed(1))
                   : 0}%
               </div>
             </CardContent>

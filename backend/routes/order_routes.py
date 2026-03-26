@@ -631,7 +631,13 @@ async def get_cancelled_orders_stats(
         "product_delayed_customer_accepted": {"label": "Product Delayed & Customer Accepted", "count": 0, "orders": []},
         "did_not_specify": {"label": "Did Not Specify", "count": 0, "orders": []},
         "pre_dispatch": {"label": "Pre-Dispatch Cancellations", "count": 0, "orders": []},
-        "in_transit": {"label": "In-Transit Cancellations", "count": 0, "orders": []}
+        "in_transit": {"label": "In-Transit Cancellations (RTO)", "count": 0, "orders": []},
+        "post_delivery": {"label": "Post-Delivery Returns", "count": 0, "orders": []},
+        "change_of_mind": {"label": "Change of Mind", "count": 0, "orders": []},
+        "found_better_pricing": {"label": "Found Better Pricing", "count": 0, "orders": []},
+        "customer_refused_doorstep": {"label": "Customer Refused at Doorstep", "count": 0, "orders": []},
+        "customer_unavailable": {"label": "Customer Unavailable", "count": 0, "orders": []},
+        "delay": {"label": "Delay", "count": 0, "orders": []}
     }
     
     for group in result:
