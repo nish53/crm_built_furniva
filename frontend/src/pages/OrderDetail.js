@@ -434,6 +434,11 @@ export const OrderDetail = () => {
                   <TimelineItem label="Return Requested" date={safeDateShort(order.return_date)} active warn />
                   <TimelineItem label="RTO Initiated" date={safeDateShort(order.rto_initiated_date)} active={!!order.rto_initiated_date} warn />
                   <TimelineItem label="RTO Delivered" date={safeDateShort(order.rto_delivered_date)} active={!!order.rto_delivered_date} warn />
+                  <TimelineItem label="Warehouse Received" date={safeDateShort(order.rto_warehouse_received_date)} active={!!order.rto_warehouse_received_date} warn />
+                  {order.rto_received_condition && (
+                    <TimelineItem label={`Condition: ${order.rto_received_condition}`} date={order.rto_received_condition === 'damaged' ? '⚠️ Damaged' : '✓ Mint'} active warn />
+                  )}
+                  <TimelineItem label="Refund Date" date={safeDateShort(order.refund_date)} active={!!order.refund_date} warn />
                 </>}
               </div>
             </CardContent>

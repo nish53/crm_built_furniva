@@ -165,6 +165,11 @@ class Order(OrderBase):
     delivered_date: Optional[datetime] = None
     rto_initiated_date: Optional[datetime] = None
     rto_delivered_date: Optional[datetime] = None
+    # RTO Warehouse fields
+    rto_warehouse_received_date: Optional[datetime] = None
+    rto_received_condition: Optional[str] = None  # "mint" or "damaged"
+    rto_condition_notes: Optional[str] = None
+    rto_damage_images: List[str] = []
     return_requested: bool = False
     return_reason: Optional[str] = None
     return_date: Optional[datetime] = None
@@ -727,6 +732,15 @@ class ReplacementRequest(BaseModel):
     replacement_approved: bool = False  # Approval to send new product
     replacement_approved_date: Optional[datetime] = None
     replacement_approved_by: Optional[str] = None
+    
+    # SEPARATE STATUS TRACKING FOR DUAL TIMELINE
+    # Pickup Timeline: pending -> approved -> picked_up -> in_transit -> warehouse_received -> condition_checked -> closed
+    pickup_status: Optional[str] = "pending"  # Track pickup workflow independently
+    # Replacement Timeline: pending -> approved -> dispatched -> delivered -> closed
+    shipment_status: Optional[str] = "pending"  # Track replacement shipment independently
+    
+    # Condition images for warehouse received
+    condition_images: List[str] = []
     
     # Previous status for undo functionality (Bug #3)
     previous_status: Optional[str] = None

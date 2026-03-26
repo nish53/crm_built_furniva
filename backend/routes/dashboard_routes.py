@@ -22,24 +22,18 @@ async def get_dashboard_stats(
     
     pending_tasks = await db.tasks.count_documents({"status": "pending"})
     
-    # Pending Confirmation = orders that are:
-    # 1. Status = pending (not dispatched)
-    # 2. NOT confirmed (unconfirmed or missing confirmed field)
-    # 3. Expected dispatch is TODAY or PAST (or field doesn't exist)
+    # BUG FIX: Pending Confirmation = SUBSET of pending orders where:
+    # 1. Status = pending (not confirmed yet)
+    # 2. dispatch_by date is TODAY or PAST (urgent/overdue for confirmation)
+    # This is different from total pending_orders
     pending_confirmation = await db.orders.count_documents({
         "$and": [
             {"status": "pending"},
             {
                 "$or": [
-                    {"confirmed": {"$exists": False}},
-                    {"confirmed": False},
-                    {"confirmed": None}
-                ]
-            },
-            {
-                "$or": [
-                    {"expected_dispatch_date": {"$lte": today}},
-                    {"expected_dispatch_date": {"$exists": False}}
+                    {"dispatch_by": {"$lte": today}},
+                    {"dispatch_by": {"$exists": False}},
+                    {"dispatch_by": None}
                 ]
             }
         ]

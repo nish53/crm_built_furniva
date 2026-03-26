@@ -31,7 +31,15 @@ export const Replacements = () => {
       // ONLY fetch open replacements (exclude resolved status)
       params.exclude_status = 'resolved';
       
-      if (statusFilter !== 'all') params.status = statusFilter;
+      // Handle special dual approval filters
+      const specialFilters = ['replacement_approval_pending', 'pickup_approval_pending', 'pickups_in_progress', 'shipments_in_progress'];
+      
+      if (specialFilters.includes(statusFilter)) {
+        params.filter_type = statusFilter;
+        delete params.exclude_status;  // Filter will handle this
+      } else if (statusFilter !== 'all') {
+        params.status = statusFilter;
+      }
       
       const response = await api.get('/replacement-requests/', { params });
       setReplacements(response.data || []);
@@ -44,10 +52,18 @@ export const Replacements = () => {
 
   const fetchCounters = async () => {
     try {
-      const response = await api.get('/replacement-requests/analytics/counts');
+      // Use the v2 endpoint with dual approval filters
+      const response = await api.get('/replacement-requests/analytics/counts-v2');
       setCounters(response.data);
     } catch (error) {
       console.error('Failed to fetch counters:', error);
+      // Fallback to old endpoint
+      try {
+        const fallback = await api.get('/replacement-requests/analytics/counts');
+        setCounters(fallback.data);
+      } catch (e) {
+        console.error('Fallback also failed:', e);
+      }
     }
   };
 
@@ -206,8 +222,8 @@ export const Replacements = () => {
         </Button>
       </div>
 
-      {/* Summary Cards - Bug #5: Updated Counters */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Summary Cards - Bug #5 & #6: Updated Counters with Dual Approval */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('all')}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -220,38 +236,50 @@ export const Replacements = () => {
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('approved')}>
+        <Card className="cursor-pointer hover:bg-secondary/20 border-orange-200" onClick={() => setStatusFilter('replacement_approval_pending')}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">To Be Shipped</p>
-                <p className="text-2xl font-bold text-orange-600">{counters?.replacements_to_be_shipped || 0}</p>
+                <p className="text-sm text-muted-foreground">Replacement Approval</p>
+                <p className="text-2xl font-bold text-orange-600">{counters?.replacement_approval_pending || 0}</p>
               </div>
               <Clock className="w-8 h-8 text-orange-500" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('new_shipment_dispatched')}>
+        <Card className="cursor-pointer hover:bg-secondary/20 border-red-200" onClick={() => setStatusFilter('pickup_approval_pending')}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">In Transit</p>
-                <p className="text-2xl font-bold text-purple-600">{counters?.replacements_in_transit || 0}</p>
+                <p className="text-sm text-muted-foreground">Pickup Approval</p>
+                <p className="text-2xl font-bold text-red-600">{counters?.pickup_approval_pending || 0}</p>
+              </div>
+              <AlertTriangle className="w-8 h-8 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('pickups_in_progress')}>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Pickups Active</p>
+                <p className="text-2xl font-bold text-purple-600">{counters?.pickups_in_progress || 0}</p>
               </div>
               <Truck className="w-8 h-8 text-purple-500" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('requested')}>
+        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('shipments_in_progress')}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pickups Pending</p>
-                <p className="text-2xl font-bold text-red-600">{counters?.pickups_pending || 0}</p>
+                <p className="text-sm text-muted-foreground">Shipments Active</p>
+                <p className="text-2xl font-bold text-green-600">{counters?.shipments_in_progress || 0}</p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-red-500" />
+              <CheckCircle2 className="w-8 h-8 text-green-500" />
             </div>
           </CardContent>
         </Card>
@@ -265,12 +293,13 @@ export const Replacements = () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Replacement Pending">Pending</SelectItem>
-            <SelectItem value="Priority Review">Priority Review</SelectItem>
-            <SelectItem value="Ship Replacement">To Ship</SelectItem>
-            <SelectItem value="Tracking Added">In Transit</SelectItem>
-            <SelectItem value="Delivered">Delivered</SelectItem>
-            <SelectItem value="Issue Resolved">Resolved</SelectItem>
+            <SelectItem value="replacement_approval_pending">Replacement Approval Pending</SelectItem>
+            <SelectItem value="pickup_approval_pending">Pickup Approval Pending</SelectItem>
+            <SelectItem value="pickups_in_progress">Pickups In Progress</SelectItem>
+            <SelectItem value="shipments_in_progress">Shipments In Progress</SelectItem>
+            <SelectItem value="requested">Requested</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="delivered">Delivered</SelectItem>
           </SelectContent>
         </Select>
         <Button variant="outline" onClick={() => { setStatusFilter('all'); fetchReplacements(); }}>

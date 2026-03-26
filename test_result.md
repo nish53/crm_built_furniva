@@ -1397,7 +1397,12 @@ metadata:
           final resolution with proper validation and state management at each stage.
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "Dashboard Pending Confirmation Fix"
+    - "Returns RTO Workflow with Condition Images"
+    - "Returns Analytics Reason-Wise Tiles"
+    - "Return Workflow Remove Closed"
+    - "Replacement Dual Approval with Separate Timelines"
   stuck_tasks: []
   test_all: false
   test_priority: "critical_first"
@@ -1405,17 +1410,16 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: |
-      === RETURNS/REPLACEMENTS BUG FIXES - SESSION 2026-03-26 ===
+      === RETURNS/REPLACEMENTS BUG FIXES - SESSION 2 ===
       
-      Implemented 6 bug fixes/features for Returns & Replacements section:
+      Implemented additional bug fixes per user feedback:
       
-      1. BUG #1 - Returns Dashboard Analytics (Reason-Wise):
-         - Added /api/return-requests/analytics/dashboard endpoint
-         - Returns total_open, total_closed, pending_action counts
-         - Groups returns by_reason with counts for each
-         - Frontend updated with analytics cards at top of Returns page
-         - File: /app/backend/routes/return_routes.py (new endpoint)
-         - File: /app/frontend/src/pages/Returns.js (dashboard UI)
+      1. Dashboard Pending Confirmation - Fixed query to use dispatch_by
+      2. RTO Workflow - Added condition check with images for warehouse
+      3. Returns Analytics - Replaced summary card with reason-wise tiles
+      4. Return Workflow - Removed "closed", only approved/rejected with reason
+      5. Replacement Dual Approval - Added separate timelines for pickup and shipment
+      6. Counter Cards - Added 5 new dual approval counters
       
       2. BUG #2 - Priority on Replacements:
          - Priority functionality was already in backend

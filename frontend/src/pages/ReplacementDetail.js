@@ -11,21 +11,26 @@ import {
   CheckCircle, XCircle, Clock, ChevronRight, Box, Undo2, ShieldCheck
 } from 'lucide-react';
 
-// Replacement Workflow - DUAL TIMELINE STAGES
+// Replacement Workflow - DUAL TIMELINE STAGES (Bug #6 Fix)
+// Pickup Timeline: pending -> approved -> picked_up -> in_transit -> warehouse_received -> condition_checked -> closed
 const PICKUP_STAGES = [
-  { key: 'pickup_scheduled', label: 'Pickup Scheduled', icon: Clock },
+  { key: 'pending', label: 'Pending Approval', icon: Clock },
+  { key: 'approved', label: 'Approved', icon: CheckCircle },
   { key: 'picked_up', label: 'Picked Up', icon: Truck },
-  { key: 'pickup_in_transit', label: 'In Transit', icon: Truck },
+  { key: 'in_transit', label: 'In Transit', icon: Truck },
   { key: 'warehouse_received', label: 'Warehouse', icon: Package },
-  { key: 'condition_checked', label: 'Condition Check', icon: CheckCircle }
+  { key: 'condition_checked', label: 'Condition Checked', icon: CheckCircle },
+  { key: 'closed', label: 'Closed', icon: CheckCircle }
 ];
 
+// Shipment Timeline: pending -> approved -> dispatched/parts_shipped -> delivered -> closed
 const SHIPMENT_STAGES = [
+  { key: 'pending', label: 'Pending Approval', icon: Clock },
   { key: 'approved', label: 'Approved', icon: CheckCircle },
-  { key: 'new_shipment_dispatched', label: 'Dispatched', icon: Truck },
+  { key: 'dispatched', label: 'Dispatched', icon: Truck },
   { key: 'parts_shipped', label: 'Parts Shipped', icon: Box },
   { key: 'delivered', label: 'Delivered', icon: CheckCircle },
-  { key: 'resolved', label: 'Resolved', icon: XCircle }
+  { key: 'closed', label: 'Closed', icon: CheckCircle }
 ];
 
 const statusColors = {
@@ -404,11 +409,12 @@ export const ReplacementDetail = () => {
           </div>
 
           {/* Dual Approval Section - Bug #6 */}
-          {replacement.replacement_status === 'requested' && (
+          {/* Show when not resolved/rejected and either approval is still pending */}
+          {replacement.replacement_status !== 'resolved' && replacement.replacement_status !== 'rejected' && (
             <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5" />
-                Dual Approval Required
+                Dual Approval Status
               </h4>
               <div className="grid grid-cols-2 gap-4">
                 {/* Pickup Approval */}
@@ -417,7 +423,11 @@ export const ReplacementDetail = () => {
                   <p className="text-xs text-muted-foreground mb-3">
                     Approve collection of old/damaged product from customer
                   </p>
-                  {replacement.pickup_approved ? (
+                  {replacement.pickup_not_required ? (
+                    <Badge className="bg-gray-100 text-gray-700">
+                      Pickup Not Required
+                    </Badge>
+                  ) : replacement.pickup_approved ? (
                     <Badge className="bg-green-100 text-green-800">
                       <CheckCircle className="w-3 h-3 mr-1" />
                       Approved by {replacement.pickup_approved_by}
@@ -459,23 +469,23 @@ export const ReplacementDetail = () => {
                   )}
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Show approval status for non-requested states */}
-          {replacement.replacement_status !== 'requested' && (replacement.pickup_approved || replacement.replacement_approved) && (
-            <div className="mt-4 flex gap-4">
-              {replacement.pickup_approved && (
-                <Badge variant="outline" className="text-green-700">
-                  <CheckCircle className="w-3 h-3 mr-1" />
-                  Pickup Approved
-                </Badge>
+              
+              {/* Show pickup status if approved */}
+              {replacement.pickup_approved && replacement.pickup_status && replacement.pickup_status !== 'pending' && (
+                <div className="mt-3 pt-3 border-t">
+                  <p className="text-sm text-blue-700">
+                    <strong>Pickup Status:</strong> {replacement.pickup_status.replace(/_/g, ' ')}
+                  </p>
+                </div>
               )}
-              {replacement.replacement_approved && (
-                <Badge variant="outline" className="text-green-700">
-                  <CheckCircle className="w-3 h-3 mr-1" />
-                  Replacement Approved
-                </Badge>
+              
+              {/* Show shipment status if approved */}
+              {replacement.replacement_approved && replacement.shipment_status && replacement.shipment_status !== 'pending' && (
+                <div className="mt-2">
+                  <p className="text-sm text-blue-700">
+                    <strong>Shipment Status:</strong> {replacement.shipment_status.replace(/_/g, ' ')}
+                  </p>
+                </div>
               )}
             </div>
           )}

@@ -38,34 +38,36 @@ def classify_return_category(return_reason: str, status: str, delivery_date: str
     return "refunded"
 
 # Workflow transition map for 3-type return workflow
-# Each return_type has its own allowed transitions
+# BUG FIX: Remove "closed" from dropdown - only approved/rejected at first
+# If rejected, ask for reason and move to "resolved" (not just rejected)
 WORKFLOW_TRANSITIONS = {
     "pre_dispatch": {
-        "requested": ["approved", "closed", "rejected"],
-        "approved": ["closed"],
-        "rejected": [],
-        "closed": []
+        "requested": ["approved", "rejected"],  # Removed "closed"
+        "approved": ["resolved"],  # Changed from "closed" to "resolved"
+        "rejected": ["resolved"],  # Rejected with reason goes to resolved
+        "resolved": []
     },
     "in_transit": {
-        "requested": ["approved", "closed", "rejected"],
-        "approved": ["rto_in_transit", "closed"],
+        "requested": ["approved", "rejected"],  # Removed "closed"
+        "approved": ["rto_in_transit"],
         "rto_in_transit": ["warehouse_received"],
-        "warehouse_received": ["closed"],
-        "rejected": [],
-        "closed": []
+        "warehouse_received": ["condition_checked"],  # Add condition check
+        "condition_checked": ["resolved"],  # Then resolved
+        "rejected": ["resolved"],
+        "resolved": []
     },
     "post_delivery": {
-        "requested": ["accepted", "closed", "rejected"],
+        "requested": ["accepted", "rejected"],  # Removed "closed"
         "accepted": ["picked_up", "pickup_not_required"],
-        "picked_up": ["pickup_in_transit", "warehouse_received"],  # Can go to warehouse directly
+        "picked_up": ["pickup_in_transit", "warehouse_received"],
         "pickup_in_transit": ["warehouse_received"],
-        "pickup_not_required": ["closed"],  # Skip directly to closed
+        "pickup_not_required": ["resolved"],  # Changed to "resolved"
         "warehouse_received": ["condition_checked"],
-        "condition_checked": ["closed"],
-        "rejected": [],
-        "closed": []
+        "condition_checked": ["resolved"],
+        "rejected": ["resolved"],
+        "resolved": []
     },
-    # Legacy transitions for backward compatibility with old 12-stage workflow
+    # Legacy transitions for backward compatibility
     "legacy": {
         "requested": ["feedback_check", "authorized", "approved", "rejected", "closed", "cancelled"],
         "feedback_check": ["claim_filed", "authorized", "approved", "rejected", "closed", "cancelled"],
@@ -378,6 +380,8 @@ async def advance_return_workflow(
     notes: Optional[str] = None,
     # Pre-dispatch fields
     approved_by: Optional[str] = None,
+    # Rejection fields
+    rejection_reason: Optional[str] = None,  # Required when rejecting
     # In-transit RTO fields
     rto_tracking_number: Optional[str] = None,
     rto_courier: Optional[str] = None,
@@ -391,10 +395,13 @@ async def advance_return_workflow(
     # Post-delivery condition check fields
     received_condition: Optional[str] = None,  # "mint" or "damaged"
     condition_notes: Optional[str] = None,
+    condition_images: Optional[List[str]] = None,  # Images if damaged
+    # Refund fields
+    refund_amount: Optional[float] = None,
+    refund_date: Optional[str] = None,
     # Legacy fields for backward compatibility
     tracking_number: Optional[str] = None,
     courier_partner: Optional[str] = None,
-    refund_amount: Optional[float] = None,
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
@@ -425,11 +432,24 @@ async def advance_return_workflow(
         )
     
     # Context-aware validation based on return_type and next_status
+    # Rejection requires a reason
+    if next_status == "rejected" and not rejection_reason:
+        raise HTTPException(
+            status_code=400,
+            detail="rejection_reason is required when rejecting a return"
+        )
+    
     if return_type == "in_transit":
         if next_status == "rto_in_transit" and not rto_tracking_number:
             raise HTTPException(
                 status_code=400,
                 detail="rto_tracking_number is required for RTO in-transit status"
+            )
+        # Condition check for RTO warehouse
+        if next_status == "condition_checked" and not received_condition:
+            raise HTTPException(
+                status_code=400,
+                detail="received_condition ('mint' or 'damaged') is required for condition_checked status"
             )
     
     elif return_type == "post_delivery":
@@ -452,11 +472,20 @@ async def advance_return_workflow(
         "updated_at": now
     }
     
+    # Handle rejection - set reason and move to resolved
+    if next_status == "rejected":
+        update_data["rejection_reason"] = rejection_reason
+        update_data["rejected_date"] = now
+        update_data["rejected_by"] = current_user.email
+    
     # Set status-specific fields based on return_type
     if return_type == "pre_dispatch":
         if next_status == "approved":
             update_data["approved_date"] = now
             update_data["approved_by"] = approved_by or current_user.email
+        elif next_status == "resolved":
+            update_data["resolved_date"] = now
+            update_data["resolved_by"] = current_user.email
     
     elif return_type == "in_transit":
         if next_status == "approved":
@@ -465,8 +494,22 @@ async def advance_return_workflow(
         elif next_status == "rto_in_transit":
             update_data["rto_tracking_number"] = rto_tracking_number
             update_data["rto_courier"] = rto_courier
+            update_data["rto_initiated_date"] = now
         elif next_status == "warehouse_received":
             update_data["warehouse_received_date"] = warehouse_received_date or now
+            update_data["rto_delivered_date"] = warehouse_received_date or now
+        elif next_status == "condition_checked":
+            update_data["received_condition"] = received_condition
+            update_data["condition_notes"] = condition_notes
+            if condition_images:
+                update_data["condition_images"] = condition_images
+        elif next_status == "resolved":
+            update_data["resolved_date"] = now
+            update_data["resolved_by"] = current_user.email
+            if refund_amount:
+                update_data["refund_amount"] = refund_amount
+            if refund_date:
+                update_data["refund_date"] = refund_date
     
     elif return_type == "post_delivery":
         if next_status == "accepted":
@@ -474,10 +517,9 @@ async def advance_return_workflow(
             update_data["approved_by"] = current_user.email
         elif next_status == "pickup_not_required":
             update_data["pickup_not_required"] = True
-            # Skip directly to closed
-            update_data["return_status"] = "closed"
-            update_data["closed_date"] = now
-            update_data["closed_by"] = current_user.email
+            update_data["return_status"] = "resolved"  # Changed from "closed" to "resolved"
+            update_data["resolved_date"] = now
+            update_data["resolved_by"] = current_user.email
         elif next_status == "picked_up":
             update_data["pickup_date"] = pickup_date
             update_data["pickup_tracking_id"] = pickup_tracking_id
@@ -487,6 +529,13 @@ async def advance_return_workflow(
         elif next_status == "condition_checked":
             update_data["received_condition"] = received_condition
             update_data["condition_notes"] = condition_notes
+            if condition_images:
+                update_data["condition_images"] = condition_images
+        elif next_status == "resolved":
+            update_data["resolved_date"] = now
+            update_data["resolved_by"] = current_user.email
+            if refund_amount:
+                update_data["refund_amount"] = refund_amount
     
     # Add notes if provided
     if notes:

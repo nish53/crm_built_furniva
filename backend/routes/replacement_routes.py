@@ -99,14 +99,31 @@ async def create_replacement_request(
 async def get_replacement_requests(
     status: Optional[ReplacementStatus] = None,
     exclude_status: Optional[str] = None,  # NEW: exclude certain statuses
+    filter_type: Optional[str] = None,  # NEW: special filters for dual approval
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
     """Get all replacement requests with optional status filter and exclusion"""
     query = {}
     
+    # Handle special dual approval filters
+    if filter_type == "replacement_approval_pending":
+        query["replacement_approved"] = {"$ne": True}
+        query["replacement_status"] = {"$nin": ["resolved", "rejected"]}
+    elif filter_type == "pickup_approval_pending":
+        query["pickup_approved"] = {"$ne": True}
+        query["pickup_not_required"] = {"$ne": True}
+        query["replacement_status"] = {"$nin": ["resolved", "rejected"]}
+    elif filter_type == "pickups_in_progress":
+        query["pickup_approved"] = True
+        query["pickup_status"] = {"$nin": ["closed", "not_required", None]}
+        query["replacement_status"] = {"$nin": ["resolved", "rejected"]}
+    elif filter_type == "shipments_in_progress":
+        query["replacement_approved"] = True
+        query["shipment_status"] = {"$nin": ["closed", None]}
+        query["replacement_status"] = {"$nin": ["resolved", "rejected"]}
     # Handle both status filter and exclusion properly
-    if status and exclude_status:
+    elif status and exclude_status:
         # Both provided: match status AND exclude specific one
         query["replacement_status"] = {"$eq": status, "$ne": exclude_status}
     elif status:
@@ -464,7 +481,7 @@ async def approve_pickup(
     
     now = datetime.now(timezone.utc).isoformat()
     
-    # Update pickup approval
+    # Update pickup approval and set pickup_status to approved
     status_history = replacement.get("status_history", [])
     status_history.append({
         "status": "pickup_approved",
@@ -478,6 +495,7 @@ async def approve_pickup(
         "pickup_approved": True,
         "pickup_approved_date": now,
         "pickup_approved_by": current_user.email,
+        "pickup_status": "approved",  # Set pickup timeline status
         "updated_at": now,
         "status_history": status_history
     }
@@ -505,7 +523,7 @@ async def approve_replacement_shipment(
     
     now = datetime.now(timezone.utc).isoformat()
     
-    # Update replacement approval
+    # Update replacement approval and set shipment_status to approved
     status_history = replacement.get("status_history", [])
     status_history.append({
         "status": "replacement_approved",
@@ -519,6 +537,7 @@ async def approve_replacement_shipment(
         "replacement_approved": True,
         "replacement_approved_date": now,
         "replacement_approved_by": current_user.email,
+        "shipment_status": "approved",  # Set shipment timeline status
         "updated_at": now,
         "status_history": status_history
     }
@@ -567,4 +586,254 @@ async def get_replacement_counts(
         "replacements_to_be_shipped": to_ship_count,
         "replacements_in_transit": in_transit_count,
         "pickups_pending": pickups_pending_count
+    }
+
+
+# BUG #6: Advance Pickup Timeline (separate from shipment)
+@router.patch("/{replacement_id}/advance-pickup")
+async def advance_pickup_timeline(
+    replacement_id: str,
+    next_status: str,
+    # Pickup fields
+    pickup_date: Optional[str] = None,
+    pickup_tracking_id: Optional[str] = None,
+    pickup_courier: Optional[str] = None,
+    # Warehouse fields
+    warehouse_received_date: Optional[str] = None,
+    received_condition: Optional[str] = None,
+    condition_notes: Optional[str] = None,
+    condition_images: Optional[List[str]] = None,
+    notes: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Advance pickup timeline independently.
+    Flow: pending -> approved -> picked_up -> in_transit -> warehouse_received -> condition_checked -> closed
+    """
+    replacement = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    if not replacement:
+        raise HTTPException(status_code=404, detail="Replacement request not found")
+    
+    current_pickup_status = replacement.get("pickup_status", "pending")
+    
+    # Define pickup workflow transitions
+    PICKUP_TRANSITIONS = {
+        "pending": ["approved"],
+        "approved": ["picked_up", "not_required"],
+        "picked_up": ["in_transit", "warehouse_received"],
+        "in_transit": ["warehouse_received"],
+        "warehouse_received": ["condition_checked"],
+        "condition_checked": ["closed"],
+        "not_required": ["closed"],
+        "closed": []
+    }
+    
+    allowed = PICKUP_TRANSITIONS.get(current_pickup_status, [])
+    if next_status not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot transition pickup from '{current_pickup_status}' to '{next_status}'. Allowed: {allowed}"
+        )
+    
+    # Validate required fields
+    if next_status == "picked_up" and not pickup_tracking_id:
+        raise HTTPException(status_code=400, detail="pickup_tracking_id is required")
+    
+    if next_status == "condition_checked" and not received_condition:
+        raise HTTPException(status_code=400, detail="received_condition ('mint' or 'damaged') is required")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    update_data = {
+        "pickup_status": next_status,
+        "updated_at": now
+    }
+    
+    # Set fields based on status
+    if next_status == "approved":
+        update_data["pickup_approved"] = True
+        update_data["pickup_approved_date"] = now
+        update_data["pickup_approved_by"] = current_user.email
+    elif next_status == "picked_up":
+        update_data["pickup_date"] = pickup_date or now
+        update_data["pickup_tracking_id"] = pickup_tracking_id
+        update_data["pickup_courier"] = pickup_courier
+    elif next_status == "warehouse_received":
+        update_data["warehouse_received_date"] = warehouse_received_date or now
+    elif next_status == "condition_checked":
+        update_data["received_condition"] = received_condition
+        update_data["condition_notes"] = condition_notes
+        if condition_images:
+            update_data["condition_images"] = condition_images
+    elif next_status == "not_required":
+        update_data["pickup_not_required"] = True
+    
+    # Add to status history
+    status_history = replacement.get("status_history", [])
+    status_history.append({
+        "timeline": "pickup",
+        "status": next_status,
+        "timestamp": now,
+        "changed_by": current_user.email,
+        "notes": notes
+    })
+    update_data["status_history"] = status_history
+    
+    await db.replacement_requests.update_one(
+        {"id": replacement_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    return ReplacementRequest(**updated)
+
+# BUG #6: Advance Shipment Timeline (separate from pickup)
+@router.patch("/{replacement_id}/advance-shipment")
+async def advance_shipment_timeline(
+    replacement_id: str,
+    next_status: str,
+    # Shipment fields
+    new_tracking_id: Optional[str] = None,
+    new_courier: Optional[str] = None,
+    items_sent_description: Optional[str] = None,
+    parts_tracking_id: Optional[str] = None,
+    parts_courier: Optional[str] = None,
+    parts_description: Optional[str] = None,
+    delivered_date: Optional[str] = None,
+    notes: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Advance replacement shipment timeline independently.
+    Flow: pending -> approved -> dispatched -> delivered -> closed
+    """
+    replacement = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    if not replacement:
+        raise HTTPException(status_code=404, detail="Replacement request not found")
+    
+    current_shipment_status = replacement.get("shipment_status", "pending")
+    
+    # Define shipment workflow transitions
+    SHIPMENT_TRANSITIONS = {
+        "pending": ["approved"],
+        "approved": ["dispatched", "parts_shipped"],
+        "dispatched": ["delivered"],
+        "parts_shipped": ["delivered"],
+        "delivered": ["closed"],
+        "closed": []
+    }
+    
+    allowed = SHIPMENT_TRANSITIONS.get(current_shipment_status, [])
+    if next_status not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot transition shipment from '{current_shipment_status}' to '{next_status}'. Allowed: {allowed}"
+        )
+    
+    # Validate required fields
+    if next_status == "dispatched" and not new_tracking_id:
+        raise HTTPException(status_code=400, detail="new_tracking_id is required for dispatch")
+    
+    if next_status == "parts_shipped" and not parts_tracking_id:
+        raise HTTPException(status_code=400, detail="parts_tracking_id is required")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    update_data = {
+        "shipment_status": next_status,
+        "updated_at": now
+    }
+    
+    # Set fields based on status
+    if next_status == "approved":
+        update_data["replacement_approved"] = True
+        update_data["replacement_approved_date"] = now
+        update_data["replacement_approved_by"] = current_user.email
+    elif next_status == "dispatched":
+        update_data["new_tracking_id"] = new_tracking_id
+        update_data["new_courier"] = new_courier
+        update_data["items_sent_description"] = items_sent_description
+        update_data["ship_date"] = now
+    elif next_status == "parts_shipped":
+        update_data["parts_tracking_id"] = parts_tracking_id
+        update_data["parts_courier"] = parts_courier
+        update_data["parts_description"] = parts_description
+        update_data["ship_date"] = now
+    elif next_status == "delivered":
+        update_data["delivered_date"] = delivered_date or now
+        update_data["delivery_confirmed"] = True
+    elif next_status == "closed":
+        update_data["resolved_date"] = now
+        update_data["issue_resolved"] = True
+        # Check if both timelines are closed
+        pickup_status = replacement.get("pickup_status")
+        if pickup_status in ["closed", "not_required", None]:
+            update_data["replacement_status"] = "resolved"
+    
+    # Add to status history
+    status_history = replacement.get("status_history", [])
+    status_history.append({
+        "timeline": "shipment",
+        "status": next_status,
+        "timestamp": now,
+        "changed_by": current_user.email,
+        "notes": notes
+    })
+    update_data["status_history"] = status_history
+    
+    await db.replacement_requests.update_one(
+        {"id": replacement_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    return ReplacementRequest(**updated)
+
+# Update analytics counts to use new dual status fields
+@router.get("/analytics/counts-v2")
+async def get_replacement_counts_v2(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get counts for replacement dashboard with dual approval filters"""
+    # Open Replacement Requests
+    open_count = await db.replacement_requests.count_documents({
+        "replacement_status": {"$nin": ["resolved", "rejected"]}
+    })
+    
+    # Pickup Approval Pending
+    pickup_approval_pending = await db.replacement_requests.count_documents({
+        "pickup_approved": {"$ne": True},
+        "pickup_not_required": {"$ne": True},
+        "replacement_status": {"$nin": ["resolved", "rejected"]}
+    })
+    
+    # Replacement Approval Pending
+    replacement_approval_pending = await db.replacement_requests.count_documents({
+        "replacement_approved": {"$ne": True},
+        "replacement_status": {"$nin": ["resolved", "rejected"]}
+    })
+    
+    # Pickups in Progress (approved but not closed)
+    pickups_in_progress = await db.replacement_requests.count_documents({
+        "pickup_approved": True,
+        "pickup_status": {"$nin": ["closed", "not_required", None]},
+        "replacement_status": {"$nin": ["resolved", "rejected"]}
+    })
+    
+    # Shipments in Progress
+    shipments_in_progress = await db.replacement_requests.count_documents({
+        "replacement_approved": True,
+        "shipment_status": {"$nin": ["closed", None]},
+        "replacement_status": {"$nin": ["resolved", "rejected"]}
+    })
+    
+    return {
+        "open_replacement_requests": open_count,
+        "pickup_approval_pending": pickup_approval_pending,
+        "replacement_approval_pending": replacement_approval_pending,
+        "pickups_in_progress": pickups_in_progress,
+        "shipments_in_progress": shipments_in_progress
     }
