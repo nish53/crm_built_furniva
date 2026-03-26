@@ -719,6 +719,17 @@ class ReplacementRequest(BaseModel):
     
     # Delivery confirmation
     delivery_confirmed: bool = False
+    
+    # DUAL APPROVAL FIELDS (Bug #6)
+    pickup_approved: bool = False  # Approval to collect old product
+    pickup_approved_date: Optional[datetime] = None
+    pickup_approved_by: Optional[str] = None
+    replacement_approved: bool = False  # Approval to send new product
+    replacement_approved_date: Optional[datetime] = None
+    replacement_approved_by: Optional[str] = None
+    
+    # Previous status for undo functionality (Bug #3)
+    previous_status: Optional[str] = None
 
 class ReplacementRequestCreate(BaseModel):
     order_id: str

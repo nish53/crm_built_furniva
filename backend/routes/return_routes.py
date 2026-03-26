@@ -728,3 +728,61 @@ async def delete_return_request(
         raise HTTPException(status_code=404, detail="Return request not found")
     
     return {"message": "Return request deleted successfully", "deleted_count": result.deleted_count}
+
+
+# BUG #1: Dashboard analytics for Returns page
+@router.get("/analytics/dashboard")
+async def get_returns_dashboard_analytics(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get dashboard analytics for returns page - reason-wise breakdown"""
+    # Total open returns (exclude closed)
+    total_open = await db.return_requests.count_documents({
+        "return_status": {"$ne": "closed"}
+    })
+    
+    # Total closed returns
+    total_closed = await db.return_requests.count_documents({
+        "return_status": "closed"
+    })
+    
+    # Group by cancellation_reason
+    reason_pipeline = [
+        {"$match": {"return_status": {"$ne": "closed"}}},
+        {
+            "$group": {
+                "_id": "$cancellation_reason",
+                "count": {"$sum": 1}
+            }
+        },
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]
+    reasons = await db.return_requests.aggregate(reason_pipeline).to_list(10)
+    
+    # Group by return_type
+    type_pipeline = [
+        {"$match": {"return_status": {"$ne": "closed"}}},
+        {
+            "$group": {
+                "_id": "$return_type",
+                "count": {"$sum": 1}
+            }
+        },
+        {"$sort": {"count": -1}}
+    ]
+    types = await db.return_requests.aggregate(type_pipeline).to_list(10)
+    
+    # Pending actions count (returns in requested status)
+    pending_count = await db.return_requests.count_documents({
+        "return_status": "requested"
+    })
+    
+    return {
+        "total_open": total_open,
+        "total_closed": total_closed,
+        "pending_action": pending_count,
+        "by_reason": [{"reason": r["_id"] or "Not Specified", "count": r["count"]} for r in reasons],
+        "by_type": [{"type": t["_id"] or "Unknown", "count": t["count"]} for t in types]
+    }

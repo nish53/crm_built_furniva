@@ -10,7 +10,11 @@ import {
   Package, 
   Filter,
   Eye,
-  Trash2
+  Trash2,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  TrendingUp
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -18,10 +22,12 @@ export const Returns = () => {
   const [returns, setReturns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [analytics, setAnalytics] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchReturns();
+    fetchAnalytics();
   }, []);
 
   const fetchReturns = async () => {
@@ -35,6 +41,15 @@ export const Returns = () => {
       toast.error('Failed to fetch open returns');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAnalytics = async () => {
+    try {
+      const response = await api.get('/return-requests/analytics/dashboard');
+      setAnalytics(response.data);
+    } catch (error) {
+      console.error('Failed to fetch analytics:', error);
     }
   };
 
@@ -94,11 +109,94 @@ export const Returns = () => {
           <h1 className="text-3xl font-bold font-[Manrope]">Open Returns</h1>
           <p className="text-muted-foreground mt-1">Manage in-progress return requests (excluding closed returns)</p>
         </div>
-        <Button onClick={fetchReturns}>
+        <Button onClick={() => { fetchReturns(); fetchAnalytics(); }}>
           <RefreshCcw className="w-4 h-4 mr-2" />
           Refresh
         </Button>
       </div>
+
+      {/* Analytics Dashboard - Reason Wise (Bug #1) */}
+      {analytics && (
+        <div className="space-y-4">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Open</p>
+                    <p className="text-2xl font-bold">{analytics.total_open}</p>
+                  </div>
+                  <Package className="w-8 h-8 text-blue-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Pending Action</p>
+                    <p className="text-2xl font-bold text-orange-600">{analytics.pending_action}</p>
+                  </div>
+                  <Clock className="w-8 h-8 text-orange-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Closed</p>
+                    <p className="text-2xl font-bold text-green-600">{analytics.total_closed}</p>
+                  </div>
+                  <CheckCircle className="w-8 h-8 text-green-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Reasons Tracked</p>
+                    <p className="text-2xl font-bold">{analytics.by_reason?.length || 0}</p>
+                  </div>
+                  <TrendingUp className="w-8 h-8 text-purple-500" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Reason-Wise Analytics */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg font-[Manrope] flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-orange-500" />
+                Returns by Reason
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {analytics.by_reason?.map((item, idx) => (
+                  <Badge 
+                    key={idx} 
+                    variant="outline" 
+                    className="px-3 py-1 text-sm cursor-pointer hover:bg-secondary"
+                    onClick={() => setSearchTerm(item.reason)}
+                  >
+                    {item.reason}: <span className="font-bold ml-1">{item.count}</span>
+                  </Badge>
+                ))}
+                {(!analytics.by_reason || analytics.by_reason.length === 0) && (
+                  <p className="text-sm text-muted-foreground">No return reasons recorded yet</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Search */}
       <div className="flex items-center gap-4">

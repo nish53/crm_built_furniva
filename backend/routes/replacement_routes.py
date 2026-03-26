@@ -275,6 +275,7 @@ async def advance_replacement_workflow(
     now = datetime.now(timezone.utc).isoformat()
     update_data = {
         "replacement_status": next_status,
+        "previous_status": current_status,  # Save for undo functionality
         "updated_at": now
     }
     
@@ -392,3 +393,178 @@ async def delete_replacement_request(
         raise HTTPException(status_code=404, detail="Replacement request not found")
     
     return {"message": "Replacement request deleted successfully", "deleted_count": result.deleted_count}
+
+
+# BUG #3: Add UNDO endpoint for replacements
+@router.patch("/{replacement_id}/undo")
+async def undo_replacement_status(
+    replacement_id: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Undo the last status change on a replacement request"""
+    replacement = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    if not replacement:
+        raise HTTPException(status_code=404, detail="Replacement request not found")
+    
+    previous_status = replacement.get("previous_status")
+    if not previous_status:
+        raise HTTPException(status_code=400, detail="No previous status to revert to")
+    
+    current_status = replacement.get("replacement_status")
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Record undo in status history
+    status_history = replacement.get("status_history", [])
+    status_history.append({
+        "status": previous_status,
+        "timestamp": now,
+        "changed_by": current_user.email,
+        "notes": f"Undone from {current_status}",
+        "is_undo": True
+    })
+    
+    update_data = {
+        "replacement_status": previous_status,
+        "previous_status": None,  # Clear previous status after undo
+        "updated_at": now,
+        "status_history": status_history
+    }
+    
+    # If undoing from resolved, also revert order status
+    if current_status == "resolved":
+        await db.orders.update_one(
+            {"id": replacement["order_id"]},
+            {"$set": {
+                "replacement_status": previous_status,
+                "status": "delivered"  # Revert order status
+            }}
+        )
+    
+    await db.replacement_requests.update_one(
+        {"id": replacement_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    return ReplacementRequest(**updated)
+
+# BUG #6: Dual Approval - Approve Pickup
+@router.patch("/{replacement_id}/approve-pickup")
+async def approve_pickup(
+    replacement_id: str,
+    notes: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Approve pickup of old/damaged product (separate from replacement approval)"""
+    replacement = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    if not replacement:
+        raise HTTPException(status_code=404, detail="Replacement request not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Update pickup approval
+    status_history = replacement.get("status_history", [])
+    status_history.append({
+        "status": "pickup_approved",
+        "timestamp": now,
+        "changed_by": current_user.email,
+        "notes": notes or "Pickup approved",
+        "approval_type": "pickup"
+    })
+    
+    update_data = {
+        "pickup_approved": True,
+        "pickup_approved_date": now,
+        "pickup_approved_by": current_user.email,
+        "updated_at": now,
+        "status_history": status_history
+    }
+    
+    await db.replacement_requests.update_one(
+        {"id": replacement_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    return {"message": "Pickup approved successfully", "replacement": ReplacementRequest(**updated)}
+
+# BUG #6: Dual Approval - Approve Replacement Shipment
+@router.patch("/{replacement_id}/approve-replacement")
+async def approve_replacement_shipment(
+    replacement_id: str,
+    notes: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Approve sending replacement product (separate from pickup approval)"""
+    replacement = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    if not replacement:
+        raise HTTPException(status_code=404, detail="Replacement request not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    # Update replacement approval
+    status_history = replacement.get("status_history", [])
+    status_history.append({
+        "status": "replacement_approved",
+        "timestamp": now,
+        "changed_by": current_user.email,
+        "notes": notes or "Replacement shipment approved",
+        "approval_type": "replacement"
+    })
+    
+    update_data = {
+        "replacement_approved": True,
+        "replacement_approved_date": now,
+        "replacement_approved_by": current_user.email,
+        "updated_at": now,
+        "status_history": status_history
+    }
+    
+    await db.replacement_requests.update_one(
+        {"id": replacement_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.replacement_requests.find_one({"id": replacement_id}, {"_id": 0})
+    return {"message": "Replacement shipment approved successfully", "replacement": ReplacementRequest(**updated)}
+
+# BUG #5: Analytics endpoint for replacement counters
+@router.get("/analytics/counts")
+async def get_replacement_counts(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get counts for replacement dashboard counters"""
+    # Open Replacement Requests (exclude resolved and rejected)
+    open_count = await db.replacement_requests.count_documents({
+        "replacement_status": {"$nin": ["resolved", "rejected"]}
+    })
+    
+    # Replacements to be Shipped (approved but not yet dispatched)
+    to_ship_count = await db.replacement_requests.count_documents({
+        "replacement_status": {"$in": ["approved", "warehouse_received"]},
+        "new_tracking_id": {"$in": [None, ""]},
+        "parts_tracking_id": {"$in": [None, ""]}
+    })
+    
+    # Replacements in Transit (dispatched but not delivered)
+    in_transit_count = await db.replacement_requests.count_documents({
+        "replacement_status": {"$in": ["new_shipment_dispatched", "parts_shipped"]}
+    })
+    
+    # Pickups Pending (approved but not picked up, and pickup is required)
+    pickups_pending_count = await db.replacement_requests.count_documents({
+        "replacement_status": {"$in": ["requested", "approved"]},
+        "pickup_not_required": {"$ne": True},
+        "pickup_tracking_id": {"$in": [None, ""]}
+    })
+    
+    return {
+        "open_replacement_requests": open_count,
+        "replacements_to_be_shipped": to_ship_count,
+        "replacements_in_transit": in_transit_count,
+        "pickups_pending": pickups_pending_count
+    }

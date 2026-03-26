@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import api from '../lib/api';
 import { toast } from 'sonner';
-import { Package, Clock, CheckCircle2, Truck, AlertTriangle, X, Trash2, Eye } from 'lucide-react';
+import { Package, Clock, CheckCircle2, Truck, AlertTriangle, X, Trash2, Eye, RefreshCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Replacements = () => {
@@ -17,10 +17,12 @@ export const Replacements = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [resolutionNotes, setResolutionNotes] = useState('');
+  const [counters, setCounters] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchReplacements();
+    fetchCounters();
   }, [statusFilter]);
 
   const fetchReplacements = async () => {
@@ -40,6 +42,15 @@ export const Replacements = () => {
     }
   };
 
+  const fetchCounters = async () => {
+    try {
+      const response = await api.get('/replacement-requests/analytics/counts');
+      setCounters(response.data);
+    } catch (error) {
+      console.error('Failed to fetch counters:', error);
+    }
+  };
+
   const handleDelete = async (replacementId) => {
     if (!window.confirm('Are you sure you want to delete this replacement request? This action cannot be undone.')) {
       return;
@@ -56,23 +67,52 @@ export const Replacements = () => {
 
   const updateStatus = async (replacementId, newStatus) => {
     try {
-      const params = { new_status: newStatus };
-      if (trackingNumber) params.tracking_number = trackingNumber;
-      if (resolutionNotes) params.resolution_notes = resolutionNotes;
+      // Use advance endpoint for new workflow statuses, status endpoint for legacy
+      const newWorkflowStatuses = ['approved', 'rejected', 'picked_up', 'pickup_not_required', 
+        'warehouse_received', 'new_shipment_dispatched', 'parts_shipped', 'delivered', 'resolved'];
       
-      await api.patch(`/replacement-requests/${replacementId}/status`, null, { params });
-      toast.success(`Status updated to: ${newStatus}`);
+      if (newWorkflowStatuses.includes(newStatus)) {
+        // Use advance endpoint for new workflow
+        const params = new URLSearchParams({ next_status: newStatus });
+        if (trackingNumber) params.append('new_tracking_id', trackingNumber);
+        if (resolutionNotes) params.append('notes', resolutionNotes);
+        
+        await api.patch(`/replacement-requests/${replacementId}/advance?${params.toString()}`);
+      } else {
+        // Legacy status update
+        const params = { new_status: newStatus };
+        if (trackingNumber) params.tracking_number = trackingNumber;
+        if (resolutionNotes) params.resolution_notes = resolutionNotes;
+        
+        await api.patch(`/replacement-requests/${replacementId}/status`, null, { params });
+      }
+      
+      toast.success(`Status updated to: ${newStatus.replace(/_/g, ' ')}`);
       setShowStatusModal(false);
       setTrackingNumber('');
       setResolutionNotes('');
       fetchReplacements();
+      fetchCounters();
     } catch (error) {
-      toast.error('Failed to update status');
+      toast.error(error.response?.data?.detail || 'Failed to update status');
     }
   };
 
   const getStatusBadge = (status) => {
     const statusMap = {
+      // New workflow statuses
+      'requested': { color: 'bg-blue-100 text-blue-800', icon: Clock },
+      'approved': { color: 'bg-green-100 text-green-800', icon: CheckCircle2 },
+      'rejected': { color: 'bg-red-100 text-red-800', icon: X },
+      'picked_up': { color: 'bg-purple-100 text-purple-800', icon: Truck },
+      'pickup_in_transit': { color: 'bg-purple-100 text-purple-800', icon: Truck },
+      'pickup_not_required': { color: 'bg-gray-100 text-gray-800', icon: Package },
+      'warehouse_received': { color: 'bg-teal-100 text-teal-800', icon: Package },
+      'new_shipment_dispatched': { color: 'bg-orange-100 text-orange-800', icon: Truck },
+      'parts_shipped': { color: 'bg-yellow-100 text-yellow-800', icon: Package },
+      'delivered': { color: 'bg-green-100 text-green-800', icon: CheckCircle2 },
+      'resolved': { color: 'bg-green-200 text-green-900', icon: CheckCircle2 },
+      // Legacy statuses
       'Replacement Pending': { color: 'bg-orange-100 text-orange-800', icon: Clock },
       'Priority Review': { color: 'bg-red-100 text-red-800', icon: AlertTriangle },
       'Ship Replacement': { color: 'bg-blue-100 text-blue-800', icon: Package },
@@ -88,7 +128,7 @@ export const Replacements = () => {
     return (
       <Badge className={config.color}>
         <Icon className="w-3 h-3 mr-1" />
-        {status}
+        {status?.replace(/_/g, ' ')}
       </Badge>
     );
   };
@@ -96,6 +136,40 @@ export const Replacements = () => {
   const getNextActions = (replacement) => {
     const status = replacement.replacement_status;
     
+    // New workflow statuses
+    if (status === 'requested') {
+      return [
+        { label: 'Approve', status: 'approved', needsInput: false },
+        { label: 'Reject', status: 'rejected', needsInput: false }
+      ];
+    }
+    if (status === 'approved') {
+      return [
+        { label: 'Schedule Pickup', status: 'picked_up', needsInput: 'pickup' },
+        { label: 'Pickup Not Required', status: 'pickup_not_required', needsInput: false },
+        { label: 'Ship Replacement', status: 'new_shipment_dispatched', needsInput: 'tracking' }
+      ];
+    }
+    if (status === 'picked_up' || status === 'pickup_in_transit') {
+      return [
+        { label: 'Warehouse Received', status: 'warehouse_received', needsInput: false },
+        { label: 'Ship Replacement', status: 'new_shipment_dispatched', needsInput: 'tracking' }
+      ];
+    }
+    if (status === 'warehouse_received') {
+      return [
+        { label: 'Ship Replacement', status: 'new_shipment_dispatched', needsInput: 'tracking' },
+        { label: 'Ship Parts', status: 'parts_shipped', needsInput: 'tracking' }
+      ];
+    }
+    if (status === 'new_shipment_dispatched' || status === 'parts_shipped') {
+      return [{ label: 'Mark Delivered', status: 'delivered', needsInput: false }];
+    }
+    if (status === 'delivered') {
+      return [{ label: 'Mark Resolved', status: 'resolved', needsInput: false }];
+    }
+    
+    // Legacy workflow statuses (backward compatibility)
     if (status === 'Replacement Pending') {
       return [
         { label: 'Mark Priority', status: 'Priority Review', needsInput: false },
@@ -112,10 +186,7 @@ export const Replacements = () => {
       return [{ label: 'Mark Delivered', status: 'Delivered', needsInput: false }];
     }
     if (status === 'Delivered') {
-      return [
-        { label: 'Issue Resolved', status: 'Issue Resolved', needsInput: 'resolution' },
-        { label: 'Not Resolved', status: 'Issue Not Resolved', needsInput: 'resolution' }
-      ];
+      return [{ label: 'Mark Resolved', status: 'resolved', needsInput: false }];
     }
     
     return [];
@@ -129,54 +200,58 @@ export const Replacements = () => {
           <h1 className="text-3xl font-bold font-[Manrope]">Open Replacements</h1>
           <p className="text-muted-foreground mt-1">Manage in-progress replacement requests (resolved replacements moved to Resolved Orders)</p>
         </div>
+        <Button onClick={() => { fetchReplacements(); fetchCounters(); }}>
+          <RefreshCcw className="w-4 h-4 mr-2" />
+          Refresh
+        </Button>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - Bug #5: Updated Counters */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('Replacement Pending')}>
+        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('all')}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pending</p>
-                <p className="text-2xl font-bold">{replacements.filter(r => r.replacement_status === 'Replacement Pending').length}</p>
-              </div>
-              <Clock className="w-8 h-8 text-orange-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('Priority Review')}>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Priority</p>
-                <p className="text-2xl font-bold">{replacements.filter(r => r.replacement_status === 'Priority Review').length}</p>
-              </div>
-              <AlertTriangle className="w-8 h-8 text-red-500" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('Ship Replacement')}>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">To Ship</p>
-                <p className="text-2xl font-bold">{replacements.filter(r => r.replacement_status === 'Ship Replacement').length}</p>
+                <p className="text-sm text-muted-foreground">Open Requests</p>
+                <p className="text-2xl font-bold">{counters?.open_replacement_requests || replacements.length}</p>
               </div>
               <Package className="w-8 h-8 text-blue-500" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('Delivered')}>
+        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('approved')}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Delivered</p>
-                <p className="text-2xl font-bold">{replacements.filter(r => r.replacement_status === 'Delivered').length}</p>
+                <p className="text-sm text-muted-foreground">To Be Shipped</p>
+                <p className="text-2xl font-bold text-orange-600">{counters?.replacements_to_be_shipped || 0}</p>
               </div>
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
+              <Clock className="w-8 h-8 text-orange-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('new_shipment_dispatched')}>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">In Transit</p>
+                <p className="text-2xl font-bold text-purple-600">{counters?.replacements_in_transit || 0}</p>
+              </div>
+              <Truck className="w-8 h-8 text-purple-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('requested')}>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Pickups Pending</p>
+                <p className="text-2xl font-bold text-red-600">{counters?.pickups_pending || 0}</p>
+              </div>
+              <AlertTriangle className="w-8 h-8 text-red-500" />
             </div>
           </CardContent>
         </Card>

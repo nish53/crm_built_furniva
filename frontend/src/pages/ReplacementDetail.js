@@ -8,7 +8,7 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import {
   ArrowLeft, Package, User, Calendar, Truck,
-  CheckCircle, XCircle, Clock, ChevronRight, Box
+  CheckCircle, XCircle, Clock, ChevronRight, Box, Undo2, ShieldCheck
 } from 'lucide-react';
 
 // Replacement Workflow - DUAL TIMELINE STAGES
@@ -129,6 +129,52 @@ export const ReplacementDetail = () => {
       fetchReplacement();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to advance workflow');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Bug #3: Undo functionality
+  const handleUndo = async () => {
+    if (!window.confirm('Are you sure you want to undo the last status change?')) {
+      return;
+    }
+    
+    setUpdating(true);
+    try {
+      await api.patch(`/replacement-requests/${id}/undo`);
+      toast.success('Status undone successfully');
+      fetchReplacement();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to undo status');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Bug #6: Dual Approval - Approve Pickup
+  const handleApprovePickup = async () => {
+    setUpdating(true);
+    try {
+      await api.patch(`/replacement-requests/${id}/approve-pickup`);
+      toast.success('Pickup approved successfully');
+      fetchReplacement();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to approve pickup');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Bug #6: Dual Approval - Approve Replacement
+  const handleApproveReplacement = async () => {
+    setUpdating(true);
+    try {
+      await api.patch(`/replacement-requests/${id}/approve-replacement`);
+      toast.success('Replacement shipment approved successfully');
+      fetchReplacement();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to approve replacement');
     } finally {
       setUpdating(false);
     }
@@ -334,10 +380,104 @@ export const ReplacementDetail = () => {
             )}
           </div>
 
-          {replacement.replacement_status !== 'resolved' && replacement.replacement_status !== 'rejected' && (
-            <Button onClick={() => setShowAdvanceModal(true)} className="w-full mt-4">
-              Advance Workflow
-            </Button>
+          {/* Action Buttons - Bug #3 Undo and Bug #6 Dual Approval */}
+          <div className="flex flex-wrap gap-3 mt-4">
+            {/* Advance Workflow Button */}
+            {replacement.replacement_status !== 'resolved' && replacement.replacement_status !== 'rejected' && (
+              <Button onClick={() => setShowAdvanceModal(true)} className="flex-1">
+                Advance Workflow
+              </Button>
+            )}
+            
+            {/* Undo Button - Bug #3 */}
+            {replacement.previous_status && (
+              <Button 
+                variant="outline" 
+                onClick={handleUndo}
+                disabled={updating}
+                className="flex items-center gap-2"
+              >
+                <Undo2 className="w-4 h-4" />
+                Undo to {replacement.previous_status}
+              </Button>
+            )}
+          </div>
+
+          {/* Dual Approval Section - Bug #6 */}
+          {replacement.replacement_status === 'requested' && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5" />
+                Dual Approval Required
+              </h4>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Pickup Approval */}
+                <div className="p-3 bg-white rounded border">
+                  <p className="text-sm font-medium mb-2">Pickup Approval</p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Approve collection of old/damaged product from customer
+                  </p>
+                  {replacement.pickup_approved ? (
+                    <Badge className="bg-green-100 text-green-800">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Approved by {replacement.pickup_approved_by}
+                    </Badge>
+                  ) : (
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={handleApprovePickup}
+                      disabled={updating}
+                      className="w-full"
+                    >
+                      Approve Pickup
+                    </Button>
+                  )}
+                </div>
+                
+                {/* Replacement Approval */}
+                <div className="p-3 bg-white rounded border">
+                  <p className="text-sm font-medium mb-2">Replacement Approval</p>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Approve sending new replacement product to customer
+                  </p>
+                  {replacement.replacement_approved ? (
+                    <Badge className="bg-green-100 text-green-800">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Approved by {replacement.replacement_approved_by}
+                    </Badge>
+                  ) : (
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={handleApproveReplacement}
+                      disabled={updating}
+                      className="w-full"
+                    >
+                      Approve Replacement
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Show approval status for non-requested states */}
+          {replacement.replacement_status !== 'requested' && (replacement.pickup_approved || replacement.replacement_approved) && (
+            <div className="mt-4 flex gap-4">
+              {replacement.pickup_approved && (
+                <Badge variant="outline" className="text-green-700">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Pickup Approved
+                </Badge>
+              )}
+              {replacement.replacement_approved && (
+                <Badge variant="outline" className="text-green-700">
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Replacement Approved
+                </Badge>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>

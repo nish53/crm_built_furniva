@@ -1252,6 +1252,150 @@ metadata:
           Added QC image upload capability.
           Stage-specific form fields for each workflow stage.
 
+  - task: "Returns Dashboard Analytics"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/return_routes.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ RETURNS DASHBOARD ANALYTICS FULLY FUNCTIONAL
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          - GET /api/return-requests/analytics/dashboard endpoint working perfectly
+          - Response structure correct: total_open, total_closed, pending_action, by_reason, by_type
+          - Analytics data properly aggregated and returned
+          - Current metrics: total_open=1, total_closed=0, pending_action=1
+          - by_reason entries: 1, by_type entries: 1
+          - All required fields present and properly formatted
+          
+          PRODUCTION READY: Dashboard analytics provide comprehensive return insights
+          for business intelligence and operational management.
+
+  - task: "Replacement Counter Cards"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/replacement_routes.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ REPLACEMENT COUNTER CARDS FULLY FUNCTIONAL
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          - GET /api/replacement-requests/analytics/counts endpoint working perfectly
+          - Response structure correct: open_replacement_requests, replacements_to_be_shipped, replacements_in_transit, pickups_pending
+          - All values are numeric and >= 0 as required
+          - Current metrics: open_replacement_requests=1, replacements_to_be_shipped=0, replacements_in_transit=0, pickups_pending=1
+          - Proper aggregation logic for different replacement statuses
+          
+          PRODUCTION READY: Counter cards provide real-time replacement workflow metrics
+          for dashboard visualization and operational tracking.
+
+  - task: "Replacement Undo Functionality"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/replacement_routes.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ REPLACEMENT UNDO FUNCTIONALITY FULLY FUNCTIONAL
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          1. ✅ Replacement Creation: Successfully created test replacement
+          2. ✅ Status Advance: Advanced replacement from 'requested' to 'approved'
+          3. ✅ Previous Status Tracking: previous_status correctly saved as 'requested'
+          4. ✅ Undo Operation: PATCH /api/replacement-requests/{id}/undo working perfectly
+          5. ✅ Status Reversion: Status correctly reverted from 'approved' back to 'requested'
+          6. ✅ Previous Status Cleanup: previous_status correctly cleared to None after undo
+          
+          VALIDATION RESULTS:
+          - Initial state: replacement_status = "requested", previous_status = None
+          - After advance: replacement_status = "approved", previous_status = "requested"
+          - After undo: replacement_status = "requested", previous_status = None
+          
+          PRODUCTION READY: Undo functionality provides safety net for accidental status changes
+          in replacement workflow management.
+
+  - task: "Dual Approval System"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/replacement_routes.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ DUAL APPROVAL SYSTEM FULLY FUNCTIONAL
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          
+          1. ✅ Pickup Approval (PATCH /api/replacement-requests/{id}/approve-pickup):
+             - pickup_approved correctly set to: True
+             - pickup_approved_by correctly set to: test@furniva.com
+             - pickup_approved_date correctly set with timestamp: 2026-03-26T06:25:09.369933Z
+             - Status history properly updated with approval entry
+          
+          2. ✅ Replacement Approval (PATCH /api/replacement-requests/{id}/approve-replacement):
+             - replacement_approved correctly set to: True
+             - replacement_approved_by correctly set to: test@furniva.com
+             - replacement_approved_date correctly set with timestamp: 2026-03-26T06:25:09.412000Z
+             - Status history properly updated with approval entry
+          
+          VALIDATION RESULTS:
+          - Both approvals can be granted independently
+          - Proper audit trail with user and timestamp tracking
+          - Response structure includes nested replacement data
+          - All approval fields properly stored in database
+          
+          PRODUCTION READY: Dual approval system enables separate authorization for
+          pickup collection and replacement shipment, providing proper workflow control
+          and audit capabilities for replacement operations.
+
+  - task: "Replacement Status Transitions"
+    implemented: true
+    working: true
+    file: "/app/backend/routes/replacement_routes.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: |
+          ✅ REPLACEMENT STATUS TRANSITIONS FULLY FUNCTIONAL
+          
+          COMPREHENSIVE TESTING COMPLETED:
+          - Full workflow tested: requested → approved → new_shipment_dispatched → delivered → resolved
+          
+          TRANSITION VALIDATION:
+          1. ✅ requested → approved: Successfully transitioned
+          2. ✅ approved → new_shipment_dispatched: Successfully transitioned (with tracking_id=TEST123)
+          3. ✅ new_shipment_dispatched → delivered: Successfully transitioned
+          4. ✅ delivered → resolved: Successfully transitioned
+          
+          WORKFLOW FEATURES VERIFIED:
+          - Status validation: Only allowed transitions permitted
+          - Required field validation: new_tracking_id required for shipment dispatch
+          - Previous status tracking: Each transition saves previous_status for undo capability
+          - Final status verification: Replacement correctly reaches "resolved" state
+          
+          PRODUCTION READY: Complete replacement workflow from initial request through
+          final resolution with proper validation and state management at each stage.
+
 test_plan:
   current_focus: []
   stuck_tasks: []
@@ -1259,6 +1403,59 @@ test_plan:
   test_priority: "critical_first"
 
 agent_communication:
+  - agent: "main"
+    message: |
+      === RETURNS/REPLACEMENTS BUG FIXES - SESSION 2026-03-26 ===
+      
+      Implemented 6 bug fixes/features for Returns & Replacements section:
+      
+      1. BUG #1 - Returns Dashboard Analytics (Reason-Wise):
+         - Added /api/return-requests/analytics/dashboard endpoint
+         - Returns total_open, total_closed, pending_action counts
+         - Groups returns by_reason with counts for each
+         - Frontend updated with analytics cards at top of Returns page
+         - File: /app/backend/routes/return_routes.py (new endpoint)
+         - File: /app/frontend/src/pages/Returns.js (dashboard UI)
+      
+      2. BUG #2 - Priority on Replacements:
+         - Priority functionality was already in backend
+         - Fixed frontend getNextActions to support new workflow
+         - Status mapping now includes requested, approved, etc.
+      
+      3. BUG #3 - Replacement Dual Timeline Undo:
+         - Added /api/replacement-requests/{id}/undo endpoint
+         - Saves previous_status on every status change
+         - Can undo from resolved back to previous state
+         - Undo button shows in ReplacementDetail when previous_status exists
+         - File: /app/backend/routes/replacement_routes.py
+         - File: /app/backend/models.py (added previous_status field)
+         - File: /app/frontend/src/pages/ReplacementDetail.js
+      
+      4. BUG #4 - Replacement Resolved Not Working:
+         - Fixed status mapping: "Issue Resolved" -> "resolved"
+         - Updated getNextActions to return correct status values
+         - updateStatus now uses /advance endpoint for new workflow
+      
+      5. BUG #5 - Replacement Counter Cards:
+         - Added /api/replacement-requests/analytics/counts endpoint
+         - Returns: open_replacement_requests, replacements_to_be_shipped,
+                   replacements_in_transit, pickups_pending
+         - Updated counter cards in Replacements.js
+      
+      6. BUG #6 - Dual Approval (Pickup + Replacement):
+         - Added /api/replacement-requests/{id}/approve-pickup endpoint
+         - Added /api/replacement-requests/{id}/approve-replacement endpoint
+         - New model fields: pickup_approved, replacement_approved, etc.
+         - UI shows dual approval section for requested status
+         - Each can be approved independently
+      
+      NEEDS BACKEND TESTING TO VERIFY:
+      - /api/return-requests/analytics/dashboard
+      - /api/replacement-requests/analytics/counts
+      - /api/replacement-requests/{id}/undo
+      - /api/replacement-requests/{id}/approve-pickup
+      - /api/replacement-requests/{id}/approve-replacement
+      - Status transitions with /advance endpoint
   - agent: "testing"
     message: |
       🎉 CRITICAL BUG FIXES TESTING COMPLETE - ALL 4 TESTS PASSED! 🎉
@@ -1313,6 +1510,74 @@ agent_communication:
       Main Agent: The 4 critical bug fixes have been thoroughly tested and validated.
       All systems are working correctly and ready for user deployment. The Furniva CRM
       application is now stable for production use with these critical issues resolved.
+  - agent: "testing"
+    message: |
+      🎉 RETURNS & REPLACEMENTS BACKEND TESTING COMPLETE - ALL 6 TESTS PASSED! 🎉
+      
+      === COMPREHENSIVE VALIDATION RESULTS ===
+      Date: 2026-03-26 Testing Session
+      Test Coverage: 6/6 Returns & Replacements endpoints passed (100% success rate)
+      
+      ✅ **TEST 1 - Returns Dashboard Analytics (PASSED):**
+      - GET /api/return-requests/analytics/dashboard endpoint working perfectly
+      - Response structure correct: total_open, total_closed, pending_action, by_reason, by_type
+      - Current metrics: total_open=1, total_closed=0, pending_action=1, by_reason=1, by_type=1
+      - All required fields present and properly formatted for dashboard visualization
+      
+      ✅ **TEST 2 - Replacement Counter Counts (PASSED):**
+      - GET /api/replacement-requests/analytics/counts endpoint working perfectly
+      - Response structure correct: open_replacement_requests, replacements_to_be_shipped, replacements_in_transit, pickups_pending
+      - All values numeric and >= 0: open=1, to_be_shipped=0, in_transit=0, pickups_pending=1
+      - Proper aggregation logic for different replacement workflow statuses
+      
+      ✅ **TEST 3 - Replacement Undo Functionality (PASSED):**
+      - Created replacement → Advanced to approved → Verified previous_status saved
+      - PATCH /api/replacement-requests/{id}/undo working perfectly
+      - Status correctly reverted from 'approved' back to 'requested'
+      - previous_status correctly cleared to None after undo operation
+      - Provides safety net for accidental status changes
+      
+      ✅ **TEST 4 - Dual Approval Pickup (PASSED):**
+      - PATCH /api/replacement-requests/{id}/approve-pickup working perfectly
+      - pickup_approved=True, pickup_approved_by=test@furniva.com, pickup_approved_date set
+      - Proper audit trail with user and timestamp tracking
+      - Independent approval for pickup collection operations
+      
+      ✅ **TEST 5 - Dual Approval Replacement (PASSED):**
+      - PATCH /api/replacement-requests/{id}/approve-replacement working perfectly
+      - replacement_approved=True, replacement_approved_by=test@furniva.com, replacement_approved_date set
+      - Proper audit trail with user and timestamp tracking
+      - Independent approval for replacement shipment operations
+      
+      ✅ **TEST 6 - Status Transition to Resolved (PASSED):**
+      - Full workflow tested: requested → approved → new_shipment_dispatched → delivered → resolved
+      - All transitions working with proper validation (tracking_id required for shipment)
+      - Previous status tracking working for undo capability
+      - Final status correctly reaches "resolved" state
+      
+      🎯 **TEST EXECUTION SUMMARY:**
+      - Authentication: ✅ Working with proper JWT tokens
+      - Test data creation: ✅ Created orders and replacements for isolated testing
+      - API responses: ✅ All endpoints returning correct status codes (200)
+      - Data validation: ✅ All response structures match expected formats
+      - Workflow validation: ✅ Status transitions and business logic working correctly
+      - Cleanup: ✅ Test data properly removed after testing
+      
+      🚀 **PRODUCTION READINESS:**
+      - All 6 Returns & Replacements endpoints are fully functional and tested
+      - Dashboard analytics provide comprehensive business intelligence
+      - Counter cards enable real-time operational tracking
+      - Undo functionality provides workflow safety and error recovery
+      - Dual approval system enables proper authorization controls
+      - Status transitions support complete replacement lifecycle management
+      - No breaking changes or regressions detected
+      
+      🏆 **FINAL STATUS: ALL RETURNS & REPLACEMENTS BACKEND ENDPOINTS ARE COMPLETE AND FUNCTIONAL!**
+      
+      Main Agent: The Returns & Replacements system has been thoroughly tested and validated.
+      All 6 critical endpoints are working correctly and ready for production deployment.
+      The backend APIs provide comprehensive support for returns analytics, replacement workflow
+      management, dual approval processes, and complete status lifecycle tracking.
   - agent: "main"
     message: |
       === CRITICAL FIXES COMPLETED ===
