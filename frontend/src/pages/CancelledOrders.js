@@ -47,33 +47,36 @@ const CancelledOrders = () => {
     order.customer_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // SIMPLIFIED TABS - Grouped by category
-  // Only show main categories + most common reasons within each
+  // EXACT REASONS from user's screenshots - No generic terms!
   const reasonTabs = [
-    // Main categories
-    { key: 'all', label: 'All Cancelled', color: 'gray', isCategory: true },
+    // Main view
+    { key: 'all', label: 'All Cancelled', color: 'gray' },
     
-    // PFC (Pre-Fulfillment)
-    { key: 'did_not_specify', label: 'PFC - No Reason', color: 'gray' },
-    { key: 'change_of_mind', label: 'PFC - Change of Mind', color: 'gray' },
-    { key: 'found_better_pricing', label: 'PFC - Better Pricing', color: 'gray' },
+    // PFC (Pre-Fulfillment) - 6 reasons
+    { key: 'change_of_mind', label: 'Change of Mind', color: 'gray' },
+    { key: 'found_better_pricing', label: 'Found Better Pricing', color: 'gray' },
+    { key: 'ordered_mistakenly', label: 'Ordered Mistakenly', color: 'gray' },
+    { key: 'wants_to_customize', label: 'Wants to Customize', color: 'gray' },
+    { key: 'did_not_specify', label: 'Did Not Specify', color: 'gray' },
+    { key: 'customer_not_available_pfc', label: 'Customer not Available (PFC)', color: 'gray' },
     
-    // RTO (Return to Origin - before delivery)
-    { key: 'customer_refused_doorstep', label: 'RTO - Customer Refused', color: 'blue' },
-    { key: 'customer_unavailable', label: 'RTO - Customer Unavailable', color: 'blue' },
-    { key: 'delay', label: 'RTO - Delay', color: 'blue' },
-    { key: 'in_transit', label: 'RTO - In-Transit', color: 'blue' },
+    // RTO (In-Transit) - 3 reasons
+    { key: 'customer_refused_doorstep', label: 'Customer Refused at Doorstep', color: 'blue' },
+    { key: 'customer_unavailable', label: 'Customer Unavailable', color: 'blue' },
+    { key: 'delay', label: 'Delay', color: 'blue' },
     
-    // Post-Delivery Returns
-    { key: 'damage', label: 'Return - Damage', color: 'orange' },
-    { key: 'defective_product', label: 'Return - Defective', color: 'orange' },
-    { key: 'hardware_missing', label: 'Return - Hardware Missing', color: 'orange' },
-    { key: 'wrong_product_sent', label: 'Return - Wrong Product', color: 'orange' },
-    { key: 'customer_quality_issues', label: 'Return - Quality Issues', color: 'orange' },
+    // Post-Delivery - 8 reasons
+    { key: 'damage', label: 'Damage', color: 'orange' },
+    { key: 'customer_issues_except_quality', label: 'Customer Issues (Except Quality)', color: 'orange' },
+    { key: 'hardware_missing', label: 'Hardware Missing', color: 'orange' },
+    { key: 'defective_product', label: 'Defective Product', color: 'orange' },
+    { key: 'fraud_customer', label: 'Fraud Customer', color: 'orange' },
+    { key: 'wrong_product_sent', label: 'Wrong Product Sent', color: 'orange' },
+    { key: 'customer_quality_issues', label: 'Customer Quality Issues', color: 'orange' },
+    { key: 'product_delayed_customer_accepted', label: 'Product Delayed & Customer Accepted', color: 'orange' },
     
-    // Other
-    { key: 'no_status', label: 'No Status', color: 'red' },
-    { key: 'fraud_customer', label: 'Fraud Customer', color: 'red' }
+    // No Status
+    { key: 'no_status', label: 'No Status', color: 'red' }
   ];
 
   const getReasonCount = (reason) => {

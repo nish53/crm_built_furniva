@@ -619,44 +619,49 @@ async def get_cancelled_orders_stats(
     result = await db.orders.aggregate(pipeline).to_list(None)
     
     # Group by reason with proper labels
-    # SIMPLIFIED STRUCTURE:
-    # 1. PFC (Pre-Fulfillment) - Order cancelled BEFORE dispatch
-    # 2. RTO (Return to Origin) - Order shipped but returned BEFORE delivery
-    # 3. POST-DELIVERY - Order delivered then returned
+    # EXACT REASONS FROM USER'S SCREENSHOTS - No generic terms!
+    # These are the ONLY valid cancellation reasons
     
     reason_groups = {
         # PFC - Pre-Fulfillment Cancellations (before dispatch)
-        "did_not_specify": {"label": "Did Not Specify", "count": 0, "orders": [], "category": "PFC"},
         "change_of_mind": {"label": "Change of Mind", "count": 0, "orders": [], "category": "PFC"},
         "found_better_pricing": {"label": "Found Better Pricing", "count": 0, "orders": [], "category": "PFC"},
-        "pre_dispatch": {"label": "Pre-Dispatch", "count": 0, "orders": [], "category": "PFC"},
+        "ordered_mistakenly": {"label": "Ordered Mistakenly", "count": 0, "orders": [], "category": "PFC"},
+        "wants_to_customize": {"label": "Wants to Customize", "count": 0, "orders": [], "category": "PFC"},
+        "did_not_specify": {"label": "Did Not Specify", "count": 0, "orders": [], "category": "PFC"},
+        "customer_not_available_pfc": {"label": "Customer not Available (PFC)", "count": 0, "orders": [], "category": "PFC"},
         
         # RTO - Return to Origin (after dispatch, before delivery)
-        "customer_refused_doorstep": {"label": "Customer Refused", "count": 0, "orders": [], "category": "RTO"},
+        "customer_refused_doorstep": {"label": "Customer Refused at Doorstep", "count": 0, "orders": [], "category": "RTO"},
         "customer_unavailable": {"label": "Customer Unavailable", "count": 0, "orders": [], "category": "RTO"},
         "delay": {"label": "Delay", "count": 0, "orders": [], "category": "RTO"},
-        "in_transit": {"label": "In-Transit RTO", "count": 0, "orders": [], "category": "RTO"},
         
         # POST-DELIVERY - Returns after delivery
         "damage": {"label": "Damage", "count": 0, "orders": [], "category": "POST_DELIVERY"},
-        "defective_product": {"label": "Defective Product", "count": 0, "orders": [], "category": "POST_DELIVERY"},
+        "customer_issues_except_quality": {"label": "Customer Issues (Except Quality)", "count": 0, "orders": [], "category": "POST_DELIVERY"},
         "hardware_missing": {"label": "Hardware Missing", "count": 0, "orders": [], "category": "POST_DELIVERY"},
-        "wrong_product_sent": {"label": "Wrong Product", "count": 0, "orders": [], "category": "POST_DELIVERY"},
-        "customer_quality_issues": {"label": "Quality Issues", "count": 0, "orders": [], "category": "POST_DELIVERY"},
-        "customer_issues_except_quality": {"label": "Customer Issues", "count": 0, "orders": [], "category": "POST_DELIVERY"},
-        "post_delivery": {"label": "Post-Delivery Return", "count": 0, "orders": [], "category": "POST_DELIVERY"},
-        "product_delayed_customer_accepted": {"label": "Delayed & Accepted", "count": 0, "orders": [], "category": "POST_DELIVERY"},
+        "defective_product": {"label": "Defective Product", "count": 0, "orders": [], "category": "POST_DELIVERY"},
+        "fraud_customer": {"label": "Fraud Customer", "count": 0, "orders": [], "category": "POST_DELIVERY"},
+        "wrong_product_sent": {"label": "Wrong Product Sent", "count": 0, "orders": [], "category": "POST_DELIVERY"},
+        "customer_quality_issues": {"label": "Customer Quality Issues", "count": 0, "orders": [], "category": "POST_DELIVERY"},
+        "product_delayed_customer_accepted": {"label": "Product Delayed & Customer Accepted", "count": 0, "orders": [], "category": "POST_DELIVERY"},
         
-        # OTHER
-        "fraud_customer": {"label": "Fraud Customer", "count": 0, "orders": [], "category": "OTHER"},
-        "no_status": {"label": "No Status", "count": 0, "orders": [], "category": "OTHER"}
+        # NO STATUS - For orders without a reason
+        "no_status": {"label": "No Status", "count": 0, "orders": [], "category": "NO_STATUS"}
     }
     
     for group in result:
-        reason = group["_id"] or "no_status"
+        reason = group["_id"]
+        # Handle null/None/empty reasons as "no_status"
+        if reason is None or reason == "" or reason == "null":
+            reason = "no_status"
         if reason in reason_groups:
             reason_groups[reason]["count"] = group["count"]
             reason_groups[reason]["orders"] = group["orders"][:5]  # First 5 orders only
+        else:
+            # Unknown reasons go to no_status
+            reason_groups["no_status"]["count"] += group["count"]
+            reason_groups["no_status"]["orders"].extend(group["orders"][:5])
     
     total_cancelled = sum(g["count"] for g in reason_groups.values())
     
@@ -664,7 +669,7 @@ async def get_cancelled_orders_stats(
     pfc_total = sum(g["count"] for g in reason_groups.values() if g.get("category") == "PFC")
     rto_total = sum(g["count"] for g in reason_groups.values() if g.get("category") == "RTO")
     post_delivery_total = sum(g["count"] for g in reason_groups.values() if g.get("category") == "POST_DELIVERY")
-    other_total = sum(g["count"] for g in reason_groups.values() if g.get("category") == "OTHER")
+    no_status_total = sum(g["count"] for g in reason_groups.values() if g.get("category") == "NO_STATUS")
     
     return {
         "total_cancelled": total_cancelled,
@@ -674,7 +679,7 @@ async def get_cancelled_orders_stats(
             "PFC": {"label": "Pre-Fulfillment Cancellations (PFC)", "count": pfc_total},
             "RTO": {"label": "RTO Pre-Delivery (Excluding PFC)", "count": rto_total},
             "POST_DELIVERY": {"label": "Returns % (Post-Delivery)", "count": post_delivery_total},
-            "OTHER": {"label": "Other", "count": other_total}
+            "NO_STATUS": {"label": "No Status", "count": no_status_total}
         }
     }
 

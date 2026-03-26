@@ -617,6 +617,7 @@ async def advance_return_workflow(
     )
     
     # SYNC return dates to order timeline - update order with RTO progress
+    # These fields are used by the Order Timeline in frontend
     order_sync_data = {"return_status": next_status}
     
     if next_status == "rto_in_transit":
@@ -624,7 +625,9 @@ async def advance_return_workflow(
         order_sync_data["rto_tracking_number"] = update_data.get("rto_tracking_number")
         order_sync_data["rto_courier"] = update_data.get("rto_courier")
     elif next_status == "warehouse_received":
-        order_sync_data["rto_delivered_date"] = update_data.get("rto_delivered_date")
+        # For timeline: both rto_delivered_date and rto_warehouse_received_date
+        order_sync_data["rto_delivered_date"] = update_data.get("rto_delivered_date") or update_data.get("warehouse_received_date")
+        order_sync_data["rto_warehouse_received_date"] = update_data.get("warehouse_received_date") or update_data.get("rto_delivered_date")
         order_sync_data["warehouse_received_date"] = update_data.get("warehouse_received_date")
         if update_data.get("received_condition"):
             order_sync_data["rto_received_condition"] = update_data.get("received_condition")
@@ -639,13 +642,16 @@ async def advance_return_workflow(
         order_sync_data["refund_date"] = update_data.get("refund_date")
         order_sync_data["refund_amount"] = update_data.get("refund_amount")
         order_sync_data["refund_reference_id"] = update_data.get("refund_reference_id")
+    elif next_status == "approved":
+        order_sync_data["return_approved_date"] = update_data.get("approved_date")
+    elif next_status == "accepted":
+        order_sync_data["return_accepted_date"] = update_data.get("approved_date")
     
-    # Update order with synced return data (for all steps, not just closed)
-    if len(order_sync_data) > 1:  # More than just return_status
-        await db.orders.update_one(
-            {"id": return_req["order_id"]},
-            {"$set": order_sync_data}
-        )
+    # ALWAYS update order with synced return data for all steps
+    await db.orders.update_one(
+        {"id": return_req["order_id"]},
+        {"$set": order_sync_data}
+    )
     
     # Get order to check previous_status
     order = await db.orders.find_one({"id": return_req["order_id"]}, {"_id": 0})
@@ -676,46 +682,18 @@ async def advance_return_workflow(
         return_data = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
         original_reason = return_data.get("cancellation_reason", "")
         
-        # Set cancellation category and reason based on return_type
+        # KEEP the original cancellation_reason - no mapping needed!
+        # The cancellation_reason is already in the correct format from the dropdown
+        order_update["cancellation_reason"] = original_reason
+        
+        # Set cancellation category based on return_type
         if return_type == "in_transit":
-            # RTO Pre-Delivery (Excluding PFC) - product was dispatched but returned before delivery
             order_update["rto_category"] = "RTO Pre-Delivery"
             order_update["cancellation_category"] = "RTO Pre-Delivery (Excluding PFC)"
-            # Map to stats-compatible cancellation_reason
-            # Default to "in_transit" for stats grouping if no specific reason
-            if "refuse" in original_reason.lower():
-                order_update["cancellation_reason"] = "customer_refused_doorstep"
-            elif "unavailable" in original_reason.lower():
-                order_update["cancellation_reason"] = "customer_unavailable"
-            elif "delay" in original_reason.lower():
-                order_update["cancellation_reason"] = "delay"
-            else:
-                order_update["cancellation_reason"] = "in_transit"  # Generic in-transit cancellation
         elif return_type == "pre_dispatch":
             order_update["cancellation_category"] = "Pre-Dispatch Cancellation"
-            # Map to stats-compatible cancellation_reason
-            if "mind" in original_reason.lower() or "change" in original_reason.lower():
-                order_update["cancellation_reason"] = "change_of_mind"
-            elif "price" in original_reason.lower() or "pricing" in original_reason.lower():
-                order_update["cancellation_reason"] = "found_better_pricing"
-            else:
-                order_update["cancellation_reason"] = "pre_dispatch"  # Generic pre-dispatch cancellation
         elif return_type == "post_delivery":
             order_update["cancellation_category"] = "Post-Delivery Return"
-            # Map to stats-compatible cancellation_reason based on original reason
-            reason_lower = original_reason.lower() if original_reason else ""
-            if "damage" in reason_lower:
-                order_update["cancellation_reason"] = "damage"
-            elif "quality" in reason_lower:
-                order_update["cancellation_reason"] = "customer_quality_issues"
-            elif "wrong" in reason_lower:
-                order_update["cancellation_reason"] = "wrong_product_sent"
-            elif "defect" in reason_lower:
-                order_update["cancellation_reason"] = "defective_product"
-            elif "hardware" in reason_lower or "missing" in reason_lower:
-                order_update["cancellation_reason"] = "hardware_missing"
-            else:
-                order_update["cancellation_reason"] = original_reason or "post_delivery"
         
         # Add condition info to order if available from return request
         if return_data.get("received_condition"):
