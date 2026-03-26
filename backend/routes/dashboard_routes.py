@@ -14,6 +14,9 @@ async def get_dashboard_stats(
     today = datetime.now(timezone.utc).date().isoformat()
     
     total_orders = await db.orders.count_documents({})
+    
+    # PENDING ORDERS = Orders that are status="pending" (not shipped/dispatched yet)
+    # This includes ALL pending orders regardless of dispatch date
     pending_orders = await db.orders.count_documents({"status": "pending"})
     
     dispatched_today_count = await db.orders.count_documents({
@@ -22,21 +25,16 @@ async def get_dashboard_stats(
     
     pending_tasks = await db.tasks.count_documents({"status": "pending"})
     
-    # BUG FIX: Pending Confirmation = SUBSET of pending orders where:
-    # 1. Status = pending (not confirmed yet)
-    # 2. dispatch_by date is TODAY or PAST (urgent/overdue for confirmation)
-    # This is different from total pending_orders
+    # PENDING CONFIRMATION = Orders where:
+    # 1. Status = "pending" (not confirmed/dispatched)
+    # 2. dispatch_by date is TODAY or IN THE PAST (not future)
+    # This means orders that SHOULD have been dispatched by now but haven't been confirmed
+    # Example: Order placed March 23, dispatch_by March 26, today is March 26 - SHOW
+    # Example: Order placed March 22, dispatch_by March 25, today is March 26 - SHOW (overdue)
+    # Example: Order placed March 25, dispatch_by March 28, today is March 26 - DON'T SHOW (future)
     pending_confirmation = await db.orders.count_documents({
-        "$and": [
-            {"status": "pending"},
-            {
-                "$or": [
-                    {"dispatch_by": {"$lte": today}},
-                    {"dispatch_by": {"$exists": False}},
-                    {"dispatch_by": None}
-                ]
-            }
-        ]
+        "status": "pending",
+        "dispatch_by": {"$lte": today}  # dispatch_by is today or past (NOT future)
     })
     
     low_stock_items = await db.products.count_documents({

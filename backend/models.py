@@ -487,6 +487,7 @@ class ReturnStatus(str, Enum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     CLOSED = "closed"
+    RESOLVED = "resolved"  # NEW: Final status for completed returns
     # In-transit RTO specific
     RTO_IN_TRANSIT = "rto_in_transit"
     # Post-delivery pickup specific

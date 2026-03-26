@@ -54,7 +54,35 @@ export const ReplacementDetail = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [showPickupModal, setShowPickupModal] = useState(false);
+  const [showShipmentModal, setShowShipmentModal] = useState(false);
   const [selectedNextStatus, setSelectedNextStatus] = useState('');
+  const [conditionImages, setConditionImages] = useState([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  
+  // Pickup form state
+  const [pickupForm, setPickupForm] = useState({
+    pickup_date: '',
+    pickup_tracking_id: '',
+    pickup_courier: '',
+    warehouse_received_date: '',
+    received_condition: '',
+    condition_notes: '',
+    notes: ''
+  });
+  
+  // Shipment form state
+  const [shipmentForm, setShipmentForm] = useState({
+    new_tracking_id: '',
+    new_courier: '',
+    items_sent_description: '',
+    parts_tracking_id: '',
+    parts_courier: '',
+    parts_description: '',
+    delivered_date: '',
+    notes: ''
+  });
+  
   const [advanceForm, setAdvanceForm] = useState({
     notes: '',
     // Pickup fields
@@ -91,6 +119,133 @@ export const ReplacementDetail = () => {
       toast.error('Failed to load replacement request');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Image upload handler
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+    
+    setUploadingImages(true);
+    const uploadedUrls = [];
+    
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await api.post('/uploads/image', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        if (response.data?.url) {
+          uploadedUrls.push(response.data.url);
+        }
+      } catch (err) {
+        console.error('Failed to upload image:', err);
+      }
+    }
+    
+    setConditionImages(prev => [...prev, ...uploadedUrls]);
+    setUploadingImages(false);
+  };
+
+  // UNDO HANDLER - Fixed
+  const handleUndo = async () => {
+    if (!window.confirm('Are you sure you want to undo the last status change?')) {
+      return;
+    }
+    
+    setUpdating(true);
+    try {
+      const response = await api.patch(`/replacement-requests/${id}/undo`);
+      toast.success('Status undone successfully');
+      fetchReplacement();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to undo status');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // PICKUP APPROVAL HANDLER - Fixed
+  const handleApprovePickup = async () => {
+    setUpdating(true);
+    try {
+      const response = await api.patch(`/replacement-requests/${id}/approve-pickup`);
+      toast.success('Pickup approved successfully');
+      fetchReplacement();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to approve pickup');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // REPLACEMENT APPROVAL HANDLER - Fixed  
+  const handleApproveReplacement = async () => {
+    setUpdating(true);
+    try {
+      const response = await api.patch(`/replacement-requests/${id}/approve-replacement`);
+      toast.success('Replacement shipment approved successfully');
+      fetchReplacement();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to approve replacement');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // ADVANCE PICKUP TIMELINE
+  const handleAdvancePickup = async (nextStatus) => {
+    setUpdating(true);
+    try {
+      const params = new URLSearchParams({ next_status: nextStatus });
+      
+      // Add form fields
+      Object.entries(pickupForm).forEach(([key, value]) => {
+        if (value) params.append(key, value);
+      });
+      
+      // Add condition images
+      if (conditionImages.length > 0 && nextStatus === 'condition_checked') {
+        params.append('condition_images', JSON.stringify(conditionImages));
+      }
+      
+      await api.patch(`/replacement-requests/${id}/advance-pickup?${params.toString()}`);
+      toast.success(`Pickup ${nextStatus.replace(/_/g, ' ')} successfully`);
+      setShowPickupModal(false);
+      setPickupForm({ pickup_date: '', pickup_tracking_id: '', pickup_courier: '', warehouse_received_date: '', received_condition: '', condition_notes: '', notes: '' });
+      setConditionImages([]);
+      fetchReplacement();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to advance pickup');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // ADVANCE SHIPMENT TIMELINE
+  const handleAdvanceShipment = async (nextStatus) => {
+    setUpdating(true);
+    try {
+      const params = new URLSearchParams({ next_status: nextStatus });
+      
+      // Add form fields
+      Object.entries(shipmentForm).forEach(([key, value]) => {
+        if (value) params.append(key, value);
+      });
+      
+      await api.patch(`/replacement-requests/${id}/advance-shipment?${params.toString()}`);
+      toast.success(`Shipment ${nextStatus.replace(/_/g, ' ')} successfully`);
+      setShowShipmentModal(false);
+      setShipmentForm({ new_tracking_id: '', new_courier: '', items_sent_description: '', parts_tracking_id: '', parts_courier: '', parts_description: '', delivered_date: '', notes: '' });
+      fetchReplacement();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to advance shipment');
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -134,52 +289,6 @@ export const ReplacementDetail = () => {
       fetchReplacement();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to advance workflow');
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  // Bug #3: Undo functionality
-  const handleUndo = async () => {
-    if (!window.confirm('Are you sure you want to undo the last status change?')) {
-      return;
-    }
-    
-    setUpdating(true);
-    try {
-      await api.patch(`/replacement-requests/${id}/undo`);
-      toast.success('Status undone successfully');
-      fetchReplacement();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to undo status');
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  // Bug #6: Dual Approval - Approve Pickup
-  const handleApprovePickup = async () => {
-    setUpdating(true);
-    try {
-      await api.patch(`/replacement-requests/${id}/approve-pickup`);
-      toast.success('Pickup approved successfully');
-      fetchReplacement();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to approve pickup');
-    } finally {
-      setUpdating(false);
-    }
-  };
-
-  // Bug #6: Dual Approval - Approve Replacement
-  const handleApproveReplacement = async () => {
-    setUpdating(true);
-    try {
-      await api.patch(`/replacement-requests/${id}/approve-replacement`);
-      toast.success('Replacement shipment approved successfully');
-      fetchReplacement();
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to approve replacement');
     } finally {
       setUpdating(false);
     }
@@ -385,106 +494,121 @@ export const ReplacementDetail = () => {
             )}
           </div>
 
-          {/* Action Buttons - Bug #3 Undo and Bug #6 Dual Approval */}
-          <div className="flex flex-wrap gap-3 mt-4">
-            {/* Advance Workflow Button */}
-            {replacement.replacement_status !== 'resolved' && replacement.replacement_status !== 'rejected' && (
-              <Button onClick={() => setShowAdvanceModal(true)} className="flex-1">
-                Advance Workflow
-              </Button>
-            )}
-            
-            {/* Undo Button - Bug #3 */}
-            {replacement.previous_status && (
-              <Button 
-                variant="outline" 
-                onClick={handleUndo}
-                disabled={updating}
-                className="flex items-center gap-2"
-              >
-                <Undo2 className="w-4 h-4" />
-                Undo to {replacement.previous_status}
-              </Button>
-            )}
-          </div>
-
-          {/* Dual Approval Section - Bug #6 */}
-          {/* Show when not resolved/rejected and either approval is still pending */}
+          {/* Dual Approval Section - Bug #6 - COMPLETELY REDESIGNED */}
           {replacement.replacement_status !== 'resolved' && replacement.replacement_status !== 'rejected' && (
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h4 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5" />
-                Dual Approval Status
-              </h4>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Pickup Approval */}
-                <div className="p-3 bg-white rounded border">
-                  <p className="text-sm font-medium mb-2">Pickup Approval</p>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Approve collection of old/damaged product from customer
-                  </p>
+            <div className="mt-4 space-y-4">
+              {/* PICKUP TIMELINE CONTROLS */}
+              <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <h4 className="font-semibold text-orange-800 mb-3 flex items-center gap-2">
+                  <Package className="w-5 h-5" />
+                  Pickup Workflow
+                </h4>
+                
+                {/* Approval Status */}
+                <div className="mb-3">
                   {replacement.pickup_not_required ? (
-                    <Badge className="bg-gray-100 text-gray-700">
-                      Pickup Not Required
-                    </Badge>
-                  ) : replacement.pickup_approved ? (
+                    <Badge className="bg-gray-100 text-gray-700">Pickup Not Required</Badge>
+                  ) : !replacement.pickup_approved ? (
+                    <div className="flex items-center gap-3">
+                      <Badge className="bg-yellow-100 text-yellow-800">Pending Approval</Badge>
+                      <Button 
+                        size="sm" 
+                        onClick={handleApprovePickup}
+                        disabled={updating}
+                        className="bg-orange-500 hover:bg-orange-600"
+                      >
+                        {updating ? 'Processing...' : 'Approve Pickup'}
+                      </Button>
+                    </div>
+                  ) : (
                     <Badge className="bg-green-100 text-green-800">
                       <CheckCircle className="w-3 h-3 mr-1" />
                       Approved by {replacement.pickup_approved_by}
                     </Badge>
-                  ) : (
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={handleApprovePickup}
-                      disabled={updating}
-                      className="w-full"
-                    >
-                      Approve Pickup
-                    </Button>
                   )}
                 </div>
                 
-                {/* Replacement Approval */}
-                <div className="p-3 bg-white rounded border">
-                  <p className="text-sm font-medium mb-2">Replacement Approval</p>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Approve sending new replacement product to customer
-                  </p>
-                  {replacement.replacement_approved ? (
+                {/* Pickup Timeline Actions (only if approved) */}
+                {replacement.pickup_approved && !replacement.pickup_not_required && (
+                  <div className="pt-3 border-t border-orange-200">
+                    <p className="text-sm mb-2">
+                      <strong>Current Status:</strong> {(replacement.pickup_status || 'approved').replace(/_/g, ' ')}
+                    </p>
+                    {replacement.pickup_status !== 'closed' && (
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => setShowPickupModal(true)}
+                        className="border-orange-400 text-orange-700 hover:bg-orange-100"
+                      >
+                        Advance Pickup Timeline →
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* SHIPMENT TIMELINE CONTROLS */}
+              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                <h4 className="font-semibold text-green-800 mb-3 flex items-center gap-2">
+                  <Truck className="w-5 h-5" />
+                  Replacement Shipment Workflow
+                </h4>
+                
+                {/* Approval Status */}
+                <div className="mb-3">
+                  {!replacement.replacement_approved ? (
+                    <div className="flex items-center gap-3">
+                      <Badge className="bg-yellow-100 text-yellow-800">Pending Approval</Badge>
+                      <Button 
+                        size="sm" 
+                        onClick={handleApproveReplacement}
+                        disabled={updating}
+                        className="bg-green-500 hover:bg-green-600"
+                      >
+                        {updating ? 'Processing...' : 'Approve Replacement'}
+                      </Button>
+                    </div>
+                  ) : (
                     <Badge className="bg-green-100 text-green-800">
                       <CheckCircle className="w-3 h-3 mr-1" />
                       Approved by {replacement.replacement_approved_by}
                     </Badge>
-                  ) : (
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={handleApproveReplacement}
-                      disabled={updating}
-                      className="w-full"
-                    >
-                      Approve Replacement
-                    </Button>
                   )}
                 </div>
+                
+                {/* Shipment Timeline Actions (only if approved) */}
+                {replacement.replacement_approved && (
+                  <div className="pt-3 border-t border-green-200">
+                    <p className="text-sm mb-2">
+                      <strong>Current Status:</strong> {(replacement.shipment_status || 'approved').replace(/_/g, ' ')}
+                    </p>
+                    {replacement.shipment_status !== 'closed' && (
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => setShowShipmentModal(true)}
+                        className="border-green-400 text-green-700 hover:bg-green-100"
+                      >
+                        Advance Shipment Timeline →
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
-              
-              {/* Show pickup status if approved */}
-              {replacement.pickup_approved && replacement.pickup_status && replacement.pickup_status !== 'pending' && (
-                <div className="mt-3 pt-3 border-t">
-                  <p className="text-sm text-blue-700">
-                    <strong>Pickup Status:</strong> {replacement.pickup_status.replace(/_/g, ' ')}
-                  </p>
-                </div>
-              )}
-              
-              {/* Show shipment status if approved */}
-              {replacement.replacement_approved && replacement.shipment_status && replacement.shipment_status !== 'pending' && (
-                <div className="mt-2">
-                  <p className="text-sm text-blue-700">
-                    <strong>Shipment Status:</strong> {replacement.shipment_status.replace(/_/g, ' ')}
-                  </p>
+
+              {/* Undo Button */}
+              {replacement.previous_status && (
+                <div className="pt-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={handleUndo}
+                    disabled={updating}
+                    className="flex items-center gap-2"
+                  >
+                    <Undo2 className="w-4 h-4" />
+                    Undo to {replacement.previous_status}
+                  </Button>
                 </div>
               )}
             </div>
@@ -815,6 +939,268 @@ export const ReplacementDetail = () => {
                   {updating ? 'Updating...' : 'Advance'}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* PICKUP TIMELINE MODAL */}
+      {showPickupModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <CardHeader className="bg-orange-50 border-b">
+              <CardTitle className="font-[Manrope] text-orange-800">Advance Pickup Timeline</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Current Status: <strong>{(replacement.pickup_status || 'approved').replace(/_/g, ' ')}</strong>
+              </p>
+
+              {/* Picked Up */}
+              {(replacement.pickup_status === 'approved' || !replacement.pickup_status) && (
+                <div className="p-4 border rounded-lg">
+                  <h5 className="font-medium mb-3">Mark as Picked Up</h5>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium">Pickup Tracking ID *</label>
+                      <Input
+                        value={pickupForm.pickup_tracking_id}
+                        onChange={e => setPickupForm({ ...pickupForm, pickup_tracking_id: e.target.value })}
+                        placeholder="Enter tracking ID"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Courier</label>
+                      <Input
+                        value={pickupForm.pickup_courier}
+                        onChange={e => setPickupForm({ ...pickupForm, pickup_courier: e.target.value })}
+                        placeholder="e.g., Blue Dart, Delhivery"
+                      />
+                    </div>
+                    <Button 
+                      onClick={() => handleAdvancePickup('picked_up')}
+                      disabled={updating || !pickupForm.pickup_tracking_id}
+                      className="w-full bg-orange-500 hover:bg-orange-600"
+                    >
+                      {updating ? 'Processing...' : 'Mark Picked Up'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Warehouse Received */}
+              {(replacement.pickup_status === 'picked_up' || replacement.pickup_status === 'in_transit') && (
+                <div className="p-4 border rounded-lg">
+                  <h5 className="font-medium mb-3">Mark as Warehouse Received</h5>
+                  <Button 
+                    onClick={() => handleAdvancePickup('warehouse_received')}
+                    disabled={updating}
+                    className="w-full bg-orange-500 hover:bg-orange-600"
+                  >
+                    {updating ? 'Processing...' : 'Mark Warehouse Received'}
+                  </Button>
+                </div>
+              )}
+
+              {/* Condition Check */}
+              {replacement.pickup_status === 'warehouse_received' && (
+                <div className="p-4 border rounded-lg">
+                  <h5 className="font-medium mb-3">Condition Check</h5>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium">Received Condition *</label>
+                      <select
+                        value={pickupForm.received_condition}
+                        onChange={e => setPickupForm({ ...pickupForm, received_condition: e.target.value })}
+                        className="w-full p-2 border rounded-md mt-1"
+                      >
+                        <option value="">-- Select --</option>
+                        <option value="mint">Mint Condition</option>
+                        <option value="damaged">Damaged Condition</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Condition Notes</label>
+                      <textarea
+                        value={pickupForm.condition_notes}
+                        onChange={e => setPickupForm({ ...pickupForm, condition_notes: e.target.value })}
+                        placeholder="Describe the condition..."
+                        className="w-full p-2 border rounded-md mt-1 min-h-[60px]"
+                      />
+                    </div>
+                    {/* Image upload for damaged condition */}
+                    {pickupForm.received_condition === 'damaged' && (
+                      <div>
+                        <label className="text-sm font-medium">Upload Damage Images</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleImageUpload}
+                          className="w-full mt-1 text-sm"
+                          disabled={uploadingImages}
+                        />
+                        {uploadingImages && <p className="text-xs text-orange-600">Uploading...</p>}
+                        {conditionImages.length > 0 && (
+                          <div className="mt-2 flex gap-2 flex-wrap">
+                            {conditionImages.map((url, idx) => (
+                              <img key={idx} src={url} alt="" className="w-16 h-16 object-cover rounded" />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <Button 
+                      onClick={() => handleAdvancePickup('condition_checked')}
+                      disabled={updating || !pickupForm.received_condition}
+                      className="w-full bg-orange-500 hover:bg-orange-600"
+                    >
+                      {updating ? 'Processing...' : 'Submit Condition Check'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Close Pickup */}
+              {replacement.pickup_status === 'condition_checked' && (
+                <div className="p-4 border rounded-lg">
+                  <h5 className="font-medium mb-3">Close Pickup Workflow</h5>
+                  <Button 
+                    onClick={() => handleAdvancePickup('closed')}
+                    disabled={updating}
+                    className="w-full bg-orange-500 hover:bg-orange-600"
+                  >
+                    {updating ? 'Processing...' : 'Close Pickup'}
+                  </Button>
+                </div>
+              )}
+
+              <Button variant="outline" onClick={() => setShowPickupModal(false)} className="w-full">
+                Cancel
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* SHIPMENT TIMELINE MODAL */}
+      {showShipmentModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <CardHeader className="bg-green-50 border-b">
+              <CardTitle className="font-[Manrope] text-green-800">Advance Shipment Timeline</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Current Status: <strong>{(replacement.shipment_status || 'approved').replace(/_/g, ' ')}</strong>
+              </p>
+
+              {/* Dispatch Replacement */}
+              {(replacement.shipment_status === 'approved' || !replacement.shipment_status) && (
+                <div className="p-4 border rounded-lg">
+                  <h5 className="font-medium mb-3">Dispatch Replacement</h5>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium">Tracking ID *</label>
+                      <Input
+                        value={shipmentForm.new_tracking_id}
+                        onChange={e => setShipmentForm({ ...shipmentForm, new_tracking_id: e.target.value })}
+                        placeholder="Enter tracking ID"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Courier</label>
+                      <Input
+                        value={shipmentForm.new_courier}
+                        onChange={e => setShipmentForm({ ...shipmentForm, new_courier: e.target.value })}
+                        placeholder="e.g., Blue Dart, Delhivery"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Items Description</label>
+                      <textarea
+                        value={shipmentForm.items_sent_description}
+                        onChange={e => setShipmentForm({ ...shipmentForm, items_sent_description: e.target.value })}
+                        placeholder="Describe what's being sent..."
+                        className="w-full p-2 border rounded-md mt-1 min-h-[60px]"
+                      />
+                    </div>
+                    <Button 
+                      onClick={() => handleAdvanceShipment('dispatched')}
+                      disabled={updating || !shipmentForm.new_tracking_id}
+                      className="w-full bg-green-500 hover:bg-green-600"
+                    >
+                      {updating ? 'Processing...' : 'Mark Dispatched'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Ship Parts (alternative to full dispatch) */}
+              {(replacement.shipment_status === 'approved' || !replacement.shipment_status) && (
+                <div className="p-4 border rounded-lg border-dashed">
+                  <h5 className="font-medium mb-3">Or Ship Parts Only</h5>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-sm font-medium">Parts Tracking ID *</label>
+                      <Input
+                        value={shipmentForm.parts_tracking_id}
+                        onChange={e => setShipmentForm({ ...shipmentForm, parts_tracking_id: e.target.value })}
+                        placeholder="Enter tracking ID"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Parts Description</label>
+                      <textarea
+                        value={shipmentForm.parts_description}
+                        onChange={e => setShipmentForm({ ...shipmentForm, parts_description: e.target.value })}
+                        placeholder="Describe the parts being sent..."
+                        className="w-full p-2 border rounded-md mt-1 min-h-[60px]"
+                      />
+                    </div>
+                    <Button 
+                      onClick={() => handleAdvanceShipment('parts_shipped')}
+                      disabled={updating || !shipmentForm.parts_tracking_id}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      {updating ? 'Processing...' : 'Mark Parts Shipped'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Mark Delivered */}
+              {(replacement.shipment_status === 'dispatched' || replacement.shipment_status === 'parts_shipped') && (
+                <div className="p-4 border rounded-lg">
+                  <h5 className="font-medium mb-3">Mark as Delivered</h5>
+                  <Button 
+                    onClick={() => handleAdvanceShipment('delivered')}
+                    disabled={updating}
+                    className="w-full bg-green-500 hover:bg-green-600"
+                  >
+                    {updating ? 'Processing...' : 'Mark Delivered'}
+                  </Button>
+                </div>
+              )}
+
+              {/* Close Shipment */}
+              {replacement.shipment_status === 'delivered' && (
+                <div className="p-4 border rounded-lg">
+                  <h5 className="font-medium mb-3">Close Shipment Workflow</h5>
+                  <Button 
+                    onClick={() => handleAdvanceShipment('closed')}
+                    disabled={updating}
+                    className="w-full bg-green-500 hover:bg-green-600"
+                  >
+                    {updating ? 'Processing...' : 'Close Shipment'}
+                  </Button>
+                </div>
+              )}
+
+              <Button variant="outline" onClick={() => setShowShipmentModal(false)} className="w-full">
+                Cancel
+              </Button>
             </CardContent>
           </Card>
         </div>

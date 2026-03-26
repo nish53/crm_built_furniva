@@ -8,22 +8,25 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import {
   ArrowLeft, RefreshCcw, User, Calendar, Truck,
-  CheckCircle, XCircle, Clock, Package, ChevronRight
+  CheckCircle, XCircle, Clock, Package, ChevronRight, Upload, Image as ImageIcon
 } from 'lucide-react';
 
-// 3-Type Workflow Stages
+// 3-Type Workflow Stages - UPDATED: removed "closed", added "resolved" and "condition_checked"
 const WORKFLOW_STAGES = {
   pre_dispatch: [
     { key: 'requested', label: 'Requested', icon: Clock },
     { key: 'approved', label: 'Approved', icon: CheckCircle },
-    { key: 'closed', label: 'Closed', icon: XCircle }
+    { key: 'rejected', label: 'Rejected', icon: XCircle },
+    { key: 'resolved', label: 'Resolved', icon: CheckCircle }
   ],
   in_transit: [
     { key: 'requested', label: 'Requested', icon: Clock },
     { key: 'approved', label: 'Approved', icon: CheckCircle },
     { key: 'rto_in_transit', label: 'RTO In Transit', icon: Truck },
     { key: 'warehouse_received', label: 'Warehouse Received', icon: Package },
-    { key: 'closed', label: 'Closed', icon: XCircle }
+    { key: 'condition_checked', label: 'Condition Checked', icon: CheckCircle },
+    { key: 'rejected', label: 'Rejected', icon: XCircle },
+    { key: 'resolved', label: 'Resolved', icon: CheckCircle }
   ],
   post_delivery: [
     { key: 'requested', label: 'Requested', icon: Clock },
@@ -32,7 +35,8 @@ const WORKFLOW_STAGES = {
     { key: 'pickup_in_transit', label: 'Pickup In Transit', icon: Truck },
     { key: 'warehouse_received', label: 'Warehouse Received', icon: Package },
     { key: 'condition_checked', label: 'Condition Checked', icon: CheckCircle },
-    { key: 'closed', label: 'Closed', icon: XCircle }
+    { key: 'rejected', label: 'Rejected', icon: XCircle },
+    { key: 'resolved', label: 'Resolved', icon: CheckCircle }
   ]
 };
 
@@ -47,6 +51,7 @@ const statusColors = {
   pickup_not_required: 'bg-gray-100 text-gray-800',
   warehouse_received: 'bg-teal-100 text-teal-800',
   condition_checked: 'bg-yellow-100 text-yellow-800',
+  resolved: 'bg-green-200 text-green-900',
   closed: 'bg-gray-100 text-gray-800'
 };
 
@@ -59,6 +64,8 @@ export const ReturnDetail = () => {
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [workflowInfo, setWorkflowInfo] = useState(null);
   const [selectedNextStatus, setSelectedNextStatus] = useState('');
+  const [conditionImages, setConditionImages] = useState([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
   const [advanceForm, setAdvanceForm] = useState({
     notes: '',
     // In-transit RTO fields
@@ -72,7 +79,12 @@ export const ReturnDetail = () => {
     // Warehouse fields
     warehouse_received_date: '',
     received_condition: '',
-    condition_notes: ''
+    condition_notes: '',
+    // Rejection fields
+    rejection_reason: '',
+    // Refund fields
+    refund_amount: '',
+    refund_date: ''
   });
 
   useEffect(() => {
@@ -98,9 +110,59 @@ export const ReturnDetail = () => {
     }
   };
 
+  // Handle image upload for condition check
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+    
+    setUploadingImages(true);
+    const uploadedUrls = [];
+    
+    for (const file of files) {
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await api.post('/uploads/image', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        if (response.data?.url) {
+          uploadedUrls.push(response.data.url);
+        }
+      } catch (err) {
+        console.error('Failed to upload image:', err);
+        toast.error(`Failed to upload ${file.name}`);
+      }
+    }
+    
+    setConditionImages(prev => [...prev, ...uploadedUrls]);
+    setUploadingImages(false);
+    
+    if (uploadedUrls.length > 0) {
+      toast.success(`${uploadedUrls.length} image(s) uploaded`);
+    }
+  };
+
+  const removeImage = (index) => {
+    setConditionImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleAdvanceWorkflow = async () => {
     if (!selectedNextStatus) {
       toast.error('Please select next status');
+      return;
+    }
+    
+    // Validation for rejection
+    if (selectedNextStatus === 'rejected' && !advanceForm.rejection_reason) {
+      toast.error('Please provide a rejection reason');
+      return;
+    }
+    
+    // Validation for condition check
+    if (selectedNextStatus === 'condition_checked' && !advanceForm.received_condition) {
+      toast.error('Please select the received condition (mint or damaged)');
       return;
     }
 
@@ -112,11 +174,17 @@ export const ReturnDetail = () => {
           Object.entries(advanceForm).filter(([_, v]) => v !== '' && v !== false)
         )
       });
+      
+      // Add condition images if any
+      if (conditionImages.length > 0) {
+        params.append('condition_images', JSON.stringify(conditionImages));
+      }
 
       await api.patch(`/return-requests/${id}/workflow/advance?${params.toString()}`);
       toast.success('Return workflow advanced successfully');
       setShowAdvanceModal(false);
       setSelectedNextStatus('');
+      setConditionImages([]);
       setAdvanceForm({
         notes: '',
         rto_tracking_number: '',
@@ -127,7 +195,10 @@ export const ReturnDetail = () => {
         pickup_not_required: false,
         warehouse_received_date: '',
         received_condition: '',
-        condition_notes: ''
+        condition_notes: '',
+        rejection_reason: '',
+        refund_amount: '',
+        refund_date: ''
       });
       fetchReturn();
     } catch (err) {
@@ -462,6 +533,89 @@ export const ReturnDetail = () => {
                       onChange={e => setAdvanceForm({ ...advanceForm, condition_notes: e.target.value })}
                       placeholder="Describe the condition..."
                       className="w-full p-2 border rounded-md mt-1 min-h-[80px]"
+                    />
+                  </div>
+                  {/* Image Upload for Damaged Condition */}
+                  {advanceForm.received_condition === 'damaged' && (
+                    <div>
+                      <label className="text-sm font-medium">Upload Damage Images</label>
+                      <div className="mt-2 border-2 border-dashed border-gray-300 rounded-lg p-4">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleImageUpload}
+                          className="hidden"
+                          id="damage-images"
+                          disabled={uploadingImages}
+                        />
+                        <label
+                          htmlFor="damage-images"
+                          className="flex flex-col items-center cursor-pointer"
+                        >
+                          {uploadingImages ? (
+                            <RefreshCcw className="w-8 h-8 text-gray-400 animate-spin" />
+                          ) : (
+                            <Upload className="w-8 h-8 text-gray-400" />
+                          )}
+                          <span className="mt-2 text-sm text-gray-500">
+                            {uploadingImages ? 'Uploading...' : 'Click to upload damage images'}
+                          </span>
+                        </label>
+                      </div>
+                      {/* Preview uploaded images */}
+                      {conditionImages.length > 0 && (
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          {conditionImages.map((url, idx) => (
+                            <div key={idx} className="relative">
+                              <img src={url} alt={`Damage ${idx + 1}`} className="w-full h-20 object-cover rounded" />
+                              <button
+                                onClick={() => removeImage(idx)}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Rejection Reason - Required when rejecting */}
+              {selectedNextStatus === 'rejected' && (
+                <div>
+                  <label className="text-sm font-medium text-red-600">Rejection Reason *</label>
+                  <textarea
+                    value={advanceForm.rejection_reason}
+                    onChange={e => setAdvanceForm({ ...advanceForm, rejection_reason: e.target.value })}
+                    placeholder="Please provide a reason for rejection..."
+                    className="w-full p-2 border border-red-300 rounded-md mt-1 min-h-[80px]"
+                    required
+                  />
+                </div>
+              )}
+
+              {/* Refund fields for resolved status */}
+              {selectedNextStatus === 'resolved' && (
+                <>
+                  <div>
+                    <label className="text-sm font-medium">Refund Amount (Optional)</label>
+                    <Input
+                      type="number"
+                      value={advanceForm.refund_amount}
+                      onChange={e => setAdvanceForm({ ...advanceForm, refund_amount: e.target.value })}
+                      placeholder="Enter refund amount"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Refund Date (Optional)</label>
+                    <Input
+                      type="date"
+                      value={advanceForm.refund_date}
+                      onChange={e => setAdvanceForm({ ...advanceForm, refund_date: e.target.value })}
                     />
                   </div>
                 </>
