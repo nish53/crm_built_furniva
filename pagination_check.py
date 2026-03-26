@@ -6,7 +6,7 @@ Check for pagination in orders endpoint
 import requests
 import json
 
-BASE_URL = "https://returns-hub-9.preview.emergentagent.com/api"
+BASE_URL = "https://furni-manage.preview.emergentagent.com/api"
 TEST_EMAIL = "furniva.test@example.com" 
 TEST_PASSWORD = "FurnivaTest2024!"
 
