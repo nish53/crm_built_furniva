@@ -1449,13 +1449,44 @@ agent_communication:
          - UI shows dual approval section for requested status
          - Each can be approved independently
       
-      NEEDS BACKEND TESTING TO VERIFY:
-      - /api/return-requests/analytics/dashboard
-      - /api/replacement-requests/analytics/counts
-      - /api/replacement-requests/{id}/undo
-      - /api/replacement-requests/{id}/approve-pickup
-      - /api/replacement-requests/{id}/approve-replacement
-      - Status transitions with /advance endpoint
+      BACKEND TESTING COMPLETED - ALL 6 TESTS PASSED:
+      ✅ /api/return-requests/analytics/dashboard - Working perfectly
+      ✅ /api/replacement-requests/analytics/counts - Working perfectly
+      ✅ /api/replacement-requests/{id}/undo - Working perfectly
+      ✅ /api/replacement-requests/{id}/approve-pickup - Working perfectly
+      ✅ /api/replacement-requests/{id}/approve-replacement - Working perfectly
+      ✅ Status transitions with /advance endpoint - All transitions working
+  - agent: "testing"
+    message: |
+      === RETURNS & REPLACEMENTS BUG FIXES - BACKEND TESTING COMPLETE ===
+      Date: 2026-03-26
+      
+      ✅ TEST 1 - Returns Dashboard Analytics:
+         GET /api/return-requests/analytics/dashboard working perfectly
+         Response: total_open, total_closed, pending_action, by_reason, by_type
+      
+      ✅ TEST 2 - Replacement Counter Counts:
+         GET /api/replacement-requests/analytics/counts working perfectly
+         Response: open_replacement_requests, replacements_to_be_shipped,
+                   replacements_in_transit, pickups_pending
+      
+      ✅ TEST 3 - Replacement Undo Functionality:
+         PATCH /api/replacement-requests/{id}/undo working perfectly
+         Status reverts correctly and previous_status is cleared after undo
+      
+      ✅ TEST 4 - Dual Approval Pickup:
+         PATCH /api/replacement-requests/{id}/approve-pickup working perfectly
+         pickup_approved=true, pickup_approved_by and date set correctly
+      
+      ✅ TEST 5 - Dual Approval Replacement:
+         PATCH /api/replacement-requests/{id}/approve-replacement working perfectly
+         replacement_approved=true, replacement_approved_by and date set correctly
+      
+      ✅ TEST 6 - Status Transition to Resolved:
+         Complete workflow tested: requested → approved → new_shipment_dispatched → delivered → resolved
+         All transitions working with proper validation
+      
+      ALL BACKEND FUNCTIONALITY IS COMPLETE AND PRODUCTION-READY!
   - agent: "testing"
     message: |
       🎉 CRITICAL BUG FIXES TESTING COMPLETE - ALL 4 TESTS PASSED! 🎉
