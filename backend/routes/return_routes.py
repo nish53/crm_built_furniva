@@ -38,34 +38,38 @@ def classify_return_category(return_reason: str, status: str, delivery_date: str
     return "refunded"
 
 # Workflow transition map for 3-type return workflow
-# BUG FIX: Remove "closed" from dropdown - only approved/rejected at first
-# If rejected, ask for reason and move to "resolved" (not just rejected)
+# FIXED: 
+# 1. "rejected" is a decision at START (not in timeline)
+# 2. After condition_checked, ask if refund processed -> then close
+# 3. Proper RTO flow: approved -> rto_in_transit -> warehouse_received -> condition_checked -> refund_processed -> closed
 WORKFLOW_TRANSITIONS = {
     "pre_dispatch": {
-        "requested": ["approved", "rejected"],  # Removed "closed"
-        "approved": ["resolved"],  # Changed from "closed" to "resolved"
-        "rejected": ["resolved"],  # Rejected with reason goes to resolved
-        "resolved": []
+        "requested": ["approved", "rejected"],
+        "approved": ["closed"],  # Pre-dispatch just needs approval then close
+        "rejected": [],  # Terminal - order restored to original status
+        "closed": []  # Terminal
     },
     "in_transit": {
-        "requested": ["approved", "rejected"],  # Removed "closed"
+        "requested": ["approved", "rejected"],
         "approved": ["rto_in_transit"],
         "rto_in_transit": ["warehouse_received"],
-        "warehouse_received": ["condition_checked"],  # Add condition check
-        "condition_checked": ["resolved"],  # Then resolved
-        "rejected": ["resolved"],
-        "resolved": []
+        "warehouse_received": ["condition_checked"],
+        "condition_checked": ["refund_processed"],  # After condition check, ask about refund
+        "refund_processed": ["closed"],  # After refund confirmed, close
+        "rejected": [],  # Terminal - order restored
+        "closed": []  # Terminal - order moved to RTO Pre-Delivery (Excluding PFC)
     },
     "post_delivery": {
-        "requested": ["accepted", "rejected"],  # Removed "closed"
+        "requested": ["accepted", "rejected"],
         "accepted": ["picked_up", "pickup_not_required"],
         "picked_up": ["pickup_in_transit", "warehouse_received"],
         "pickup_in_transit": ["warehouse_received"],
-        "pickup_not_required": ["resolved"],  # Changed to "resolved"
+        "pickup_not_required": ["closed"],  # Skip pickup, go to close
         "warehouse_received": ["condition_checked"],
-        "condition_checked": ["resolved"],
-        "rejected": ["resolved"],
-        "resolved": []
+        "condition_checked": ["refund_processed"],  # After condition check, ask about refund
+        "refund_processed": ["closed"],  # After refund confirmed, close
+        "rejected": [],  # Terminal - order restored
+        "closed": []  # Terminal
     },
     # Legacy transitions for backward compatibility
     "legacy": {
@@ -89,6 +93,9 @@ WORKFLOW_TRANSITIONS = {
         "inspected": ["refunded", "refund_processed", "replaced", "closed"],
         "refunded": ["closed"],
         "replaced": ["closed"],
+        # Legacy support for resolved status
+        "resolved": ["closed"],
+        "condition_checked": ["refund_processed", "closed"]
     }
 }
 
@@ -396,9 +403,11 @@ async def advance_return_workflow(
     received_condition: Optional[str] = None,  # "mint" or "damaged"
     condition_notes: Optional[str] = None,
     condition_images: Optional[List[str]] = None,  # Images if damaged
-    # Refund fields
+    # Refund fields - ENHANCED
+    refund_processed: Optional[bool] = None,
     refund_amount: Optional[float] = None,
     refund_date: Optional[str] = None,
+    refund_reference_id: Optional[str] = None,
     # Legacy fields for backward compatibility
     tracking_number: Optional[str] = None,
     courier_partner: Optional[str] = None,
@@ -407,9 +416,10 @@ async def advance_return_workflow(
 ):
     """
     Advance return through 3-type workflow with context-aware validation.
+    FIXED WORKFLOW:
     - pre_dispatch: requested → approved/rejected → closed
-    - in_transit: requested → approved → rto_in_transit → warehouse_received → closed
-    - post_delivery: requested → accepted → pickup_scheduled/pickup_not_required → warehouse_received → condition_checked → closed
+    - in_transit: requested → approved → rto_in_transit → warehouse_received → condition_checked → refund_processed → closed
+    - post_delivery: requested → accepted → pickup_scheduled/pickup_not_required → warehouse_received → condition_checked → refund_processed → closed
     """
     return_req = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
     if not return_req:
@@ -445,7 +455,6 @@ async def advance_return_workflow(
                 status_code=400,
                 detail="rto_tracking_number is required for RTO in-transit status"
             )
-        # Condition check for RTO warehouse
         if next_status == "condition_checked" and not received_condition:
             raise HTTPException(
                 status_code=400,
@@ -472,7 +481,7 @@ async def advance_return_workflow(
         "updated_at": now
     }
     
-    # Handle rejection - set reason and move to resolved
+    # Handle rejection - set reason (order restored to original status)
     if next_status == "rejected":
         update_data["rejection_reason"] = rejection_reason
         update_data["rejected_date"] = now
@@ -483,9 +492,15 @@ async def advance_return_workflow(
         if next_status == "approved":
             update_data["approved_date"] = now
             update_data["approved_by"] = approved_by or current_user.email
-        elif next_status == "resolved":
-            update_data["resolved_date"] = now
-            update_data["resolved_by"] = current_user.email
+        elif next_status == "closed":
+            update_data["closed_date"] = now
+            update_data["closed_by"] = current_user.email
+            if refund_amount:
+                update_data["refund_amount"] = refund_amount
+            if refund_date:
+                update_data["refund_date"] = refund_date
+            if refund_reference_id:
+                update_data["refund_reference_id"] = refund_reference_id
     
     elif return_type == "in_transit":
         if next_status == "approved":
@@ -498,35 +513,33 @@ async def advance_return_workflow(
         elif next_status == "warehouse_received":
             update_data["warehouse_received_date"] = warehouse_received_date or now
             update_data["rto_delivered_date"] = warehouse_received_date or now
-            # For in_transit RTO, condition is checked at warehouse received
-            if received_condition:
-                update_data["received_condition"] = received_condition
-                update_data["condition_notes"] = condition_notes
-                if condition_images:
-                    try:
-                        if isinstance(condition_images, str):
-                            import json
-                            update_data["condition_images"] = json.loads(condition_images)
-                        else:
-                            update_data["condition_images"] = condition_images
-                    except:
-                        update_data["condition_images"] = [condition_images] if condition_images else []
-                # Auto-advance to resolved after condition check for RTO
-                update_data["return_status"] = "resolved"
-                update_data["resolved_date"] = now
-                update_data["resolved_by"] = current_user.email
         elif next_status == "condition_checked":
             update_data["received_condition"] = received_condition
             update_data["condition_notes"] = condition_notes
+            update_data["condition_checked_date"] = now
+            update_data["condition_checked_by"] = current_user.email
             if condition_images:
-                update_data["condition_images"] = condition_images
-        elif next_status == "resolved":
-            update_data["resolved_date"] = now
-            update_data["resolved_by"] = current_user.email
+                try:
+                    if isinstance(condition_images, str):
+                        import json
+                        update_data["condition_images"] = json.loads(condition_images)
+                    else:
+                        update_data["condition_images"] = condition_images
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    update_data["condition_images"] = [condition_images] if condition_images else []
+        elif next_status == "refund_processed":
+            update_data["refund_processed"] = True
+            update_data["refund_processed_date"] = now
+            update_data["refund_processed_by"] = current_user.email
             if refund_amount:
                 update_data["refund_amount"] = refund_amount
             if refund_date:
                 update_data["refund_date"] = refund_date
+            if refund_reference_id:
+                update_data["refund_reference_id"] = refund_reference_id
+        elif next_status == "closed":
+            update_data["closed_date"] = now
+            update_data["closed_by"] = current_user.email
     
     elif return_type == "post_delivery":
         if next_status == "accepted":
@@ -534,9 +547,6 @@ async def advance_return_workflow(
             update_data["approved_by"] = current_user.email
         elif next_status == "pickup_not_required":
             update_data["pickup_not_required"] = True
-            update_data["return_status"] = "resolved"  # Changed from "closed" to "resolved"
-            update_data["resolved_date"] = now
-            update_data["resolved_by"] = current_user.email
         elif next_status == "picked_up":
             update_data["pickup_date"] = pickup_date
             update_data["pickup_tracking_id"] = pickup_tracking_id
@@ -546,13 +556,30 @@ async def advance_return_workflow(
         elif next_status == "condition_checked":
             update_data["received_condition"] = received_condition
             update_data["condition_notes"] = condition_notes
+            update_data["condition_checked_date"] = now
+            update_data["condition_checked_by"] = current_user.email
             if condition_images:
-                update_data["condition_images"] = condition_images
-        elif next_status == "resolved":
-            update_data["resolved_date"] = now
-            update_data["resolved_by"] = current_user.email
+                try:
+                    if isinstance(condition_images, str):
+                        import json
+                        update_data["condition_images"] = json.loads(condition_images)
+                    else:
+                        update_data["condition_images"] = condition_images
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    update_data["condition_images"] = [condition_images] if condition_images else []
+        elif next_status == "refund_processed":
+            update_data["refund_processed"] = True
+            update_data["refund_processed_date"] = now
+            update_data["refund_processed_by"] = current_user.email
             if refund_amount:
                 update_data["refund_amount"] = refund_amount
+            if refund_date:
+                update_data["refund_date"] = refund_date
+            if refund_reference_id:
+                update_data["refund_reference_id"] = refund_reference_id
+        elif next_status == "closed":
+            update_data["closed_date"] = now
+            update_data["closed_by"] = current_user.email
     
     # Add notes if provided
     if notes:
@@ -579,9 +606,9 @@ async def advance_return_workflow(
     # Get order to check previous_status
     order = await db.orders.find_one({"id": return_req["order_id"]}, {"_id": 0})
     
-    # Handle status changes based on return workflow outcome
+    # Handle order status changes based on return workflow outcome
     if next_status == "rejected":
-        # When rejected, revert order status to previous status
+        # When REJECTED, revert order status to previous status (order is NOT cancelled)
         previous_order_status = order.get("previous_status", "delivered")
         await db.orders.update_one(
             {"id": return_req["order_id"]},
@@ -593,15 +620,15 @@ async def advance_return_workflow(
                 "cancellation_reason": None
             }}
         )
-    elif next_status == "resolved" or next_status == "closed" or update_data.get("return_status") in ["resolved", "closed"]:
-        # Move to cancelled orders when return is RESOLVED/CLOSED
+    elif next_status == "closed":
+        # ONLY when CLOSED - move order to cancelled
         order_update = {
             "status": "cancelled",
-            "return_status": next_status,
-            "resolved_date": now
+            "return_status": "closed",
+            "closed_date": now
         }
         
-        # Set RTO category based on return_type
+        # Set cancellation category based on return_type
         if return_type == "in_transit":
             # RTO Pre-Delivery (Excluding PFC) - product was dispatched but returned before delivery
             order_update["rto_category"] = "RTO Pre-Delivery"
@@ -611,12 +638,19 @@ async def advance_return_workflow(
         elif return_type == "post_delivery":
             order_update["cancellation_category"] = "Post-Delivery Return"
         
-        # Add condition info to order if available
-        if received_condition:
-            order_update["rto_received_condition"] = received_condition
-            order_update["rto_condition_notes"] = condition_notes
-        if condition_images:
-            order_update["rto_damage_images"] = condition_images if isinstance(condition_images, list) else [condition_images]
+        # Add condition info to order if available from return request
+        return_data = await db.return_requests.find_one({"id": return_id}, {"_id": 0})
+        if return_data.get("received_condition"):
+            order_update["rto_received_condition"] = return_data.get("received_condition")
+            order_update["rto_condition_notes"] = return_data.get("condition_notes")
+        if return_data.get("condition_images"):
+            order_update["rto_damage_images"] = return_data.get("condition_images")
+        if return_data.get("refund_amount"):
+            order_update["refund_amount"] = return_data.get("refund_amount")
+        if return_data.get("refund_date"):
+            order_update["refund_date"] = return_data.get("refund_date")
+        if return_data.get("refund_reference_id"):
+            order_update["refund_reference_id"] = return_data.get("refund_reference_id")
         
         await db.orders.update_one(
             {"id": return_req["order_id"]},
@@ -666,11 +700,11 @@ def _get_workflow_description(return_type: str) -> dict:
         },
         "in_transit": {
             "name": "In-Transit RTO (Return to Origin)",
-            "flow": "requested → approved → rto_in_transit → warehouse_received → closed"
+            "flow": "requested → approved → rto_in_transit → warehouse_received → condition_checked → refund_processed → closed"
         },
         "post_delivery": {
             "name": "Post-Delivery Return",
-            "flow": "requested → accepted → pickup_scheduled/pickup_not_required → warehouse_received → condition_checked → closed"
+            "flow": "requested → accepted → picked_up/pickup_not_required → warehouse_received → condition_checked → refund_processed → closed"
         },
         "legacy": {
             "name": "Legacy 12-Stage Workflow",

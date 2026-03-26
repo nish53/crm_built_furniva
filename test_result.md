@@ -2039,3 +2039,67 @@ agent_communication:
       and validated. All 4 critical migration features are working correctly with
       proper validation, error handling, and data integrity. The system is ready
       for production deployment.
+
+
+
+  - task: "Returns In-Transit (RTO) Workflow Fix"
+    implemented: true
+    working: "NA"
+    file: "/app/backend/routes/return_routes.py, /app/frontend/src/pages/ReturnDetail.js"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: true
+    status_history:
+      - working: "NA"
+        agent: "main"
+        comment: |
+          FIXED: Multiple issues with in-transit (RTO) return workflow:
+          
+          1. UNDO BUTTON ADDED:
+             - Added handleUndo function to ReturnDetail.js
+             - Undo button shows when previous_status exists
+             - Uses existing backend /undo endpoint
+             - Confirms before reverting status
+          
+          2. FIXED WORKFLOW AFTER CONDITION CHECK:
+             - Changed: condition_checked → refund_processed → closed
+             - After condition check, system now asks "Has refund been processed?"
+             - If Yes: Enter refund date, amount (optional), reference ID (optional)
+             - Then close the return → order moves to "Cancelled Orders" under "RTO Pre-Delivery (Excluding PFC)"
+          
+          3. REMOVED "REJECTED" FROM TIMELINE:
+             - Rejection is a decision at START (step 1)
+             - Either APPROVE (continue workflow) or REJECT (with reason, order restored)
+             - Timeline now shows: Requested → Approved → RTO In Transit → Warehouse → Condition Check → Refund Processed → Closed
+          
+          4. BACKEND CHANGES:
+             - Updated WORKFLOW_TRANSITIONS for in_transit type
+             - Added refund_reference_id parameter
+             - Order only moves to cancelled when return is CLOSED
+             - Rejection reverts order to original status
+          
+          5. FRONTEND CHANGES:
+             - Updated WORKFLOW_STAGES to remove "rejected" from timeline
+             - Added "refund_processed" stage to timeline
+             - Added Undo button next to Advance Workflow
+             - Enhanced refund form with checkbox, date, amount, reference ID
+             - Added Refund Information card to display refund details
+          
+          Needs testing to verify the complete RTO workflow.
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Implemented fixes for Returns In-Transit (RTO) workflow:
+      1. Added Undo button for reverting last status change
+      2. Fixed workflow: after condition check, asks about refund → then closes
+      3. Removed "rejected" from timeline (rejection is at start only)
+      4. When closed, order moves to "Cancelled Orders" under "RTO Pre-Delivery (Excluding PFC)"
+      
+      Please test:
+      - Create a return for a dispatched order
+      - Approve → provide RTO tracking → warehouse received → condition check
+      - Then try "refund_processed" step (with refund date, amount, reference ID)
+      - Finally "closed" step
+      - Verify order is cancelled with category "RTO Pre-Delivery (Excluding PFC)"
+      - Also test the Undo button at various stages

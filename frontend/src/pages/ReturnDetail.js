@@ -11,22 +11,22 @@ import {
   CheckCircle, XCircle, Clock, Package, ChevronRight, Upload, Image as ImageIcon
 } from 'lucide-react';
 
-// 3-Type Workflow Stages - UPDATED: removed "closed", added "resolved" and "condition_checked"
+// 3-Type Workflow Stages - FIXED: Removed "rejected" from timeline (rejection happens at start, not in flow)
+// Rejected is a decision at step 1: either Approve (continue) or Reject (with reason, order goes to resolved)
 const WORKFLOW_STAGES = {
   pre_dispatch: [
     { key: 'requested', label: 'Requested', icon: Clock },
     { key: 'approved', label: 'Approved', icon: CheckCircle },
-    { key: 'rejected', label: 'Rejected', icon: XCircle },
-    { key: 'resolved', label: 'Resolved', icon: CheckCircle }
+    { key: 'closed', label: 'Closed', icon: CheckCircle }
   ],
   in_transit: [
     { key: 'requested', label: 'Requested', icon: Clock },
     { key: 'approved', label: 'Approved', icon: CheckCircle },
     { key: 'rto_in_transit', label: 'RTO In Transit', icon: Truck },
     { key: 'warehouse_received', label: 'Warehouse Received', icon: Package },
-    { key: 'condition_checked', label: 'Condition Checked', icon: CheckCircle },
-    { key: 'rejected', label: 'Rejected', icon: XCircle },
-    { key: 'resolved', label: 'Resolved', icon: CheckCircle }
+    { key: 'condition_checked', label: 'Condition Check', icon: CheckCircle },
+    { key: 'refund_processed', label: 'Refund Processed', icon: CheckCircle },
+    { key: 'closed', label: 'Closed', icon: CheckCircle }
   ],
   post_delivery: [
     { key: 'requested', label: 'Requested', icon: Clock },
@@ -34,9 +34,9 @@ const WORKFLOW_STAGES = {
     { key: 'picked_up', label: 'Picked Up', icon: Truck },
     { key: 'pickup_in_transit', label: 'Pickup In Transit', icon: Truck },
     { key: 'warehouse_received', label: 'Warehouse Received', icon: Package },
-    { key: 'condition_checked', label: 'Condition Checked', icon: CheckCircle },
-    { key: 'rejected', label: 'Rejected', icon: XCircle },
-    { key: 'resolved', label: 'Resolved', icon: CheckCircle }
+    { key: 'condition_checked', label: 'Condition Check', icon: CheckCircle },
+    { key: 'refund_processed', label: 'Refund Processed', icon: CheckCircle },
+    { key: 'closed', label: 'Closed', icon: CheckCircle }
   ]
 };
 
@@ -51,8 +51,9 @@ const statusColors = {
   pickup_not_required: 'bg-gray-100 text-gray-800',
   warehouse_received: 'bg-teal-100 text-teal-800',
   condition_checked: 'bg-yellow-100 text-yellow-800',
+  refund_processed: 'bg-purple-100 text-purple-800',
   resolved: 'bg-green-200 text-green-900',
-  closed: 'bg-gray-100 text-gray-800'
+  closed: 'bg-gray-200 text-gray-900'
 };
 
 export const ReturnDetail = () => {
@@ -82,10 +83,35 @@ export const ReturnDetail = () => {
     condition_notes: '',
     // Rejection fields
     rejection_reason: '',
-    // Refund fields
+    // Refund fields - ENHANCED for proper closure
+    refund_processed: false,
     refund_amount: '',
-    refund_date: ''
+    refund_date: '',
+    refund_reference_id: ''
   });
+
+  // Undo function
+  const handleUndo = async () => {
+    if (!returnReq?.previous_status) {
+      toast.error('No previous status to revert to');
+      return;
+    }
+    
+    if (!window.confirm(`Are you sure you want to undo the last status change? This will revert from "${returnReq.return_status}" to "${returnReq.previous_status}".`)) {
+      return;
+    }
+    
+    setUpdating(true);
+    try {
+      await api.patch(`/return-requests/${id}/undo`);
+      toast.success('Status reverted successfully');
+      fetchReturn();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to undo status');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   useEffect(() => {
     fetchReturn();
@@ -203,8 +229,10 @@ export const ReturnDetail = () => {
         received_condition: '',
         condition_notes: '',
         rejection_reason: '',
+        refund_processed: false,
         refund_amount: '',
-        refund_date: ''
+        refund_date: '',
+        refund_reference_id: ''
       });
       fetchReturn();
     } catch (err) {
@@ -323,10 +351,38 @@ export const ReturnDetail = () => {
             })}
           </div>
 
-          {allowedTransitions.length > 0 && (
-            <Button onClick={() => setShowAdvanceModal(true)} className="w-full">
-              Advance Workflow
-            </Button>
+          {/* Action buttons - Advance and Undo */}
+          <div className="flex gap-3 mt-4">
+            {returnReq.previous_status && !['closed', 'rejected'].includes(returnReq.return_status) && (
+              <Button 
+                variant="outline" 
+                onClick={handleUndo}
+                disabled={updating}
+                className="flex-1 border-orange-300 text-orange-600 hover:bg-orange-50"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Undo Last Step
+              </Button>
+            )}
+            {allowedTransitions.length > 0 && (
+              <Button onClick={() => setShowAdvanceModal(true)} className="flex-1" disabled={updating}>
+                Advance Workflow
+              </Button>
+            )}
+          </div>
+          
+          {/* Show rejected status banner if rejected */}
+          {returnReq.return_status === 'rejected' && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2 text-red-800">
+                <XCircle className="w-5 h-5" />
+                <span className="font-medium">Return Rejected</span>
+              </div>
+              {returnReq.rejection_reason && (
+                <p className="mt-2 text-sm text-red-700">Reason: {returnReq.rejection_reason}</p>
+              )}
+              <p className="mt-1 text-xs text-red-600">Order has been restored to its original status.</p>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -436,6 +492,41 @@ export const ReturnDetail = () => {
                 <div>
                   <span className="text-muted-foreground">Notes:</span>
                   <p className="mt-1 p-3 bg-gray-50 rounded-md">{returnReq.condition_notes}</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Refund Information (if applicable) */}
+      {(returnReq.refund_processed || returnReq.refund_date || returnReq.refund_amount) && (
+        <Card className="border-green-200 bg-green-50">
+          <CardHeader><CardTitle className="font-[Manrope] text-green-800">Refund Information</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4">
+              {returnReq.refund_date && (
+                <div>
+                  <span className="text-muted-foreground">Refund Date:</span>
+                  <p className="font-medium">{formatDate(returnReq.refund_date)}</p>
+                </div>
+              )}
+              {returnReq.refund_amount && (
+                <div>
+                  <span className="text-muted-foreground">Refund Amount:</span>
+                  <p className="font-medium text-green-700">₹{returnReq.refund_amount}</p>
+                </div>
+              )}
+              {returnReq.refund_reference_id && (
+                <div>
+                  <span className="text-muted-foreground">Reference ID:</span>
+                  <p className="font-[JetBrains_Mono] font-medium">{returnReq.refund_reference_id}</p>
+                </div>
+              )}
+              {returnReq.refund_processed_date && (
+                <div>
+                  <span className="text-muted-foreground">Processed On:</span>
+                  <p>{formatDate(returnReq.refund_processed_date)}</p>
                 </div>
               )}
             </div>
@@ -679,27 +770,64 @@ export const ReturnDetail = () => {
                 </div>
               )}
 
-              {/* Refund fields for resolved status */}
-              {selectedNextStatus === 'resolved' && (
-                <>
-                  <div>
-                    <label className="text-sm font-medium">Refund Amount (Optional)</label>
-                    <Input
-                      type="number"
-                      value={advanceForm.refund_amount}
-                      onChange={e => setAdvanceForm({ ...advanceForm, refund_amount: e.target.value })}
-                      placeholder="Enter refund amount"
-                    />
+              {/* Refund fields for resolved/closed status - PROPER CLOSURE FLOW */}
+              {(selectedNextStatus === 'resolved' || selectedNextStatus === 'closed' || selectedNextStatus === 'refund_processed') && (
+                <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2 text-green-800 font-medium">
+                    <CheckCircle className="w-5 h-5" />
+                    Refund Processing
                   </div>
-                  <div>
-                    <label className="text-sm font-medium">Refund Date (Optional)</label>
-                    <Input
-                      type="date"
-                      value={advanceForm.refund_date}
-                      onChange={e => setAdvanceForm({ ...advanceForm, refund_date: e.target.value })}
+                  
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="refund_processed"
+                      checked={advanceForm.refund_processed}
+                      onChange={e => setAdvanceForm({ ...advanceForm, refund_processed: e.target.checked })}
+                      className="w-4 h-4 text-green-600"
                     />
+                    <label htmlFor="refund_processed" className="text-sm font-medium">
+                      Has refund been processed?
+                    </label>
                   </div>
-                </>
+                  
+                  {advanceForm.refund_processed && (
+                    <>
+                      <div>
+                        <label className="text-sm font-medium">Refund Date *</label>
+                        <Input
+                          type="date"
+                          value={advanceForm.refund_date}
+                          onChange={e => setAdvanceForm({ ...advanceForm, refund_date: e.target.value })}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium">Refund Amount</label>
+                        <Input
+                          type="number"
+                          value={advanceForm.refund_amount}
+                          onChange={e => setAdvanceForm({ ...advanceForm, refund_amount: e.target.value })}
+                          placeholder="Enter refund amount"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium">Reference ID (Optional)</label>
+                        <Input
+                          value={advanceForm.refund_reference_id}
+                          onChange={e => setAdvanceForm({ ...advanceForm, refund_reference_id: e.target.value })}
+                          placeholder="Transaction/Reference ID"
+                        />
+                      </div>
+                    </>
+                  )}
+                  
+                  <p className="text-xs text-green-700 mt-2">
+                    {returnReq?.return_type === 'in_transit' 
+                      ? 'Once closed, order will be moved to Cancelled Orders under "RTO Pre-Delivery (Excluding PFC)".'
+                      : 'Once closed, the return will no longer be open and the order will be marked as cancelled.'}
+                  </p>
+                </div>
               )}
 
               <div>
