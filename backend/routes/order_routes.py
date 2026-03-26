@@ -653,15 +653,20 @@ async def get_cancelled_orders_stats(
     for group in result:
         reason = group["_id"]
         # Handle null/None/empty reasons as "no_status"
-        if reason is None or reason == "" or reason == "null":
-            reason = "no_status"
-        if reason in reason_groups:
+        if reason is None or reason == "" or reason == "null" or reason == "no_status":
+            # Accumulate into no_status - don't overwrite, add to it
+            reason_groups["no_status"]["count"] += group["count"]
+            reason_groups["no_status"]["orders"].extend(group["orders"][:5])
+        elif reason in reason_groups:
             reason_groups[reason]["count"] = group["count"]
             reason_groups[reason]["orders"] = group["orders"][:5]  # First 5 orders only
         else:
-            # Unknown reasons go to no_status
+            # Unknown reasons also go to no_status
             reason_groups["no_status"]["count"] += group["count"]
             reason_groups["no_status"]["orders"].extend(group["orders"][:5])
+    
+    # Trim no_status orders to max 5
+    reason_groups["no_status"]["orders"] = reason_groups["no_status"]["orders"][:5]
     
     total_cancelled = sum(g["count"] for g in reason_groups.values())
     
