@@ -9,7 +9,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-BACKEND_URL = "https://crm-ecomm-suite.preview.emergentagent.com/api"
+BACKEND_URL = "https://returns-hub-9.preview.emergentagent.com/api"
 
 async def test_master_sku_fix():
     """Test Master SKU sync after model fix"""
