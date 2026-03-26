@@ -47,32 +47,45 @@ const CancelledOrders = () => {
     order.customer_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // SIMPLIFIED TABS - Grouped by category
+  // Only show main categories + most common reasons within each
   const reasonTabs = [
-    { key: 'all', label: 'All Cancelled', color: 'gray' },
-    { key: 'no_status', label: 'No Status', color: 'gray' },
-    { key: 'in_transit', label: 'RTO (In-Transit)', color: 'blue' },
-    { key: 'pre_dispatch', label: 'Pre-Dispatch', color: 'purple' },
-    { key: 'post_delivery', label: 'Post-Delivery', color: 'orange' },
-    { key: 'damage', label: 'Damage', color: 'red' },
-    { key: 'customer_issues_except_quality', label: 'Customer Issues', color: 'orange' },
-    { key: 'hardware_missing', label: 'Hardware Missing', color: 'yellow' },
-    { key: 'defective_product', label: 'Defective Product', color: 'red' },
-    { key: 'fraud_customer', label: 'Fraud Customer', color: 'purple' },
-    { key: 'wrong_product_sent', label: 'Wrong Product', color: 'blue' },
-    { key: 'customer_quality_issues', label: 'Quality Issues', color: 'orange' },
-    { key: 'product_delayed_customer_accepted', label: 'Product Delayed', color: 'yellow' },
-    { key: 'did_not_specify', label: 'Did Not Specify (PFC)', color: 'gray' },
-    { key: 'change_of_mind', label: 'Change of Mind', color: 'blue' },
-    { key: 'found_better_pricing', label: 'Better Pricing', color: 'green' },
-    { key: 'customer_refused_doorstep', label: 'Customer Refused', color: 'red' },
-    { key: 'customer_unavailable', label: 'Customer Unavailable', color: 'orange' },
-    { key: 'delay', label: 'Delay', color: 'yellow' }
+    // Main categories
+    { key: 'all', label: 'All Cancelled', color: 'gray', isCategory: true },
+    
+    // PFC (Pre-Fulfillment)
+    { key: 'did_not_specify', label: 'PFC - No Reason', color: 'gray' },
+    { key: 'change_of_mind', label: 'PFC - Change of Mind', color: 'gray' },
+    { key: 'found_better_pricing', label: 'PFC - Better Pricing', color: 'gray' },
+    
+    // RTO (Return to Origin - before delivery)
+    { key: 'customer_refused_doorstep', label: 'RTO - Customer Refused', color: 'blue' },
+    { key: 'customer_unavailable', label: 'RTO - Customer Unavailable', color: 'blue' },
+    { key: 'delay', label: 'RTO - Delay', color: 'blue' },
+    { key: 'in_transit', label: 'RTO - In-Transit', color: 'blue' },
+    
+    // Post-Delivery Returns
+    { key: 'damage', label: 'Return - Damage', color: 'orange' },
+    { key: 'defective_product', label: 'Return - Defective', color: 'orange' },
+    { key: 'hardware_missing', label: 'Return - Hardware Missing', color: 'orange' },
+    { key: 'wrong_product_sent', label: 'Return - Wrong Product', color: 'orange' },
+    { key: 'customer_quality_issues', label: 'Return - Quality Issues', color: 'orange' },
+    
+    // Other
+    { key: 'no_status', label: 'No Status', color: 'red' },
+    { key: 'fraud_customer', label: 'Fraud Customer', color: 'red' }
   ];
 
   const getReasonCount = (reason) => {
     if (!stats || !stats.by_reason) return 0;
     if (reason === 'all') return stats.total_cancelled || 0;
     return stats.by_reason[reason]?.count || 0;
+  };
+  
+  // Get category totals from backend
+  const getCategoryCount = (category) => {
+    if (!stats || !stats.categories) return 0;
+    return stats.categories[category]?.count || 0;
   };
 
   const formatDate = (dateString) => {
@@ -124,18 +137,12 @@ const CancelledOrders = () => {
           <Card>
             <CardContent className="pt-6">
               <div className="text-3xl font-bold text-orange-600">
-                {(getReasonCount('damage') + getReasonCount('customer_issues_except_quality') + 
-                  getReasonCount('hardware_missing') + getReasonCount('defective_product') + 
-                  getReasonCount('fraud_customer') + getReasonCount('wrong_product_sent') + 
-                  getReasonCount('customer_quality_issues') + getReasonCount('product_delayed_customer_accepted'))}
+                {getCategoryCount('POST_DELIVERY')}
               </div>
               <div className="text-sm text-muted-foreground">Returns % (Post-Delivery)</div>
               <div className="text-xs text-gray-500 mt-1">
                 {stats.total_cancelled > 0 
-                  ? ((((getReasonCount('damage') + getReasonCount('customer_issues_except_quality') + 
-                        getReasonCount('hardware_missing') + getReasonCount('defective_product') + 
-                        getReasonCount('fraud_customer') + getReasonCount('wrong_product_sent') + 
-                        getReasonCount('customer_quality_issues') + getReasonCount('product_delayed_customer_accepted')) / stats.total_cancelled) * 100).toFixed(1))
+                  ? ((getCategoryCount('POST_DELIVERY') / stats.total_cancelled) * 100).toFixed(1)
                   : 0}%
               </div>
             </CardContent>
@@ -143,23 +150,25 @@ const CancelledOrders = () => {
           <Card>
             <CardContent className="pt-6">
               <div className="text-3xl font-bold text-blue-600">
-                {(getReasonCount('customer_refused_doorstep') + getReasonCount('customer_unavailable') + getReasonCount('delay') + getReasonCount('in_transit'))}
+                {getCategoryCount('RTO')}
               </div>
               <div className="text-sm text-muted-foreground">RTO Pre-Delivery (Excluding PFC)</div>
               <div className="text-xs text-gray-500 mt-1">
                 {stats.total_cancelled > 0 
-                  ? ((((getReasonCount('customer_refused_doorstep') + getReasonCount('customer_unavailable') + getReasonCount('delay') + getReasonCount('in_transit')) / stats.total_cancelled) * 100).toFixed(1))
+                  ? ((getCategoryCount('RTO') / stats.total_cancelled) * 100).toFixed(1)
                   : 0}%
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
-              <div className="text-3xl font-bold text-gray-600">{getReasonCount('did_not_specify')}</div>
+              <div className="text-3xl font-bold text-gray-600">
+                {getCategoryCount('PFC')}
+              </div>
               <div className="text-sm text-muted-foreground">Pre-Fulfillment Cancellations (PFC)</div>
               <div className="text-xs text-gray-500 mt-1">
                 {stats.total_cancelled > 0 
-                  ? (((getReasonCount('did_not_specify') / stats.total_cancelled) * 100).toFixed(1))
+                  ? ((getCategoryCount('PFC') / stats.total_cancelled) * 100).toFixed(1)
                   : 0}%
               </div>
             </CardContent>

@@ -616,6 +616,37 @@ async def advance_return_workflow(
         {"$set": update_data}
     )
     
+    # SYNC return dates to order timeline - update order with RTO progress
+    order_sync_data = {"return_status": next_status}
+    
+    if next_status == "rto_in_transit":
+        order_sync_data["rto_initiated_date"] = update_data.get("rto_initiated_date")
+        order_sync_data["rto_tracking_number"] = update_data.get("rto_tracking_number")
+        order_sync_data["rto_courier"] = update_data.get("rto_courier")
+    elif next_status == "warehouse_received":
+        order_sync_data["rto_delivered_date"] = update_data.get("rto_delivered_date")
+        order_sync_data["warehouse_received_date"] = update_data.get("warehouse_received_date")
+        if update_data.get("received_condition"):
+            order_sync_data["rto_received_condition"] = update_data.get("received_condition")
+            order_sync_data["rto_condition_notes"] = update_data.get("condition_notes")
+        if update_data.get("condition_images"):
+            order_sync_data["rto_damage_images"] = update_data.get("condition_images")
+    elif next_status == "picked_up":
+        order_sync_data["pickup_date"] = update_data.get("pickup_date")
+        order_sync_data["pickup_tracking_id"] = update_data.get("pickup_tracking_id")
+        order_sync_data["pickup_courier"] = update_data.get("pickup_courier")
+    elif next_status == "refund_processed":
+        order_sync_data["refund_date"] = update_data.get("refund_date")
+        order_sync_data["refund_amount"] = update_data.get("refund_amount")
+        order_sync_data["refund_reference_id"] = update_data.get("refund_reference_id")
+    
+    # Update order with synced return data (for all steps, not just closed)
+    if len(order_sync_data) > 1:  # More than just return_status
+        await db.orders.update_one(
+            {"id": return_req["order_id"]},
+            {"$set": order_sync_data}
+        )
+    
     # Get order to check previous_status
     order = await db.orders.find_one({"id": return_req["order_id"]}, {"_id": 0})
     
@@ -903,9 +934,14 @@ async def get_returns_dashboard_analytics(
     db = Depends(get_database)
 ):
     """Get dashboard analytics for returns page - reason-wise breakdown"""
-    # Total open returns (exclude closed)
+    # Total open returns (exclude closed AND rejected)
     total_open = await db.return_requests.count_documents({
-        "return_status": {"$ne": "closed"}
+        "return_status": {"$nin": ["closed", "rejected"]}
+    })
+    
+    # Pending action (requested status only)
+    pending_action = await db.return_requests.count_documents({
+        "return_status": "requested"
     })
     
     # Total closed returns
@@ -913,9 +949,14 @@ async def get_returns_dashboard_analytics(
         "return_status": "closed"
     })
     
-    # Group by cancellation_reason
+    # Total rejected returns
+    total_rejected = await db.return_requests.count_documents({
+        "return_status": "rejected"
+    })
+    
+    # Group by cancellation_reason (only open returns)
     reason_pipeline = [
-        {"$match": {"return_status": {"$ne": "closed"}}},
+        {"$match": {"return_status": {"$nin": ["closed", "rejected"]}}},
         {
             "$group": {
                 "_id": "$cancellation_reason",
@@ -927,9 +968,9 @@ async def get_returns_dashboard_analytics(
     ]
     reasons = await db.return_requests.aggregate(reason_pipeline).to_list(10)
     
-    # Group by return_type
+    # Group by return_type (only open returns)
     type_pipeline = [
-        {"$match": {"return_status": {"$ne": "closed"}}},
+        {"$match": {"return_status": {"$nin": ["closed", "rejected"]}}},
         {
             "$group": {
                 "_id": "$return_type",
@@ -940,15 +981,11 @@ async def get_returns_dashboard_analytics(
     ]
     types = await db.return_requests.aggregate(type_pipeline).to_list(10)
     
-    # Pending actions count (returns in requested status)
-    pending_count = await db.return_requests.count_documents({
-        "return_status": "requested"
-    })
-    
     return {
         "total_open": total_open,
         "total_closed": total_closed,
-        "pending_action": pending_count,
+        "total_rejected": total_rejected,
+        "pending_action": pending_action,
         "by_reason": [{"reason": r["_id"] or "Not Specified", "count": r["count"]} for r in reasons],
         "by_type": [{"type": t["_id"] or "Unknown", "count": t["count"]} for t in types]
     }
