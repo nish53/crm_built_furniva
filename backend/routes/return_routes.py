@@ -498,6 +498,23 @@ async def advance_return_workflow(
         elif next_status == "warehouse_received":
             update_data["warehouse_received_date"] = warehouse_received_date or now
             update_data["rto_delivered_date"] = warehouse_received_date or now
+            # For in_transit RTO, condition is checked at warehouse received
+            if received_condition:
+                update_data["received_condition"] = received_condition
+                update_data["condition_notes"] = condition_notes
+                if condition_images:
+                    try:
+                        if isinstance(condition_images, str):
+                            import json
+                            update_data["condition_images"] = json.loads(condition_images)
+                        else:
+                            update_data["condition_images"] = condition_images
+                    except:
+                        update_data["condition_images"] = [condition_images] if condition_images else []
+                # Auto-advance to resolved after condition check for RTO
+                update_data["return_status"] = "resolved"
+                update_data["resolved_date"] = now
+                update_data["resolved_by"] = current_user.email
         elif next_status == "condition_checked":
             update_data["received_condition"] = received_condition
             update_data["condition_notes"] = condition_notes
@@ -564,27 +581,46 @@ async def advance_return_workflow(
     
     # Handle status changes based on return workflow outcome
     if next_status == "rejected":
-        # FIX #2: When rejected, revert order status to previous status
+        # When rejected, revert order status to previous status
         previous_order_status = order.get("previous_status", "delivered")
         await db.orders.update_one(
             {"id": return_req["order_id"]},
             {"$set": {
-                "status": previous_order_status,  # Revert to original status
+                "status": previous_order_status,
                 "return_requested": False,
                 "return_status": "rejected",
                 "return_reason": None,
                 "cancellation_reason": None
             }}
         )
-    elif next_status == "closed" or update_data.get("return_status") == "closed":
-        # FIX #1: Only move to cancelled when return is CLOSED (completed)
+    elif next_status == "resolved" or next_status == "closed" or update_data.get("return_status") in ["resolved", "closed"]:
+        # Move to cancelled orders when return is RESOLVED/CLOSED
+        order_update = {
+            "status": "cancelled",
+            "return_status": next_status,
+            "resolved_date": now
+        }
+        
+        # Set RTO category based on return_type
+        if return_type == "in_transit":
+            # RTO Pre-Delivery (Excluding PFC) - product was dispatched but returned before delivery
+            order_update["rto_category"] = "RTO Pre-Delivery"
+            order_update["cancellation_category"] = "RTO Pre-Delivery (Excluding PFC)"
+        elif return_type == "pre_dispatch":
+            order_update["cancellation_category"] = "Pre-Dispatch Cancellation"
+        elif return_type == "post_delivery":
+            order_update["cancellation_category"] = "Post-Delivery Return"
+        
+        # Add condition info to order if available
+        if received_condition:
+            order_update["rto_received_condition"] = received_condition
+            order_update["rto_condition_notes"] = condition_notes
+        if condition_images:
+            order_update["rto_damage_images"] = condition_images if isinstance(condition_images, list) else [condition_images]
+        
         await db.orders.update_one(
             {"id": return_req["order_id"]},
-            {"$set": {
-                "status": "cancelled",
-                "return_status": "closed",
-                "closed_date": now
-            }}
+            {"$set": order_update}
         )
     
     # Fetch and return updated return request

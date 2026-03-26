@@ -165,6 +165,12 @@ export const ReturnDetail = () => {
       toast.error('Please select the received condition (mint or damaged)');
       return;
     }
+    
+    // Validation for warehouse_received in in_transit (RTO) - MUST have condition
+    if (selectedNextStatus === 'warehouse_received' && returnReq.return_type === 'in_transit' && !advanceForm.received_condition) {
+      toast.error('Please select the received condition for RTO warehouse check');
+      return;
+    }
 
     setUpdating(true);
     try {
@@ -508,6 +514,81 @@ export const ReturnDetail = () => {
                       onChange={e => setAdvanceForm({ ...advanceForm, pickup_courier: e.target.value })}
                       placeholder="e.g., Blue Dart, Delhivery"
                     />
+                  </div>
+                </>
+              )}
+
+              {/* Warehouse Received for In-Transit RTO - Show condition form */}
+              {selectedNextStatus === 'warehouse_received' && returnReq.return_type === 'in_transit' && (
+                <>
+                  <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 mb-3">
+                    <p className="text-sm text-orange-800 font-medium">
+                      RTO Warehouse Check - Please provide condition details
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Received Condition *</label>
+                    <select
+                      value={advanceForm.received_condition}
+                      onChange={e => setAdvanceForm({ ...advanceForm, received_condition: e.target.value })}
+                      className="w-full p-2 border rounded-md mt-1"
+                    >
+                      <option value="">-- Select Condition --</option>
+                      <option value="mint">Mint Condition</option>
+                      <option value="damaged">Damaged Condition</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Condition Notes</label>
+                    <textarea
+                      value={advanceForm.condition_notes}
+                      onChange={e => setAdvanceForm({ ...advanceForm, condition_notes: e.target.value })}
+                      placeholder="Describe the condition of the returned product..."
+                      className="w-full p-2 border rounded-md mt-1 min-h-[80px]"
+                    />
+                  </div>
+                  {/* Image Upload */}
+                  <div>
+                    <label className="text-sm font-medium">Upload Images (Optional for mint, recommended for damaged)</label>
+                    <div className="mt-2 border-2 border-dashed border-gray-300 rounded-lg p-4">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        id="rto-damage-images"
+                        disabled={uploadingImages}
+                      />
+                      <label
+                        htmlFor="rto-damage-images"
+                        className="flex flex-col items-center cursor-pointer"
+                      >
+                        {uploadingImages ? (
+                          <RefreshCcw className="w-8 h-8 text-gray-400 animate-spin" />
+                        ) : (
+                          <Upload className="w-8 h-8 text-gray-400" />
+                        )}
+                        <span className="mt-2 text-sm text-gray-500">
+                          {uploadingImages ? 'Uploading...' : 'Click to upload condition images'}
+                        </span>
+                      </label>
+                    </div>
+                    {conditionImages.length > 0 && (
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        {conditionImages.map((url, idx) => (
+                          <div key={idx} className="relative">
+                            <img src={url} alt={`Condition ${idx + 1}`} className="w-full h-20 object-cover rounded" />
+                            <button
+                              onClick={() => removeImage(idx)}
+                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
