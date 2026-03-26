@@ -11,8 +11,10 @@ import {
   CheckCircle, XCircle, Clock, Package, ChevronRight, Upload, Image as ImageIcon
 } from 'lucide-react';
 
-// 3-Type Workflow Stages - FIXED: Removed "rejected" from timeline (rejection happens at start, not in flow)
-// Rejected is a decision at step 1: either Approve (continue) or Reject (with reason, order goes to resolved)
+// 3-Type Workflow Stages - FIXED: 
+// 1. Removed "rejected" from timeline (rejection happens at start, not in flow)
+// 2. Condition check happens AT warehouse_received (not separate step)
+// 3. Refund asked once at refund_processed, then just close
 const WORKFLOW_STAGES = {
   pre_dispatch: [
     { key: 'requested', label: 'Requested', icon: Clock },
@@ -23,8 +25,7 @@ const WORKFLOW_STAGES = {
     { key: 'requested', label: 'Requested', icon: Clock },
     { key: 'approved', label: 'Approved', icon: CheckCircle },
     { key: 'rto_in_transit', label: 'RTO In Transit', icon: Truck },
-    { key: 'warehouse_received', label: 'Warehouse Received', icon: Package },
-    { key: 'condition_checked', label: 'Condition Check', icon: CheckCircle },
+    { key: 'warehouse_received', label: 'Warehouse Received', icon: Package },  // Includes condition check
     { key: 'refund_processed', label: 'Refund Processed', icon: CheckCircle },
     { key: 'closed', label: 'Closed', icon: CheckCircle }
   ],
@@ -33,8 +34,7 @@ const WORKFLOW_STAGES = {
     { key: 'accepted', label: 'Accepted', icon: CheckCircle },
     { key: 'picked_up', label: 'Picked Up', icon: Truck },
     { key: 'pickup_in_transit', label: 'Pickup In Transit', icon: Truck },
-    { key: 'warehouse_received', label: 'Warehouse Received', icon: Package },
-    { key: 'condition_checked', label: 'Condition Check', icon: CheckCircle },
+    { key: 'warehouse_received', label: 'Warehouse Received', icon: Package },  // Includes condition check
     { key: 'refund_processed', label: 'Refund Processed', icon: CheckCircle },
     { key: 'closed', label: 'Closed', icon: CheckCircle }
   ]
@@ -609,12 +609,14 @@ export const ReturnDetail = () => {
                 </>
               )}
 
-              {/* Warehouse Received for In-Transit RTO - Show condition form */}
-              {selectedNextStatus === 'warehouse_received' && returnReq.return_type === 'in_transit' && (
+              {/* Warehouse Received - Show condition form for BOTH in_transit and post_delivery */}
+              {selectedNextStatus === 'warehouse_received' && (
                 <>
                   <div className="p-3 bg-orange-50 rounded-lg border border-orange-200 mb-3">
                     <p className="text-sm text-orange-800 font-medium">
-                      RTO Warehouse Check - Please provide condition details
+                      {returnReq.return_type === 'in_transit' 
+                        ? 'RTO Warehouse Check - Please provide condition details'
+                        : 'Return Warehouse Check - Please provide condition details'}
                     </p>
                   </div>
                   <div>
@@ -648,11 +650,11 @@ export const ReturnDetail = () => {
                         multiple
                         onChange={handleImageUpload}
                         className="hidden"
-                        id="rto-damage-images"
+                        id="warehouse-condition-images"
                         disabled={uploadingImages}
                       />
                       <label
-                        htmlFor="rto-damage-images"
+                        htmlFor="warehouse-condition-images"
                         className="flex flex-col items-center cursor-pointer"
                       >
                         {uploadingImages ? (
@@ -684,78 +686,6 @@ export const ReturnDetail = () => {
                 </>
               )}
 
-              {selectedNextStatus === 'condition_checked' && (
-                <>
-                  <div>
-                    <label className="text-sm font-medium">Received Condition *</label>
-                    <select
-                      value={advanceForm.received_condition}
-                      onChange={e => setAdvanceForm({ ...advanceForm, received_condition: e.target.value })}
-                      className="w-full p-2 border rounded-md mt-1"
-                    >
-                      <option value="">-- Select --</option>
-                      <option value="mint">Mint Condition</option>
-                      <option value="damaged">Damaged Condition</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Condition Notes</label>
-                    <textarea
-                      value={advanceForm.condition_notes}
-                      onChange={e => setAdvanceForm({ ...advanceForm, condition_notes: e.target.value })}
-                      placeholder="Describe the condition..."
-                      className="w-full p-2 border rounded-md mt-1 min-h-[80px]"
-                    />
-                  </div>
-                  {/* Image Upload for Damaged Condition */}
-                  {advanceForm.received_condition === 'damaged' && (
-                    <div>
-                      <label className="text-sm font-medium">Upload Damage Images</label>
-                      <div className="mt-2 border-2 border-dashed border-gray-300 rounded-lg p-4">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={handleImageUpload}
-                          className="hidden"
-                          id="damage-images"
-                          disabled={uploadingImages}
-                        />
-                        <label
-                          htmlFor="damage-images"
-                          className="flex flex-col items-center cursor-pointer"
-                        >
-                          {uploadingImages ? (
-                            <RefreshCcw className="w-8 h-8 text-gray-400 animate-spin" />
-                          ) : (
-                            <Upload className="w-8 h-8 text-gray-400" />
-                          )}
-                          <span className="mt-2 text-sm text-gray-500">
-                            {uploadingImages ? 'Uploading...' : 'Click to upload damage images'}
-                          </span>
-                        </label>
-                      </div>
-                      {/* Preview uploaded images */}
-                      {conditionImages.length > 0 && (
-                        <div className="mt-3 grid grid-cols-3 gap-2">
-                          {conditionImages.map((url, idx) => (
-                            <div key={idx} className="relative">
-                              <img src={url} alt={`Damage ${idx + 1}`} className="w-full h-20 object-cover rounded" />
-                              <button
-                                onClick={() => removeImage(idx)}
-                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 text-xs"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-
               {/* Rejection Reason - Required when rejecting */}
               {selectedNextStatus === 'rejected' && (
                 <div>
@@ -770,62 +700,58 @@ export const ReturnDetail = () => {
                 </div>
               )}
 
-              {/* Refund fields for resolved/closed status - PROPER CLOSURE FLOW */}
-              {(selectedNextStatus === 'resolved' || selectedNextStatus === 'closed' || selectedNextStatus === 'refund_processed') && (
+              {/* Refund fields - ONLY for refund_processed step */}
+              {selectedNextStatus === 'refund_processed' && (
                 <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
                   <div className="flex items-center gap-2 text-green-800 font-medium">
                     <CheckCircle className="w-5 h-5" />
                     Refund Processing
                   </div>
                   
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="refund_processed"
-                      checked={advanceForm.refund_processed}
-                      onChange={e => setAdvanceForm({ ...advanceForm, refund_processed: e.target.checked })}
-                      className="w-4 h-4 text-green-600"
+                  <div>
+                    <label className="text-sm font-medium">Refund Date *</label>
+                    <Input
+                      type="date"
+                      value={advanceForm.refund_date}
+                      onChange={e => setAdvanceForm({ ...advanceForm, refund_date: e.target.value })}
+                      required
                     />
-                    <label htmlFor="refund_processed" className="text-sm font-medium">
-                      Has refund been processed?
-                    </label>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Refund Amount</label>
+                    <Input
+                      type="number"
+                      value={advanceForm.refund_amount}
+                      onChange={e => setAdvanceForm({ ...advanceForm, refund_amount: e.target.value })}
+                      placeholder="Enter refund amount"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Reference ID (Optional)</label>
+                    <Input
+                      value={advanceForm.refund_reference_id}
+                      onChange={e => setAdvanceForm({ ...advanceForm, refund_reference_id: e.target.value })}
+                      placeholder="Transaction/Reference ID"
+                    />
                   </div>
                   
-                  {advanceForm.refund_processed && (
-                    <>
-                      <div>
-                        <label className="text-sm font-medium">Refund Date *</label>
-                        <Input
-                          type="date"
-                          value={advanceForm.refund_date}
-                          onChange={e => setAdvanceForm({ ...advanceForm, refund_date: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Refund Amount</label>
-                        <Input
-                          type="number"
-                          value={advanceForm.refund_amount}
-                          onChange={e => setAdvanceForm({ ...advanceForm, refund_amount: e.target.value })}
-                          placeholder="Enter refund amount"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Reference ID (Optional)</label>
-                        <Input
-                          value={advanceForm.refund_reference_id}
-                          onChange={e => setAdvanceForm({ ...advanceForm, refund_reference_id: e.target.value })}
-                          placeholder="Transaction/Reference ID"
-                        />
-                      </div>
-                    </>
-                  )}
-                  
                   <p className="text-xs text-green-700 mt-2">
-                    {returnReq?.return_type === 'in_transit' 
-                      ? 'Once closed, order will be moved to Cancelled Orders under "RTO Pre-Delivery (Excluding PFC)".'
-                      : 'Once closed, the return will no longer be open and the order will be marked as cancelled.'}
+                    After confirming refund, click "Advance" then proceed to "Close" to complete the return.
+                  </p>
+                </div>
+              )}
+
+              {/* Closed step - just a confirmation, no more inputs */}
+              {selectedNextStatus === 'closed' && (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center gap-2 text-gray-800 font-medium">
+                    <CheckCircle className="w-5 h-5" />
+                    Close Return
+                  </div>
+                  <p className="text-sm text-gray-600 mt-2">
+                    This will close the return and mark the order as cancelled under 
+                    "{returnReq?.return_type === 'in_transit' ? 'RTO Pre-Delivery (Excluding PFC)' : 
+                      returnReq?.return_type === 'pre_dispatch' ? 'Pre-Dispatch Cancellation' : 'Post-Delivery Return'}".
                   </p>
                 </div>
               )}

@@ -40,8 +40,8 @@ def classify_return_category(return_reason: str, status: str, delivery_date: str
 # Workflow transition map for 3-type return workflow
 # FIXED: 
 # 1. "rejected" is a decision at START (not in timeline)
-# 2. After condition_checked, ask if refund processed -> then close
-# 3. Proper RTO flow: approved -> rto_in_transit -> warehouse_received -> condition_checked -> refund_processed -> closed
+# 2. Condition check happens AT warehouse_received (not separate step)
+# 3. Refund asked once at refund_processed, then close
 WORKFLOW_TRANSITIONS = {
     "pre_dispatch": {
         "requested": ["approved", "rejected"],
@@ -52,10 +52,9 @@ WORKFLOW_TRANSITIONS = {
     "in_transit": {
         "requested": ["approved", "rejected"],
         "approved": ["rto_in_transit"],
-        "rto_in_transit": ["warehouse_received"],
-        "warehouse_received": ["condition_checked"],
-        "condition_checked": ["refund_processed"],  # After condition check, ask about refund
-        "refund_processed": ["closed"],  # After refund confirmed, close
+        "rto_in_transit": ["warehouse_received"],  # Condition check happens here
+        "warehouse_received": ["refund_processed"],  # After warehouse + condition → ask about refund
+        "refund_processed": ["closed"],  # After refund confirmed, just close (no more questions)
         "rejected": [],  # Terminal - order restored
         "closed": []  # Terminal - order moved to RTO Pre-Delivery (Excluding PFC)
     },
@@ -65,9 +64,8 @@ WORKFLOW_TRANSITIONS = {
         "picked_up": ["pickup_in_transit", "warehouse_received"],
         "pickup_in_transit": ["warehouse_received"],
         "pickup_not_required": ["closed"],  # Skip pickup, go to close
-        "warehouse_received": ["condition_checked"],
-        "condition_checked": ["refund_processed"],  # After condition check, ask about refund
-        "refund_processed": ["closed"],  # After refund confirmed, close
+        "warehouse_received": ["refund_processed"],  # After warehouse + condition → ask about refund
+        "refund_processed": ["closed"],  # After refund confirmed, just close
         "rejected": [],  # Terminal - order restored
         "closed": []  # Terminal
     },
@@ -511,22 +509,24 @@ async def advance_return_workflow(
             update_data["rto_courier"] = rto_courier
             update_data["rto_initiated_date"] = now
         elif next_status == "warehouse_received":
+            # Warehouse received INCLUDES condition check for in_transit RTO
             update_data["warehouse_received_date"] = warehouse_received_date or now
             update_data["rto_delivered_date"] = warehouse_received_date or now
-        elif next_status == "condition_checked":
-            update_data["received_condition"] = received_condition
-            update_data["condition_notes"] = condition_notes
-            update_data["condition_checked_date"] = now
-            update_data["condition_checked_by"] = current_user.email
-            if condition_images:
-                try:
-                    if isinstance(condition_images, str):
-                        import json
-                        update_data["condition_images"] = json.loads(condition_images)
-                    else:
-                        update_data["condition_images"] = condition_images
-                except (json.JSONDecodeError, TypeError, ValueError):
-                    update_data["condition_images"] = [condition_images] if condition_images else []
+            # Condition check happens at this step
+            if received_condition:
+                update_data["received_condition"] = received_condition
+                update_data["condition_notes"] = condition_notes
+                update_data["condition_checked_date"] = now
+                update_data["condition_checked_by"] = current_user.email
+                if condition_images:
+                    try:
+                        if isinstance(condition_images, str):
+                            import json
+                            update_data["condition_images"] = json.loads(condition_images)
+                        else:
+                            update_data["condition_images"] = condition_images
+                    except (json.JSONDecodeError, TypeError, ValueError):
+                        update_data["condition_images"] = [condition_images] if condition_images else []
         elif next_status == "refund_processed":
             update_data["refund_processed"] = True
             update_data["refund_processed_date"] = now
@@ -538,6 +538,7 @@ async def advance_return_workflow(
             if refund_reference_id:
                 update_data["refund_reference_id"] = refund_reference_id
         elif next_status == "closed":
+            # Just close - no more questions
             update_data["closed_date"] = now
             update_data["closed_by"] = current_user.email
     
@@ -552,21 +553,23 @@ async def advance_return_workflow(
             update_data["pickup_tracking_id"] = pickup_tracking_id
             update_data["pickup_courier"] = pickup_courier
         elif next_status == "warehouse_received":
+            # Warehouse received INCLUDES condition check for post_delivery
             update_data["warehouse_received_date"] = warehouse_received_date or now
-        elif next_status == "condition_checked":
-            update_data["received_condition"] = received_condition
-            update_data["condition_notes"] = condition_notes
-            update_data["condition_checked_date"] = now
-            update_data["condition_checked_by"] = current_user.email
-            if condition_images:
-                try:
-                    if isinstance(condition_images, str):
-                        import json
-                        update_data["condition_images"] = json.loads(condition_images)
-                    else:
-                        update_data["condition_images"] = condition_images
-                except (json.JSONDecodeError, TypeError, ValueError):
-                    update_data["condition_images"] = [condition_images] if condition_images else []
+            # Condition check happens at this step
+            if received_condition:
+                update_data["received_condition"] = received_condition
+                update_data["condition_notes"] = condition_notes
+                update_data["condition_checked_date"] = now
+                update_data["condition_checked_by"] = current_user.email
+                if condition_images:
+                    try:
+                        if isinstance(condition_images, str):
+                            import json
+                            update_data["condition_images"] = json.loads(condition_images)
+                        else:
+                            update_data["condition_images"] = condition_images
+                    except (json.JSONDecodeError, TypeError, ValueError):
+                        update_data["condition_images"] = [condition_images] if condition_images else []
         elif next_status == "refund_processed":
             update_data["refund_processed"] = True
             update_data["refund_processed_date"] = now
@@ -578,6 +581,7 @@ async def advance_return_workflow(
             if refund_reference_id:
                 update_data["refund_reference_id"] = refund_reference_id
         elif next_status == "closed":
+            # Just close - no more questions
             update_data["closed_date"] = now
             update_data["closed_by"] = current_user.email
     
