@@ -119,11 +119,31 @@ async def get_replacement_requests(
         query["pickup_approved"] = {"$ne": True}
         query["pickup_not_required"] = {"$ne": True}
         query["replacement_status"] = {"$nin": ["resolved", "rejected"]}
+    elif filter_type == "pickups_in_transit":
+        # Pickups that are picked up but not yet at warehouse
+        query["pickup_approved"] = True
+        query["pickup_status"] = "picked_up"  # Picked up = in transit to warehouse
+        query["replacement_status"] = {"$nin": ["resolved", "rejected"]}
+    elif filter_type == "shipments_pending":
+        # Replacement approved but not yet shipped
+        query["replacement_approved"] = True
+        query["$or"] = [
+            {"shipment_status": {"$in": [None, "approved", "pending"]}},
+            {"shipment_status": {"$exists": False}}
+        ]
+        query["replacement_status"] = {"$nin": ["resolved", "rejected"]}
+    elif filter_type == "shipments_in_transit":
+        # Replacement shipped but not yet delivered
+        query["replacement_approved"] = True
+        query["shipment_status"] = "dispatched"
+        query["replacement_status"] = {"$nin": ["resolved", "rejected"]}
     elif filter_type == "pickups_in_progress":
+        # Legacy: any active pickup
         query["pickup_approved"] = True
         query["pickup_status"] = {"$nin": ["closed", "not_required", None]}
         query["replacement_status"] = {"$nin": ["resolved", "rejected"]}
     elif filter_type == "shipments_in_progress":
+        # Legacy: any active shipment
         query["replacement_approved"] = True
         query["shipment_status"] = {"$nin": ["closed", None]}
         query["replacement_status"] = {"$nin": ["resolved", "rejected"]}
@@ -821,17 +841,27 @@ async def get_replacement_counts_v2(
         "replacement_status": {"$nin": ["resolved", "rejected"]}
     })
     
-    # Pickups in Progress (approved but not closed)
-    pickups_in_progress = await db.replacement_requests.count_documents({
+    # Pickups In Transit (picked up but not at warehouse yet)
+    pickups_in_transit = await db.replacement_requests.count_documents({
         "pickup_approved": True,
-        "pickup_status": {"$nin": ["closed", "not_required", None]},
+        "pickup_status": "picked_up",  # Picked up = in transit
         "replacement_status": {"$nin": ["resolved", "rejected"]}
     })
     
-    # Shipments in Progress
-    shipments_in_progress = await db.replacement_requests.count_documents({
+    # Shipments Pending (approved but not shipped yet)
+    shipments_pending = await db.replacement_requests.count_documents({
         "replacement_approved": True,
-        "shipment_status": {"$nin": ["closed", None]},
+        "$or": [
+            {"shipment_status": {"$in": [None, "approved", "pending"]}},
+            {"shipment_status": {"$exists": False}}
+        ],
+        "replacement_status": {"$nin": ["resolved", "rejected"]}
+    })
+    
+    # Shipments In Transit (shipped but not delivered)
+    shipments_in_transit = await db.replacement_requests.count_documents({
+        "replacement_approved": True,
+        "shipment_status": "dispatched",
         "replacement_status": {"$nin": ["resolved", "rejected"]}
     })
     
@@ -839,6 +869,7 @@ async def get_replacement_counts_v2(
         "open_replacement_requests": open_count,
         "pickup_approval_pending": pickup_approval_pending,
         "replacement_approval_pending": replacement_approval_pending,
-        "pickups_in_progress": pickups_in_progress,
-        "shipments_in_progress": shipments_in_progress
+        "pickups_in_transit": pickups_in_transit,
+        "shipments_pending": shipments_pending,
+        "shipments_in_transit": shipments_in_transit
     }

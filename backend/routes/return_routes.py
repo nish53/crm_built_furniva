@@ -61,8 +61,7 @@ WORKFLOW_TRANSITIONS = {
     "post_delivery": {
         "requested": ["accepted", "rejected"],
         "accepted": ["picked_up", "pickup_not_required"],
-        "picked_up": ["pickup_in_transit", "warehouse_received"],
-        "pickup_in_transit": ["warehouse_received"],
+        "picked_up": ["warehouse_received"],  # Picked up = in transit, next is warehouse
         "pickup_not_required": ["closed"],  # Skip pickup, go to close
         "warehouse_received": ["refund_processed"],  # After warehouse + condition → ask about refund
         "refund_processed": ["closed"],  # After refund confirmed, just close

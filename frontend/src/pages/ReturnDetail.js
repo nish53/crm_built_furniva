@@ -32,8 +32,7 @@ const WORKFLOW_STAGES = {
   post_delivery: [
     { key: 'requested', label: 'Requested', icon: Clock },
     { key: 'accepted', label: 'Accepted', icon: CheckCircle },
-    { key: 'picked_up', label: 'Picked Up', icon: Truck },
-    { key: 'pickup_in_transit', label: 'Pickup In Transit', icon: Truck },
+    { key: 'picked_up', label: 'Picked Up (In Transit)', icon: Truck },  // Picked up = in transit to warehouse
     { key: 'warehouse_received', label: 'Warehouse Received', icon: Package },  // Includes condition check
     { key: 'refund_processed', label: 'Refund Processed', icon: CheckCircle },
     { key: 'closed', label: 'Closed', icon: CheckCircle }
@@ -46,8 +45,7 @@ const statusColors = {
   accepted: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
   rto_in_transit: 'bg-orange-100 text-orange-800',
-  picked_up: 'bg-blue-100 text-blue-800',
-  pickup_in_transit: 'bg-orange-100 text-orange-800',
+  picked_up: 'bg-purple-100 text-purple-800',  // Picked up = in transit
   pickup_not_required: 'bg-gray-100 text-gray-800',
   warehouse_received: 'bg-teal-100 text-teal-800',
   condition_checked: 'bg-yellow-100 text-yellow-800',

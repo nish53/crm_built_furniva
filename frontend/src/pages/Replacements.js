@@ -31,8 +31,8 @@ export const Replacements = () => {
       // ONLY fetch open replacements (exclude resolved status)
       params.exclude_status = 'resolved';
       
-      // Handle special dual approval filters
-      const specialFilters = ['replacement_approval_pending', 'pickup_approval_pending', 'pickups_in_progress', 'shipments_in_progress'];
+      // Handle special filters
+      const specialFilters = ['replacement_approval_pending', 'pickup_approval_pending', 'pickups_in_transit', 'shipments_pending', 'shipments_in_transit'];
       
       if (specialFilters.includes(statusFilter)) {
         params.filter_type = statusFilter;
@@ -222,13 +222,13 @@ export const Replacements = () => {
         </Button>
       </div>
 
-      {/* Summary Cards - Bug #5 & #6: Updated Counters with Dual Approval */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {/* Summary Cards - Reorganized with clear meanings */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('all')}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Open Requests</p>
+                <p className="text-sm text-muted-foreground">Open Replacements</p>
                 <p className="text-2xl font-bold">{counters?.open_replacement_requests || replacements.length}</p>
               </div>
               <Package className="w-8 h-8 text-blue-500" />
@@ -260,26 +260,38 @@ export const Replacements = () => {
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('pickups_in_progress')}>
+        <Card className="cursor-pointer hover:bg-secondary/20 border-purple-200" onClick={() => setStatusFilter('pickups_in_transit')}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pickups Active</p>
-                <p className="text-2xl font-bold text-purple-600">{counters?.pickups_in_progress || 0}</p>
+                <p className="text-sm text-muted-foreground">Pickups In Transit</p>
+                <p className="text-2xl font-bold text-purple-600">{counters?.pickups_in_transit || 0}</p>
               </div>
               <Truck className="w-8 h-8 text-purple-500" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('shipments_in_progress')}>
+        <Card className="cursor-pointer hover:bg-secondary/20 border-yellow-200" onClick={() => setStatusFilter('shipments_pending')}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Shipments Active</p>
-                <p className="text-2xl font-bold text-green-600">{counters?.shipments_in_progress || 0}</p>
+                <p className="text-sm text-muted-foreground">Shipments Pending</p>
+                <p className="text-2xl font-bold text-yellow-600">{counters?.shipments_pending || 0}</p>
               </div>
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
+              <Package className="w-8 h-8 text-yellow-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:bg-secondary/20 border-green-200" onClick={() => setStatusFilter('shipments_in_transit')}>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Shipments In Transit</p>
+                <p className="text-2xl font-bold text-green-600">{counters?.shipments_in_transit || 0}</p>
+              </div>
+              <Truck className="w-8 h-8 text-green-500" />
             </div>
           </CardContent>
         </Card>
@@ -288,17 +300,16 @@ export const Replacements = () => {
       {/* Status Filter */}
       <div className="flex items-center gap-4">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-[220px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="replacement_approval_pending">Replacement Approval Pending</SelectItem>
             <SelectItem value="pickup_approval_pending">Pickup Approval Pending</SelectItem>
-            <SelectItem value="pickups_in_progress">Pickups In Progress</SelectItem>
-            <SelectItem value="shipments_in_progress">Shipments In Progress</SelectItem>
-            <SelectItem value="requested">Requested</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="pickups_in_transit">Pickups In Transit</SelectItem>
+            <SelectItem value="shipments_pending">Shipments Pending</SelectItem>
+            <SelectItem value="shipments_in_transit">Shipments In Transit</SelectItem>
             <SelectItem value="delivered">Delivered</SelectItem>
           </SelectContent>
         </Select>
@@ -331,7 +342,31 @@ export const Replacements = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <span className="font-[JetBrains_Mono] font-medium">{replacement.order_number}</span>
-                        {getStatusBadge(replacement.replacement_status)}
+                        {/* Dual Status Badges - Pickup & Shipment */}
+                        <div className="flex gap-1">
+                          <Badge className={`text-xs ${
+                            replacement.pickup_not_required ? 'bg-gray-100 text-gray-600' :
+                            !replacement.pickup_approved ? 'bg-yellow-100 text-yellow-800' :
+                            replacement.pickup_status === 'picked_up' ? 'bg-purple-100 text-purple-800' :
+                            replacement.pickup_status === 'warehouse_received' ? 'bg-teal-100 text-teal-800' :
+                            replacement.pickup_status === 'closed' ? 'bg-green-100 text-green-800' :
+                            'bg-orange-100 text-orange-800'
+                          }`}>
+                            🔄 {replacement.pickup_not_required ? 'No Pickup' : 
+                               !replacement.pickup_approved ? 'Pickup Pending' :
+                               (replacement.pickup_status || 'approved').replace(/_/g, ' ')}
+                          </Badge>
+                          <Badge className={`text-xs ${
+                            !replacement.replacement_approved ? 'bg-yellow-100 text-yellow-800' :
+                            replacement.shipment_status === 'dispatched' ? 'bg-blue-100 text-blue-800' :
+                            replacement.shipment_status === 'delivered' ? 'bg-green-100 text-green-800' :
+                            replacement.shipment_status === 'closed' ? 'bg-green-100 text-green-800' :
+                            'bg-orange-100 text-orange-800'
+                          }`}>
+                            📦 {!replacement.replacement_approved ? 'Ship Pending' :
+                               (replacement.shipment_status || 'approved').replace(/_/g, ' ')}
+                          </Badge>
+                        </div>
                         <Badge variant="outline">{replacement.replacement_reason}</Badge>
                       </div>
                       

@@ -50,6 +50,36 @@ A comprehensive e-commerce operations management platform for Furniva furniture 
    - How It Works guide
 5. Clean navigation: Dashboard → Orders → Inventory → Returns → Costing → Channels → Tasks → Analytics → WhatsApp → Team
 
+### Phase 3 - Returns & Replacements System (Mar 28, 2026)
+1. **12-Stage Return Workflow** supporting:
+   - Post-delivery returns (customer returns after receiving)
+   - RTO/In-transit returns (return to origin during delivery)
+   - Pre-dispatch cancellations
+   - Returns after unsatisfactory replacement
+2. **Dual-Approval Replacement System**:
+   - Pickup Approval (approve old item pickup)
+   - Replacement Approval (approve sending new item)
+   - Dual status badges on overview tiles (🔄 Pickup | 📦 Shipment)
+   - Independent pickup and shipment tracking
+3. **Counter Cards for Replacements**:
+   - Open Replacements (total active)
+   - Replacement Approval (pending new item approval)
+   - Pickup Approval (pending old item pickup approval)
+   - Pickups In Transit (old items being returned)
+   - Shipments Pending (approved but not shipped)
+   - Shipments In Transit (replacements on way to customer)
+4. **Smart CSV Import Duplicate Check**:
+   - Multi-item orders (same order_id, different SKUs) → import correctly
+   - True duplicates (same order_id + same SKU) → skip automatically
+5. **Unified Order History & Status Card** (Order Detail):
+   - Single consolidated card for all return/replacement milestones
+   - Removed redundant cards (Return Info sidebar, separate Status card)
+   - Timeline card now only shows order lifecycle (not return dates)
+   - Clear separation: Return Timeline + Replacement Timeline (Pickup + Shipment tracks)
+6. **Streamlined Post-Delivery Return Workflow**:
+   - Removed redundant "pickup_in_transit" step
+   - Flow: Requested → Accepted → Picked Up (In Transit) → Warehouse Received → Refund Processed → Closed
+
 ### Bug Fixes (Feb 26, 2026)
 1. Fixed corrupted models.py - duplicate class fields in ProcurementBatchCreate and ChannelCreate
 2. Made sku and product_name optional in OrderBase for imported orders
@@ -57,17 +87,30 @@ A comprehensive e-commerce operations management platform for Furniva furniture 
 4. Added box-level procurement tracking (weight, dimensions)
 5. Return workflow with mandatory field validation and undo
 
+### Bug Fixes (Mar 28, 2026)
+1. Added 'test' as valid OrderChannel for test data compatibility
+2. Fixed replacement timeline graphics not highlighting correctly
+3. Removed approval/reject buttons from Replacements overview page (approvals only in detail view)
+4. Fixed order_id filter for return-requests and replacement-requests endpoints
+
 ## Key API Endpoints
 - `POST /api/auth/login` - Authentication
 - `GET/POST /api/orders/` - Orders CRUD
 - `POST /api/orders/import-csv` - Import CSV/TXT
+- `POST /api/import/with-mapping` - Smart import with duplicate check (order_number + SKU)
 - `GET/POST /api/master-sku/` - Master SKU CRUD
 - `GET/POST /api/platform-listings/` - Platform listings CRUD
 - `GET/POST /api/procurement-batches/` - Procurement with box details
 - `GET /api/procurement-batches/average-cost/{sku}` - Weighted avg cost
-- `GET/POST /api/returns/` - Returns CRUD
-- `PATCH /api/returns/{id}/status` - Update with mandatory field validation
-- `PATCH /api/returns/{id}/undo` - Undo last status change
+- `GET/POST /api/return-requests/` - Returns CRUD (supports ?order_id filter)
+- `POST /api/return-requests/{id}/advance` - Advance return workflow
+- `POST /api/return-requests/{id}/undo` - Undo last status change
+- `GET/POST /api/replacement-requests/` - Replacements CRUD (supports ?order_id, ?filter_type filters)
+- `POST /api/replacement-requests/{id}/approve-pickup` - Approve pickup
+- `POST /api/replacement-requests/{id}/approve-replacement` - Approve replacement shipment
+- `POST /api/replacement-requests/{id}/advance-pickup` - Advance pickup workflow
+- `POST /api/replacement-requests/{id}/advance-shipment` - Advance shipment workflow
+- `GET /api/replacement-requests/analytics/counts-v2` - Dashboard counters
 - `POST /api/financials/calculate/{order_id}` - Per-order financials
 - `GET /api/financials/profit-analysis` - Aggregated analysis
 
