@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 import uuid
 
 # Configuration
-BACKEND_URL = "https://furni-manage.preview.emergentagent.com/api"
+BACKEND_URL = "https://agent-crm-hub-6.preview.emergentagent.com/api"
 TEST_USER_EMAIL = "testuser@furniva.com"
 TEST_USER_PASSWORD = "testpass123"
 
