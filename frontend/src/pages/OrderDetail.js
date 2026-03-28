@@ -443,7 +443,7 @@ export const OrderDetail = () => {
           </Card>
 
 
-          {/* Timeline */}
+          {/* Timeline - Order Lifecycle Only */}
           <Card data-testid="timeline-card">
             <CardHeader><CardTitle className="font-[Manrope] flex items-center gap-2"><Calendar className="w-5 h-5" />Timeline</CardTitle></CardHeader>
             <CardContent>
@@ -454,16 +454,9 @@ export const OrderDetail = () => {
                 <TimelineItem label="In Transit" date={safeDateShort(order.in_transit_date)} active={!!order.in_transit_date} />
                 <TimelineItem label="Out for Delivery" date={safeDateShort(order.out_for_delivery_date)} active={!!order.out_for_delivery_date} />
                 <TimelineItem label="Delivered" date={safeDateShort(order.delivery_date || order.delivered_date)} active={!!(order.delivery_date || order.delivered_date)} />
-                {order.return_requested && <>
-                  <TimelineItem label="Return Requested" date={safeDateShort(order.return_date)} active warn />
-                  <TimelineItem label="RTO Initiated" date={safeDateShort(order.rto_initiated_date)} active={!!order.rto_initiated_date} warn />
-                  <TimelineItem label="RTO Delivered" date={safeDateShort(order.rto_delivered_date)} active={!!order.rto_delivered_date} warn />
-                  <TimelineItem label="Warehouse Received" date={safeDateShort(order.rto_warehouse_received_date)} active={!!order.rto_warehouse_received_date} warn />
-                  {order.rto_received_condition && (
-                    <TimelineItem label={`Condition: ${order.rto_received_condition}`} date={order.rto_received_condition === 'damaged' ? '⚠️ Damaged' : '✓ Mint'} active warn />
-                  )}
-                  <TimelineItem label="Refund Date" date={safeDateShort(order.refund_date)} active={!!order.refund_date} warn />
-                </>}
+                {order.status === 'cancelled' && (
+                  <TimelineItem label="Cancelled" date={safeDateShort(order.cancelled_at)} active warn />
+                )}
               </div>
             </CardContent>
           </Card>
@@ -489,201 +482,183 @@ export const OrderDetail = () => {
           </Card>
 
 
-          {/* Return/Replacement Status */}
-          {(order.return_requested || order.replacement_requested) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-[Manrope] flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-orange-600" />
-                  Return/Replacement Status
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {order.return_requested && (
-                  <div className="bg-orange-50 p-3 rounded-md border border-orange-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-orange-900">Return Request</span>
-                      <Badge className="bg-orange-600">RETURN</Badge>
-                    </div>
-                    {order.cancellation_reason && (
-                      <p className="text-sm text-orange-800">
-                        <span className="font-medium">Reason:</span> {order.cancellation_reason}
-                      </p>
-                    )}
-                    {order.return_date && (
-                      <p className="text-xs text-orange-700 mt-1">
-                        Requested: {safeDateShort(order.return_date)}
-                      </p>
-                    )}
-                  </div>
-                )}
-                
-                {order.replacement_requested && (
-                  <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-blue-900">Replacement Request</span>
-                      <Badge className="bg-blue-600">REPLACEMENT</Badge>
-                    </div>
-                    {order.replacement_reason && (
-                      <p className="text-sm text-blue-800">
-                        <span className="font-medium">Reason:</span> {order.replacement_reason}
-                      </p>
-                    )}
-                    {order.replacement_request_date && (
-                      <p className="text-xs text-blue-700 mt-1">
-                        Requested: {safeDateShort(order.replacement_request_date)}
-                      </p>
-                    )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 w-full"
-                      onClick={() => navigate('/replacements')}
-                    >
-                      View in Replacements Dashboard
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Return/Replacement Milestones Card - Shows key checkpoint dates */}
-          {(returnRequest || replacementRequest) && (
-            <Card data-testid="milestones-card" className="border-amber-200 bg-gradient-to-br from-amber-50/50 to-orange-50/30">
+          {/* Unified Return/Replacement History Card - Single source of truth */}
+          {(order.return_requested || order.replacement_requested || returnRequest || replacementRequest) && (
+            <Card data-testid="order-history-card" className="border-amber-200 bg-gradient-to-br from-amber-50/50 to-orange-50/30">
               <CardHeader>
                 <CardTitle className="font-[Manrope] flex items-center gap-2 text-amber-800">
-                  <CheckCircle className="w-5 h-5" />
-                  Return/Replacement Milestones
+                  <AlertTriangle className="w-5 h-5" />
+                  Order History & Status
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Return Request Milestones */}
-                  {returnRequest && (
-                    <>
+              <CardContent className="space-y-4">
+                {/* Active Issues Summary */}
+                <div className="flex flex-wrap gap-2">
+                  {(order.return_requested || returnRequest) && (
+                    <Badge className="bg-orange-600 text-white">
+                      <RefreshCcw className="w-3 h-3 mr-1" />
+                      RETURN {returnRequest?.return_status ? `• ${returnRequest.return_status.replace(/_/g, ' ')}` : ''}
+                    </Badge>
+                  )}
+                  {(order.replacement_requested || replacementRequest) && (
+                    <Badge className="bg-blue-600 text-white">
+                      <Package className="w-3 h-3 mr-1" />
+                      REPLACEMENT {replacementRequest?.replacement_status ? `• ${replacementRequest.replacement_status.replace(/_/g, ' ')}` : ''}
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Return Milestones Section */}
+                {(returnRequest || order.return_requested) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-orange-700 border-b border-orange-200 pb-1">
+                      <RefreshCcw className="w-4 h-4" />
+                      Return Timeline
+                      {order.return_reason && (
+                        <span className="text-xs font-normal text-orange-600 ml-auto">
+                          Reason: {order.return_reason || order.cancellation_reason}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                       <MilestoneItem 
                         label="Return Requested" 
-                        date={safeDateShort(returnRequest.requested_date)} 
-                        active={!!returnRequest.requested_date}
+                        date={safeDateShort(returnRequest?.requested_date || order.return_date)} 
+                        active={!!(returnRequest?.requested_date || order.return_date)}
                         type="return"
                       />
                       <MilestoneItem 
                         label="RTO Initiated" 
-                        date={safeDateShort(returnRequest.return_initiated_date || order.rto_initiated_date)} 
-                        active={!!(returnRequest.return_initiated_date || order.rto_initiated_date)}
+                        date={safeDateShort(returnRequest?.return_initiated_date || order.rto_initiated_date)} 
+                        active={!!(returnRequest?.return_initiated_date || order.rto_initiated_date)}
                         type="return"
                       />
                       <MilestoneItem 
                         label="Warehouse Received" 
-                        date={safeDateShort(returnRequest.warehouse_received_date || order.rto_warehouse_received_date)} 
-                        active={!!(returnRequest.warehouse_received_date || order.rto_warehouse_received_date)}
+                        date={safeDateShort(returnRequest?.warehouse_received_date || order.rto_warehouse_received_date)} 
+                        active={!!(returnRequest?.warehouse_received_date || order.rto_warehouse_received_date)}
                         type="return"
                       />
                       <MilestoneItem 
                         label="Condition Checked" 
-                        date={returnRequest.qc_condition ? `✓ ${returnRequest.qc_condition}` : safeDateShort(returnRequest.qc_inspection_date)} 
-                        active={!!(returnRequest.qc_inspection_date || returnRequest.qc_condition)}
+                        date={returnRequest?.qc_condition ? `✓ ${returnRequest.qc_condition}` : safeDateShort(returnRequest?.qc_inspection_date)} 
+                        active={!!(returnRequest?.qc_inspection_date || returnRequest?.qc_condition || order.rto_received_condition)}
                         type="return"
                       />
                       <MilestoneItem 
                         label="Refund Processed" 
-                        date={returnRequest.refund_processed_amount ? `₹${returnRequest.refund_processed_amount}` : safeDateShort(returnRequest.refund_processed_date || order.refund_date)} 
-                        active={!!(returnRequest.refund_processed_date || order.refund_date)}
+                        date={returnRequest?.refund_processed_amount ? `₹${returnRequest.refund_processed_amount}` : safeDateShort(returnRequest?.refund_processed_date || order.refund_date)} 
+                        active={!!(returnRequest?.refund_processed_date || order.refund_date)}
                         type="return"
                         highlight
                       />
                       <MilestoneItem 
                         label="Return Closed" 
-                        date={safeDateShort(returnRequest.closed_date)} 
-                        active={returnRequest.return_status === 'closed'}
+                        date={safeDateShort(returnRequest?.closed_date)} 
+                        active={returnRequest?.return_status === 'closed'}
                         type="return"
                         highlight
                       />
-                    </>
-                  )}
-                  
-                  {/* Replacement Request Milestones */}
-                  {replacementRequest && (
-                    <>
-                      <MilestoneItem 
-                        label="Replacement Requested" 
-                        date={safeDateShort(replacementRequest.requested_date)} 
-                        active={!!replacementRequest.requested_date}
-                        type="replacement"
-                      />
+                    </div>
+                    {returnRequest && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full mt-2 border-orange-300 text-orange-700 hover:bg-orange-50"
+                        onClick={() => navigate(`/returns/${returnRequest.id}`)}
+                      >
+                        View Full Return Details →
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {/* Replacement Milestones Section */}
+                {(replacementRequest || order.replacement_requested) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-blue-700 border-b border-blue-200 pb-1">
+                      <Package className="w-4 h-4" />
+                      Replacement Timeline
+                      {(order.replacement_reason || replacementRequest?.replacement_reason) && (
+                        <span className="text-xs font-normal text-blue-600 ml-auto">
+                          Reason: {replacementRequest?.replacement_reason || order.replacement_reason}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Pickup Track */}
+                    <p className="text-xs text-muted-foreground font-medium">🔄 Old Product Pickup</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <MilestoneItem 
                         label="Pickup Approved" 
-                        date={safeDateShort(replacementRequest.pickup_approved_date)} 
-                        active={replacementRequest.pickup_approved}
+                        date={safeDateShort(replacementRequest?.pickup_approved_date)} 
+                        active={replacementRequest?.pickup_approved}
                         type="replacement"
                       />
                       <MilestoneItem 
                         label="Old Item Picked Up" 
-                        date={safeDateShort(replacementRequest.pickup_date)} 
-                        active={!!replacementRequest.pickup_date}
+                        date={replacementRequest?.pickup_tracking_id ? `${safeDateShort(replacementRequest?.pickup_date)} • ${replacementRequest.pickup_tracking_id}` : safeDateShort(replacementRequest?.pickup_date)} 
+                        active={!!replacementRequest?.pickup_date || !!replacementRequest?.pickup_tracking_id}
                         type="replacement"
                       />
                       <MilestoneItem 
                         label="Warehouse Received" 
-                        date={safeDateShort(replacementRequest.warehouse_received_date)} 
-                        active={!!replacementRequest.warehouse_received_date}
+                        date={safeDateShort(replacementRequest?.warehouse_received_date)} 
+                        active={!!replacementRequest?.warehouse_received_date}
                         type="replacement"
                       />
                       <MilestoneItem 
+                        label="Condition Checked" 
+                        date={replacementRequest?.received_condition ? `✓ ${replacementRequest.received_condition}` : '-'} 
+                        active={!!replacementRequest?.received_condition}
+                        type="replacement"
+                      />
+                    </div>
+
+                    {/* Shipment Track */}
+                    <p className="text-xs text-muted-foreground font-medium mt-2">📦 New Product Shipment</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <MilestoneItem 
                         label="Replacement Approved" 
-                        date={safeDateShort(replacementRequest.replacement_approved_date)} 
-                        active={replacementRequest.replacement_approved}
+                        date={safeDateShort(replacementRequest?.replacement_approved_date)} 
+                        active={replacementRequest?.replacement_approved}
                         type="replacement"
                       />
                       <MilestoneItem 
                         label="Replacement Shipped" 
-                        date={replacementRequest.new_tracking_id ? `${safeDateShort(replacementRequest.ship_date)} • ${replacementRequest.new_tracking_id}` : safeDateShort(replacementRequest.ship_date)} 
-                        active={!!replacementRequest.ship_date || !!replacementRequest.new_tracking_id}
+                        date={replacementRequest?.new_tracking_id ? `${safeDateShort(replacementRequest?.ship_date)} • ${replacementRequest.new_tracking_id}` : safeDateShort(replacementRequest?.ship_date)} 
+                        active={!!replacementRequest?.ship_date || !!replacementRequest?.new_tracking_id}
                         type="replacement"
                         highlight
                       />
                       <MilestoneItem 
                         label="Delivered" 
-                        date={safeDateShort(replacementRequest.delivered_date)} 
-                        active={!!replacementRequest.delivered_date}
+                        date={safeDateShort(replacementRequest?.delivered_date)} 
+                        active={!!replacementRequest?.delivered_date}
                         type="replacement"
                         highlight
                       />
                       <MilestoneItem 
                         label="Resolved" 
-                        date={safeDateShort(replacementRequest.resolved_date)} 
-                        active={replacementRequest.replacement_status === 'resolved'}
+                        date={safeDateShort(replacementRequest?.resolved_date)} 
+                        active={replacementRequest?.replacement_status === 'resolved'}
                         type="replacement"
                         highlight
                       />
-                    </>
-                  )}
-                </div>
-                
-                {/* Navigation buttons */}
-                <div className="flex gap-2 mt-4">
-                  {returnRequest && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 border-orange-300 text-orange-700 hover:bg-orange-50"
-                      onClick={() => navigate(`/returns/${returnRequest.id}`)}
-                    >
-                      View Return Details
-                    </Button>
-                  )}
-                  {replacementRequest && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 border-blue-300 text-blue-700 hover:bg-blue-50"
-                      onClick={() => navigate(`/replacements/${replacementRequest.id}`)}
-                    >
-                      View Replacement Details
-                    </Button>
-                  )}
-                </div>
+                    </div>
+
+                    {replacementRequest && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full mt-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+                        onClick={() => navigate(`/replacements/${replacementRequest.id}`)}
+                      >
+                        View Full Replacement Details →
+                      </Button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -853,23 +828,6 @@ export const OrderDetail = () => {
               </div>
             </CardContent>
           </Card>
-
-          {/* Return Status */}
-          {order.return_requested && (
-            <Card className="border-orange-200" data-testid="return-status-card">
-              <CardHeader>
-                <CardTitle className="font-[Manrope] flex items-center gap-2 text-orange-700">
-                  <RefreshCcw className="w-5 h-5" />Return Info
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <InfoField label="Reason" value={order.return_reason || '-'} />
-                <InfoField label="Status" value={order.return_status || 'Requested'} />
-                <InfoField label="Return Tracking" value={order.return_tracking_number || '-'} mono />
-                {order.refund_amount && <InfoField label="Refund" value={`₹${order.refund_amount}`} />}
-              </CardContent>
-            </Card>
-          )}
 
           {/* Loss Calculation Card */}
           {(order.status === 'cancelled' || order.status === 'returned' || order.return_requested || order.loss_category) && (
