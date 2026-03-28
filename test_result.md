@@ -2397,63 +2397,61 @@ agent_communication:
 agent_communication:
   - agent: "main"
     message: |
-      INVENTORY MANAGEMENT PHASE 4 COMPLETION - SESSION JULY 2026
+      BUG FIXES AND NEW FEATURES COMPLETED - SESSION JULY 2026
       
-      **CRITICAL BUG FIXED:**
-      1. CSV Template Download Bug (FIXED ✅)
-         - Issue: "Failed to download template" error when clicking CSV Template button
-         - Root Cause: Backend returns `example_rows` (array), frontend was accessing `example_row` (singular, undefined)
-         - Fix: Updated downloadTemplate() function in InventoryIntelligence.js
-         - Enhancement: Now generates CSV with all 3 example rows showing multi-listing support
-         - File: /app/frontend/src/pages/InventoryIntelligence.js lines 240-268
+      **CRITICAL BUG FIXES:**
       
-      **PHASE 4 UI IMPLEMENTATION COMPLETED (4/4 tabs):**
-      All Phase 4 backend endpoints were already implemented, but frontend tabs were missing.
+      1. ✅ Historical Order Auto-Confirmation (FIXED)
+         - Issue: Orders with "Order Conf Calling" done showing as "pending"
+         - Root Cause: Status mapping defaulted to "delivered" before auto-confirmation check
+         - Fix: Added "pending": "pending" to mapping, default changed to "pending"
+         - Auto-confirmation now properly upgrades pending→confirmed when order_conf_calling=true
+         - File: /app/backend/routes/order_routes.py
       
-      2. Warehouses Tab (NEW ✅)
-         - Displays all warehouses with name, code, address, location details
-         - Shows active/inactive status badges
-         - "New Warehouse" button with createWarehouse() function
-         - Refresh functionality
-         - Grid layout for better UX
+      2. ✅ Replacement Original Tracking Bug (FIXED)
+         - Issue: Replacement tiles not showing original tracking/courier details
+         - Root Cause: Field name mismatch (courier_name vs courier_partner)
+         - Fix: Updated to use courier_partner with fallback to courier_name
+         - Added enrichment to populate existing replacements
+         - Frontend now shows original shipment (blue box) + new tracking (green box)
+         - Files: /app/backend/routes/replacement_routes.py, /app/frontend/src/pages/Replacements.js
       
-      3. Cycle Counts Tab (NEW ✅)
-         - Shows cycle count number, warehouse code, status
-         - Progress tracking: counted items / total items
-         - Total variance display with color coding
-         - Status badges: pending/in_progress/completed
+      3. ✅ SKU Mapping Not Syncing to Orders (FIXED)
+         - Issue: SKU import showed in listings but orders still "SKU Not Mapped"
+         - Fix: Added auto-sync after CSV import using platform_product_id (ASIN)
+         - New endpoint: POST /api/inventory/sync-skus-to-orders (manual sync)
+         - Import response now shows orders_synced count
+         - File: /app/backend/routes/inventory_routes.py
       
-      4. Shrinkage Detection Tab (NEW ✅)
-         - Summary cards: Total Items, High/Medium/Low Shrinkage counts
-         - Detailed table: SKU, Product, Expected vs Actual quantities
-         - Shrinkage quantity and percentage per item
-         - Color-coded status indicators
+      **NEW FEATURES:**
       
-      5. Audit Log Tab (NEW ✅)
-         - Comprehensive inventory movement tracking
-         - Shows: Adjustments, Cycle Counts, PO Received events
-         - Type badges, SKU, action, quantity changes
-         - User tracking with timestamps
-         - Proper formatting for +/- quantity changes
+      4. ✅ Initial Stock Entry Endpoint (NEW)
+         - Purpose: Add historical/previous procurement and opening stock
+         - Endpoint: POST /api/inventory/initial-stock-entry
+         - Parameters: master_sku, warehouse_code, initial_quantity, procurement_date, cost, supplier, notes
+         - Creates procurement record marked as initial stock
+         - Updates warehouse stock and audit log
+         - Enables proper stock calculations by deducting delivered orders from initial stock
+         - File: /app/backend/routes/inventory_routes.py (lines 1590-1682)
       
-      **BACKEND VERIFICATION:**
-      All Phase 4 backend endpoints confirmed working:
-      - POST /api/inventory/warehouses ✅
-      - GET /api/inventory/warehouses ✅
-      - GET /api/inventory/warehouse-stock/{code} ✅
-      - POST /api/inventory/stock-adjustment ✅
-      - GET /api/inventory/stock-adjustments ✅
-      - POST /api/inventory/cycle-count ✅
-      - GET /api/inventory/cycle-counts ✅
-      - PATCH /api/inventory/cycle-count/{id}/item ✅
-      - GET /api/inventory/shrinkage-report ✅
-      - GET /api/inventory/audit-log ✅
+      5. ✅ Delayed Orders Dashboard Tile (NEW)
+         - Shows orders dispatched but past delivery_by date
+         - Purple/fuchsia colored tile on dashboard
+         - Clickable - navigates to dispatched orders
+         - Real-time count updates
+         - Files: /app/backend/models.py, dashboard_routes.py, Dashboard.js
       
-      **PHASE 4 STATUS: COMPLETE (7/7)**
-      Backend (4/4): Multi-Warehouse, Stock Adjustments, Cycle Counts, Shrinkage, Audit ✅
-      Frontend (4/4): Warehouses Tab, Cycle Counts Tab, Shrinkage Tab, Audit Log Tab ✅
+      **INVENTORY PHASE 4 RECAP (Previously Completed):**
+      - CSV template download bug fixed
+      - Multi-warehouse UI (warehouses tab)
+      - Cycle counts UI (cycle counts tab)
+      - Shrinkage detection UI (shrinkage tab)
+      - Audit log UI (audit tab)
       
-      Needs backend testing to verify all inventory endpoints work correctly.
+      **TESTING GUIDANCE:**
+      See /app/FIXES_SUMMARY.md for detailed testing instructions.
+      
+      User will test all features. No automated testing requested.
   - agent: "testing"
     message: |
       🎉 TESTING COMPLETED - BOTH NEW FEATURES WORKING PERFECTLY!

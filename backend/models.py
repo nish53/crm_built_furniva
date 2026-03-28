@@ -889,3 +889,4 @@ class DashboardStats(BaseModel):
     revenue_today: float
     open_returns: int = 0
     open_replacements: int = 0
+    delayed_orders: int = 0

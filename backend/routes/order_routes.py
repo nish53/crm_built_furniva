@@ -435,14 +435,15 @@ async def import_historical_orders(
                     "cancelled": "cancelled",
                     "damaged": "returned",
                     "lost": "cancelled",
-                    "replaced": "replacement"
+                    "replaced": "replacement",
+                    "pending": "pending"  # Keep pending as pending
                 }
                 
                 # Handle pickup pending specifically
                 if "pickup pending" in live_status or "pickup pending" in pickup_status:
                     status = "pending"
                 else:
-                    status = status_mapping.get(live_status, "delivered")
+                    status = status_mapping.get(live_status, "pending")  # Default to pending instead of delivered
                 
                 # Parse boolean fields - handle TRUE/FALSE strings
                 def parse_bool(value):

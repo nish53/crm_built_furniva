@@ -46,6 +46,12 @@ async def get_dashboard_stats(
     open_returns = await db.return_requests.count_documents({"return_status": {"$ne": "closed"}})
     open_replacements = await db.replacement_requests.count_documents({"replacement_status": {"$ne": "resolved"}})
     
+    # DELAYED ORDERS = Orders that are dispatched but not delivered, and past their delivery_by date
+    delayed_orders = await db.orders.count_documents({
+        "status": "dispatched",
+        "delivery_by": {"$lt": today}
+    })
+    
     revenue_pipeline = [
         {
             "$match": {
@@ -74,7 +80,8 @@ async def get_dashboard_stats(
         pending_claims=pending_claims,
         revenue_today=revenue_today,
         open_returns=open_returns,
-        open_replacements=open_replacements
+        open_replacements=open_replacements,
+        delayed_orders=delayed_orders
     )
 
 @router.get("/recent-orders")

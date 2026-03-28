@@ -145,6 +145,17 @@ export const Dashboard = () => {
       onClick: () => navigate('/claims', { state: { filterStatus: 'filed' } }),
       clickable: true,
     },
+    {
+      title: 'Delayed Orders',
+      value: stats.delayed_orders || 0,
+      subtitle: 'Past delivery date',
+      icon: AlertCircle,
+      color: 'text-fuchsia-600',
+      bgColor: 'bg-fuchsia-100',
+      gradient: 'from-fuchsia-50 to-fuchsia-100',
+      onClick: () => navigate('/orders?status=dispatched'),
+      clickable: true,
+    },
   ] : [];
 
   if (loading) {

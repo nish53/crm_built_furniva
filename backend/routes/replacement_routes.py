@@ -75,7 +75,7 @@ async def create_replacement_request(
     
     # Add original shipment details for reference
     replacement_dict["original_tracking_number"] = order.get("tracking_number", "")
-    replacement_dict["original_courier"] = order.get("courier_name", "")
+    replacement_dict["original_courier"] = order.get("courier_partner", "") or order.get("courier_name", "")
     
     replacement_dict["status_history"] = [{
         "status": ReplacementStatus.REQUESTED,
@@ -176,12 +176,12 @@ async def get_replacement_requests(
     # Enrich replacements with original tracking/courier from order if missing
     for replacement in replacements:
         if not replacement.get("original_tracking_number") or not replacement.get("original_courier"):
-            order = await db.orders.find_one({"id": replacement["order_id"]}, {"_id": 0, "tracking_number": 1, "courier_name": 1})
+            order = await db.orders.find_one({"id": replacement["order_id"]}, {"_id": 0, "tracking_number": 1, "courier_partner": 1, "courier_name": 1})
             if order:
                 if not replacement.get("original_tracking_number") and order.get("tracking_number"):
                     replacement["original_tracking_number"] = order.get("tracking_number", "")
-                if not replacement.get("original_courier") and order.get("courier_name"):
-                    replacement["original_courier"] = order.get("courier_name", "")
+                if not replacement.get("original_courier"):
+                    replacement["original_courier"] = order.get("courier_partner", "") or order.get("courier_name", "")
                 
                 # Update the database with these values for next time
                 await db.replacement_requests.update_one(

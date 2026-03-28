@@ -145,12 +145,44 @@ async def bulk_import_sku_csv(
         except Exception as e:
             errors.append({"row": row_num, "error": str(e)})
     
+    # SYNC SKUs TO ORDERS: Update orders with unmapped SKUs using platform_product_id (ASIN, etc.)
+    sync_count = 0
+    if listings_created > 0 or master_skus_created > 0:
+        # Get all platform listings
+        all_listings = await db.platform_listings.find({}, {"_id": 0}).to_list(None)
+        
+        # Create mapping: platform_product_id -> master_sku
+        product_id_to_master_sku = {}
+        for listing in all_listings:
+            if listing.get("platform_product_id"):
+                product_id_to_master_sku[listing["platform_product_id"]] = listing["master_sku"]
+        
+        # Update orders that have platform_asin but no master_sku
+        unmapped_orders = await db.orders.find({
+            "$or": [
+                {"master_sku": {"$exists": False}},
+                {"master_sku": {"$in": [None, "", "SKU Not Mapped"]}}
+            ],
+            "platform_asin": {"$exists": True, "$ne": None, "$ne": ""}
+        }, {"_id": 0, "id": 1, "platform_asin": 1}).to_list(None)
+        
+        for order in unmapped_orders:
+            asin = order.get("platform_asin", "").strip()
+            if asin and asin in product_id_to_master_sku:
+                master_sku = product_id_to_master_sku[asin]
+                await db.orders.update_one(
+                    {"id": order["id"]},
+                    {"$set": {"master_sku": master_sku}}
+                )
+                sync_count += 1
+    
     return {
         "success": True,
         "master_skus_created": master_skus_created,
         "master_skus_updated": master_skus_updated,
         "listings_created": listings_created,
         "listings_skipped": listings_skipped,
+        "orders_synced": sync_count,
         "errors": errors[:20],
         "total_errors": len(errors),
         "mode": mode
@@ -185,6 +217,59 @@ async def get_csv_template():
                 "platform": "amazon",
                 "platform_sku": "AMZ-SR-002",
                 "platform_product_id": "B09ABC456",
+
+@router.post("/sync-skus-to-orders")
+async def sync_skus_to_orders(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Manually sync Master SKUs to orders using platform_product_id (ASIN, etc.)
+    Updates orders that have platform_asin but no master_sku assigned
+    """
+    # Get all platform listings
+    all_listings = await db.platform_listings.find({}, {"_id": 0}).to_list(None)
+    
+    # Create mapping: platform_product_id -> master_sku
+    product_id_to_master_sku = {}
+    for listing in all_listings:
+        if listing.get("platform_product_id"):
+            product_id_to_master_sku[listing["platform_product_id"]] = listing["master_sku"]
+    
+    # Update orders that have platform_asin but no master_sku
+    unmapped_orders = await db.orders.find({
+        "$or": [
+            {"master_sku": {"$exists": False}},
+            {"master_sku": {"$in": [None, "", "SKU Not Mapped"]}}
+        ],
+        "platform_asin": {"$exists": True, "$ne": None, "$ne": ""}
+    }, {"_id": 0, "id": 1, "platform_asin": 1, "order_number": 1}).to_list(None)
+    
+    sync_count = 0
+    synced_orders = []
+    
+    for order in unmapped_orders:
+        asin = order.get("platform_asin", "").strip()
+        if asin and asin in product_id_to_master_sku:
+            master_sku = product_id_to_master_sku[asin]
+            await db.orders.update_one(
+                {"id": order["id"]},
+                {"$set": {"master_sku": master_sku}}
+            )
+            sync_count += 1
+            synced_orders.append({
+                "order_number": order["order_number"],
+                "asin": asin,
+                "master_sku": master_sku
+            })
+    
+    return {
+        "success": True,
+        "orders_synced": sync_count,
+        "total_unmapped_orders": len(unmapped_orders),
+        "synced_orders": synced_orders[:50]  # Show first 50
+    }
+
                 "listing_title": "Shoe Rack 3 Tier - White",
                 "cost_price": "1500",
                 "selling_price": "3199"
@@ -1502,6 +1587,107 @@ async def create_stock_adjustment(
         "warehouse_code": warehouse_code.upper(),
         "adjustment_type": adjustment_type,
         "quantity_change": quantity if adjustment_type == "add" else -quantity if adjustment_type == "remove" else new_qty - current_qty,
+
+@router.post("/initial-stock-entry")
+async def add_initial_stock_entry(
+    master_sku: str,
+    warehouse_code: str,
+    initial_quantity: int,
+    procurement_date: Optional[str] = None,
+    procurement_cost: Optional[float] = None,
+    supplier: Optional[str] = None,
+    notes: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Add initial stock/procurement entry for historical inventory.
+    This creates the baseline stock from which delivered orders will be deducted.
+    """
+    # Verify SKU exists
+    sku = await db.master_sku_mappings.find_one({"master_sku": master_sku})
+    if not sku:
+        raise HTTPException(status_code=404, detail="Master SKU not found")
+    
+    # Verify warehouse exists
+    warehouse = await db.warehouses.find_one({"code": warehouse_code.upper()})
+    if not warehouse:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    
+    # Get current stock
+    current_stock = await db.warehouse_stock.find_one({
+        "master_sku": master_sku,
+        "warehouse_code": warehouse_code.upper()
+    })
+    current_qty = current_stock.get("quantity", 0) if current_stock else 0
+    
+    # Create procurement record
+    procurement = {
+        "id": str(uuid.uuid4()),
+        "master_sku": master_sku,
+        "warehouse_code": warehouse_code.upper(),
+        "quantity": initial_quantity,
+        "procurement_date": procurement_date or datetime.now(timezone.utc).isoformat(),
+        "procurement_cost": procurement_cost,
+        "supplier": supplier or "Initial Stock Entry",
+        "notes": notes or "Initial/Historical stock entry",
+        "created_by": current_user.id,
+        "created_by_name": current_user.name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "is_initial_stock": True
+    }
+    await db.procurements.insert_one(procurement)
+    
+    # Update warehouse stock (add to existing)
+    new_qty = current_qty + initial_quantity
+    if current_stock:
+        await db.warehouse_stock.update_one(
+            {"master_sku": master_sku, "warehouse_code": warehouse_code.upper()},
+            {"$set": {
+                "quantity": new_qty,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    else:
+        await db.warehouse_stock.insert_one({
+            "id": str(uuid.uuid4()),
+            "master_sku": master_sku,
+            "warehouse_code": warehouse_code.upper(),
+            "quantity": new_qty,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    
+    # Create audit log entry
+    await db.inventory_audit.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "INITIAL_STOCK",
+        "entity_id": procurement["id"],
+        "master_sku": master_sku,
+        "warehouse_code": warehouse_code.upper(),
+        "action": "Initial stock entry",
+        "quantity_change": initial_quantity,
+        "quantity_before": current_qty,
+        "quantity_after": new_qty,
+        "reference": f"Procurement: {supplier or 'Initial Stock'}",
+        "user_id": current_user.id,
+        "user_name": current_user.name,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {
+        "success": True,
+        "procurement": {
+            "id": procurement["id"],
+            "master_sku": master_sku,
+            "warehouse_code": warehouse_code.upper(),
+            "initial_quantity": initial_quantity,
+            "previous_stock": current_qty,
+            "new_stock": new_qty,
+            "procurement_date": procurement["procurement_date"],
+            "supplier": procurement["supplier"]
+        }
+    }
+
         "quantity_before": current_qty,
         "quantity_after": new_qty,
         "reason": reason,
