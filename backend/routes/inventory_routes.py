@@ -1394,8 +1394,21 @@ async def create_warehouse(
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
-    await db.warehouses.insert_one(warehouse)
-    return warehouse
+    result = await db.warehouses.insert_one(warehouse)
+    
+    # Return warehouse without MongoDB _id
+    return {
+        "id": warehouse["id"],
+        "name": warehouse["name"],
+        "code": warehouse["code"],
+        "address": warehouse["address"],
+        "city": warehouse["city"],
+        "state": warehouse["state"],
+        "pincode": warehouse["pincode"],
+        "is_active": warehouse["is_active"],
+        "created_by": warehouse["created_by"],
+        "created_at": warehouse["created_at"]
+    }
 
 
 @router.get("/warehouses")
@@ -1415,7 +1428,7 @@ async def get_warehouse_stock(
     db = Depends(get_database)
 ):
     """Get stock levels for a specific warehouse"""
-    warehouse = await db.warehouses.find_one({"code": warehouse_code.upper()})
+    warehouse = await db.warehouses.find_one({"code": warehouse_code.upper()}, {"_id": 0})
     if not warehouse:
         raise HTTPException(status_code=404, detail="Warehouse not found")
     
@@ -1514,9 +1527,23 @@ async def create_stock_adjustment(
             "created_at": datetime.now(timezone.utc).isoformat()
         })
     
+    # Return adjustment without MongoDB _id
     return {
         "success": True,
-        "adjustment": adjustment
+        "adjustment": {
+            "id": adjustment["id"],
+            "master_sku": adjustment["master_sku"],
+            "warehouse_code": adjustment["warehouse_code"],
+            "adjustment_type": adjustment["adjustment_type"],
+            "quantity_change": adjustment["quantity_change"],
+            "quantity_before": adjustment["quantity_before"],
+            "quantity_after": adjustment["quantity_after"],
+            "reason": adjustment["reason"],
+            "reference": adjustment["reference"],
+            "created_by": adjustment["created_by"],
+            "created_by_name": adjustment["created_by_name"],
+            "created_at": adjustment["created_at"]
+        }
     }
 
 
