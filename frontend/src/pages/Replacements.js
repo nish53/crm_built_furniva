@@ -32,7 +32,7 @@ export const Replacements = () => {
       params.exclude_status = 'resolved';
       
       // Handle special filters
-      const specialFilters = ['replacement_approval_pending', 'pickup_approval_pending', 'pickups_in_transit', 'shipments_pending', 'shipments_in_transit'];
+      const specialFilters = ['replacement_approval_pending', 'pickup_approval_pending', 'pickups_pending', 'pickups_in_transit', 'shipments_pending', 'shipments_in_transit'];
       
       if (specialFilters.includes(statusFilter)) {
         params.filter_type = statusFilter;
@@ -223,7 +223,7 @@ export const Replacements = () => {
       </div>
 
       {/* Summary Cards - Reorganized with clear meanings */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-7 gap-4">
         <Card className="cursor-pointer hover:bg-secondary/20" onClick={() => setStatusFilter('all')}>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -256,6 +256,18 @@ export const Replacements = () => {
                 <p className="text-2xl font-bold text-red-600">{counters?.pickup_approval_pending || 0}</p>
               </div>
               <AlertTriangle className="w-8 h-8 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer hover:bg-secondary/20 border-amber-200" onClick={() => setStatusFilter('pickups_pending')}>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Pickups Pending</p>
+                <p className="text-2xl font-bold text-amber-600">{counters?.pickups_pending || 0}</p>
+              </div>
+              <Package className="w-8 h-8 text-amber-500" />
             </div>
           </CardContent>
         </Card>
@@ -307,6 +319,7 @@ export const Replacements = () => {
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="replacement_approval_pending">Replacement Approval Pending</SelectItem>
             <SelectItem value="pickup_approval_pending">Pickup Approval Pending</SelectItem>
+            <SelectItem value="pickups_pending">Pickups Pending</SelectItem>
             <SelectItem value="pickups_in_transit">Pickups In Transit</SelectItem>
             <SelectItem value="shipments_pending">Shipments Pending</SelectItem>
             <SelectItem value="shipments_in_transit">Shipments In Transit</SelectItem>
