@@ -1,586 +1,433 @@
 #!/usr/bin/env python3
 """
-Backend Testing Script for 4 Critical Bug Fixes
-Testing the Furniva CRM application backend APIs
+Backend Testing for Furniva CRM - New Features
+Testing:
+1. Return/Replacement Request order_id filter
+2. Smart Duplicate Check for CSV Import
 """
 
 import requests
 import json
-import sys
+import csv
+import io
+import tempfile
+import os
+import urllib.parse
 from datetime import datetime, timezone
-import uuid
 
-# Configuration
+# Backend URL from environment
 BACKEND_URL = "https://agent-crm-hub-6.preview.emergentagent.com/api"
-TEST_USER_EMAIL = "testuser@furniva.com"
-TEST_USER_PASSWORD = "testpass123"
 
-class FurnivaAPITester:
+# Test credentials - will create a test user
+TEST_EMAIL = "test@furniva.com"
+TEST_PASSWORD = "testpass123"
+
+class FurnivaBackendTester:
     def __init__(self):
         self.session = requests.Session()
         self.token = None
-        self.user_id = None
         self.test_order_id = None
-        
-    def log(self, message, level="INFO"):
-        """Log messages with timestamp"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] {level}: {message}")
+        self.test_return_id = None
+        self.test_replacement_id = None
         
     def authenticate(self):
         """Authenticate and get access token"""
-        self.log("🔐 Authenticating user...")
+        print("🔐 Authenticating...")
         
         # Try to register first (in case user doesn't exist)
         register_data = {
-            "email": TEST_USER_EMAIL,
-            "password": TEST_USER_PASSWORD,
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD,
             "name": "Test User",
             "role": "admin"
         }
         
         try:
             response = self.session.post(f"{BACKEND_URL}/auth/register", json=register_data)
-            if response.status_code == 201:
-                self.log("✅ User registered successfully")
-            elif response.status_code == 400 and "already exists" in response.text:
-                self.log("ℹ️ User already exists, proceeding to login")
-            else:
-                self.log(f"⚠️ Registration response: {response.status_code} - {response.text}")
-        except Exception as e:
-            self.log(f"⚠️ Registration failed: {e}")
+            if response.status_code == 200:
+                print("✅ User registered successfully")
+        except:
+            pass  # User might already exist
         
         # Login
         login_data = {
-            "email": TEST_USER_EMAIL,
-            "password": TEST_USER_PASSWORD
+            "email": TEST_EMAIL,
+            "password": TEST_PASSWORD
         }
         
-        try:
-            response = self.session.post(f"{BACKEND_URL}/auth/login", json=login_data)
-            if response.status_code == 200:
-                data = response.json()
-                self.token = data["access_token"]
-                self.user_id = data["user"]["id"]
-                self.session.headers.update({"Authorization": f"Bearer {self.token}"})
-                self.log("✅ Authentication successful")
-                return True
-            else:
-                self.log(f"❌ Login failed: {response.status_code} - {response.text}")
-                return False
-        except Exception as e:
-            self.log(f"❌ Authentication error: {e}")
+        response = self.session.post(f"{BACKEND_URL}/auth/login", json=login_data)
+        if response.status_code == 200:
+            result = response.json()
+            self.token = result["access_token"]
+            self.session.headers.update({"Authorization": f"Bearer {self.token}"})
+            print("✅ Authentication successful")
+            return True
+        else:
+            print(f"❌ Authentication failed: {response.status_code} - {response.text}")
             return False
     
     def create_test_order(self):
-        """Create a test order for testing purposes"""
-        self.log("📦 Creating test order...")
+        """Create a test order for testing filters"""
+        print("\n📦 Creating test order...")
         
         order_data = {
-            "channel": "website",
-            "order_number": f"TEST-BUG-{uuid.uuid4().hex[:8].upper()}",
-            "order_date": datetime.now(timezone.utc).isoformat(),
-            "customer_id": str(uuid.uuid4()),
-            "customer_name": "John Smith",
+            "order_number": f"TEST-ORDER-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "order_date": datetime.now().isoformat(),
+            "customer_id": f"CUST-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "customer_name": "John Doe",
             "phone": "9876543210",
             "email": "john@example.com",
-            "shipping_address": "123 Test Street",
-            "city": "Mumbai",
-            "state": "Maharashtra",
-            "pincode": "400001",
+            "pincode": "560001",
             "sku": "CHAIR-001",
-            "product_name": "Test Chair",
+            "product_name": "Ergonomic Office Chair",
             "quantity": 1,
-            "price": 5000.0,
-            "total_amount": 5000.0,
-            "status": "delivered"  # Set to delivered for post-delivery return testing
+            "price": 15000.0,
+            "status": "delivered",  # Delivered status for post-delivery returns
+            "channel": "website"
         }
         
-        try:
-            response = self.session.post(f"{BACKEND_URL}/orders/", json=order_data)
-            if response.status_code in [200, 201]:
-                order = response.json()
-                self.test_order_id = order["id"]
-                self.log(f"✅ Test order created: {order['order_number']} (ID: {self.test_order_id})")
-                return True
-            else:
-                self.log(f"❌ Order creation failed: {response.status_code} - {response.text}")
-                return False
-        except Exception as e:
-            self.log(f"❌ Order creation error: {e}")
+        response = self.session.post(f"{BACKEND_URL}/orders/", json=order_data)
+        if response.status_code == 200:
+            result = response.json()
+            self.test_order_id = result["id"]
+            print(f"✅ Test order created: {self.test_order_id}")
+            return True
+        else:
+            print(f"❌ Failed to create test order: {response.status_code} - {response.text}")
             return False
     
-    def test_bug_1_damage_category_enum(self):
-        """
-        Bug Fix #1: DamageCategory Enum Validation
-        Test creating post-delivery return with new damage categories
-        """
-        self.log("\n🐛 TESTING BUG FIX #1: DamageCategory Enum Validation")
+    def create_test_return_request(self):
+        """Create a test return request"""
+        print("\n🔄 Creating test return request...")
         
-        if not self.test_order_id:
-            self.log("❌ No test order available for testing")
+        return_data = {
+            "order_id": self.test_order_id,
+            "return_reason": "damaged",
+            "damage_description": "Product arrived with scratches",
+            "damage_images": ["https://example.com/damage1.jpg"]
+        }
+        
+        # Add cancellation_reason as query parameter
+        response = self.session.post(
+            f"{BACKEND_URL}/return-requests/?cancellation_reason=Product damaged during shipping",
+            json=return_data
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            self.test_return_id = result["id"]
+            print(f"✅ Test return request created: {self.test_return_id}")
+            return True
+        else:
+            print(f"❌ Failed to create return request: {response.status_code} - {response.text}")
             return False
-        
-        # Test each new damage category
-        new_damage_categories = ["Dent", "Broken", "Scratches", "Crack"]
-        old_damage_categories = ["No Damage", "Missing Parts"]  # Should fail
-        
-        success_count = 0
-        
-        # Test NEW valid damage categories
-        for i, damage_category in enumerate(new_damage_categories):
-            self.log(f"Testing damage category: {damage_category}")
-            
-            # Create a fresh order for each test to avoid status conflicts
-            fresh_order_data = {
-                "channel": "website",
-                "order_number": f"TEST-DAMAGE-{uuid.uuid4().hex[:8].upper()}",
-                "order_date": datetime.now(timezone.utc).isoformat(),
-                "customer_id": str(uuid.uuid4()),
-                "customer_name": "Jane Doe",
-                "phone": "9876543210",
-                "email": "jane@example.com",
-                "shipping_address": "456 Test Avenue",
-                "city": "Delhi",
-                "state": "Delhi",
-                "pincode": "110001",
-                "sku": f"CHAIR-{i+1:03d}",
-                "product_name": f"Test Chair {i+1}",
-                "quantity": 1,
-                "price": 4000.0,
-                "total_amount": 4000.0,
-                "status": "delivered"
-            }
-            
-            try:
-                order_response = self.session.post(f"{BACKEND_URL}/orders/", json=fresh_order_data)
-                if order_response.status_code in [200, 201]:
-                    fresh_order_id = order_response.json()["id"]
-                    
-                    return_data = {
-                        "order_id": fresh_order_id,
-                        "return_reason": "Damage",  # Use proper enum value
-                        "damage_category": damage_category,
-                        "damage_images": ["https://example.com/damage1.jpg"]
-                    }
-                    
-                    response = self.session.post(
-                        f"{BACKEND_URL}/return-requests/",
-                        json=return_data,
-                        params={"cancellation_reason": f"Product has {damage_category.lower()} damage"}
-                    )
-                    
-                    if response.status_code in [200, 201]:
-                        self.log(f"✅ {damage_category} category accepted successfully")
-                        success_count += 1
-                    else:
-                        self.log(f"❌ {damage_category} category failed: {response.status_code} - {response.text}")
-                else:
-                    self.log(f"❌ Failed to create fresh order for {damage_category} test")
-            except Exception as e:
-                self.log(f"❌ Error testing {damage_category}: {e}")
-        
-        # Test OLD invalid damage categories (should fail)
-        for i, damage_category in enumerate(old_damage_categories):
-            self.log(f"Testing OLD damage category (should fail): {damage_category}")
-            
-            # Create a fresh order for each test
-            fresh_order_data = {
-                "channel": "website",
-                "order_number": f"TEST-OLD-{uuid.uuid4().hex[:8].upper()}",
-                "order_date": datetime.now(timezone.utc).isoformat(),
-                "customer_id": str(uuid.uuid4()),
-                "customer_name": "Bob Smith",
-                "phone": "9876543210",
-                "email": "bob@example.com",
-                "shipping_address": "789 Test Road",
-                "city": "Bangalore",
-                "state": "Karnataka",
-                "pincode": "560001",
-                "sku": f"TABLE-{i+1:03d}",
-                "product_name": f"Test Table {i+1}",
-                "quantity": 1,
-                "price": 3000.0,
-                "total_amount": 3000.0,
-                "status": "delivered"
-            }
-            
-            try:
-                order_response = self.session.post(f"{BACKEND_URL}/orders/", json=fresh_order_data)
-                if order_response.status_code in [200, 201]:
-                    fresh_order_id = order_response.json()["id"]
-                    
-                    return_data = {
-                        "order_id": fresh_order_id,
-                        "return_reason": "Damage",  # Use proper enum value
-                        "damage_category": damage_category,
-                        "damage_images": ["https://example.com/damage1.jpg"]
-                    }
-                    
-                    response = self.session.post(
-                        f"{BACKEND_URL}/return-requests/",
-                        json=return_data,
-                        params={"cancellation_reason": f"Product has {damage_category.lower()} damage"}
-                    )
-                    
-                    if response.status_code not in [200, 201]:
-                        self.log(f"✅ {damage_category} correctly rejected (expected)")
-                        success_count += 1
-                    else:
-                        self.log(f"❌ {damage_category} was accepted (should have failed)")
-                else:
-                    self.log(f"❌ Failed to create fresh order for {damage_category} test")
-            except Exception as e:
-                self.log(f"❌ Error testing {damage_category}: {e}")
-        
-        total_tests = len(new_damage_categories) + len(old_damage_categories)
-        self.log(f"🎯 Bug Fix #1 Results: {success_count}/{total_tests} tests passed")
-        return success_count == total_tests
     
-    def test_bug_2_replacements_exclude_status(self):
-        """
-        Bug Fix #2: Replacements Endpoint exclude_status Logic
-        Test GET /api/replacement-requests/ with exclude_status parameter
-        """
-        self.log("\n🐛 TESTING BUG FIX #2: Replacements Endpoint exclude_status Logic")
-        
-        if not self.test_order_id:
-            self.log("❌ No test order available for testing")
-            return False
-        
-        # First create some replacement requests with different statuses
-        self.log("Creating test replacement requests...")
+    def create_test_replacement_request(self):
+        """Create a test replacement request"""
+        print("\n🔄 Creating test replacement request...")
         
         replacement_data = {
             "order_id": self.test_order_id,
-            "replacement_reason": "quality",
+            "replacement_reason": "damaged",
             "replacement_type": "full_replacement",
-            "notes": "Quality issue test"
+            "damage_description": "Product has manufacturing defect",
+            "damage_images": ["https://example.com/defect1.jpg"],
+            "notes": "Customer reported defective product"
         }
         
-        try:
-            response = self.session.post(f"{BACKEND_URL}/replacement-requests/", json=replacement_data)
-            if response.status_code in [200, 201]:
-                replacement_id = response.json()["id"]
-                self.log(f"✅ Test replacement created: {replacement_id}")
-                
-                # Update one to resolved status
-                update_response = self.session.patch(
-                    f"{BACKEND_URL}/replacement-requests/{replacement_id}/status",
-                    params={"new_status": "resolved"}
-                )
-                if update_response.status_code == 200:
-                    self.log("✅ Updated replacement to resolved status")
-            else:
-                self.log(f"❌ Failed to create test replacement: {response.status_code} - {response.text}")
-        except Exception as e:
-            self.log(f"❌ Error creating test replacement: {e}")
+        response = self.session.post(f"{BACKEND_URL}/replacement-requests/", json=replacement_data)
         
-        success_count = 0
-        
-        # Test 1: exclude_status=resolved (should return only non-resolved)
-        self.log("Testing exclude_status=resolved...")
-        try:
-            response = self.session.get(f"{BACKEND_URL}/replacement-requests/?exclude_status=resolved")
-            if response.status_code == 200:
-                replacements = response.json()
-                resolved_found = any(r.get("replacement_status") == "resolved" for r in replacements)
-                if not resolved_found:
-                    self.log("✅ exclude_status=resolved working correctly (no resolved replacements returned)")
-                    success_count += 1
-                else:
-                    self.log("❌ exclude_status=resolved failed (resolved replacements still returned)")
-            else:
-                self.log(f"❌ exclude_status=resolved request failed: {response.status_code} - {response.text}")
-        except Exception as e:
-            self.log(f"❌ Error testing exclude_status=resolved: {e}")
-        
-        # Test 2: status=requested&exclude_status=rejected (both parameters)
-        self.log("Testing both status and exclude_status parameters...")
-        try:
-            response = self.session.get(f"{BACKEND_URL}/replacement-requests/?status=requested&exclude_status=rejected")
-            if response.status_code == 200:
-                replacements = response.json()
-                valid_results = all(
-                    r.get("replacement_status") == "requested" and r.get("replacement_status") != "rejected"
-                    for r in replacements
-                )
-                if valid_results:
-                    self.log("✅ Combined status and exclude_status working correctly")
-                    success_count += 1
-                else:
-                    self.log("❌ Combined parameters failed")
-            else:
-                self.log(f"❌ Combined parameters request failed: {response.status_code} - {response.text}")
-        except Exception as e:
-            self.log(f"❌ Error testing combined parameters: {e}")
-        
-        # Test 3: Basic endpoint functionality
-        self.log("Testing basic replacements endpoint...")
-        try:
-            response = self.session.get(f"{BACKEND_URL}/replacement-requests/")
-            if response.status_code == 200:
-                replacements = response.json()
-                self.log(f"✅ Basic endpoint working (returned {len(replacements)} replacements)")
-                success_count += 1
-            else:
-                self.log(f"❌ Basic endpoint failed: {response.status_code} - {response.text}")
-        except Exception as e:
-            self.log(f"❌ Error testing basic endpoint: {e}")
-        
-        self.log(f"🎯 Bug Fix #2 Results: {success_count}/3 tests passed")
-        return success_count == 3
-    
-    def test_bug_3_damage_images_validation(self):
-        """
-        Bug Fix #3: Damage Images Required for All Replacement Reasons
-        Test creating replacements with different reasons and image requirements
-        """
-        self.log("\n🐛 TESTING BUG FIX #3: Damage Images Validation")
-        
-        if not self.test_order_id:
-            self.log("❌ No test order available for testing")
+        if response.status_code == 200:
+            result = response.json()
+            self.test_replacement_id = result["id"]
+            print(f"✅ Test replacement request created: {self.test_replacement_id}")
+            return True
+        else:
+            print(f"❌ Failed to create replacement request: {response.status_code} - {response.text}")
             return False
-        
-        success_count = 0
-        
-        # Test 1: replacement_reason="quality" WITHOUT damage_images (should succeed)
-        self.log("Testing quality replacement without damage images (should succeed)...")
-        quality_data = {
-            "order_id": self.test_order_id,
-            "replacement_reason": "quality",
-            "replacement_type": "full_replacement",
-            "notes": "Quality issue without images"
-        }
-        
-        try:
-            response = self.session.post(f"{BACKEND_URL}/replacement-requests/", json=quality_data)
-            if response.status_code in [200, 201]:
-                self.log("✅ Quality replacement without images succeeded (correct)")
-                success_count += 1
-            else:
-                self.log(f"❌ Quality replacement without images failed: {response.status_code} - {response.text}")
-        except Exception as e:
-            self.log(f"❌ Error testing quality replacement: {e}")
-        
-        # Test 2: replacement_reason="damaged" WITHOUT damage_images (should fail)
-        self.log("Testing damaged replacement without damage images (should fail)...")
-        damaged_data = {
-            "order_id": self.test_order_id,
-            "replacement_reason": "damaged",
-            "replacement_type": "full_replacement",
-            "notes": "Damaged without images"
-        }
-        
-        try:
-            response = self.session.post(f"{BACKEND_URL}/replacement-requests/", json=damaged_data)
-            if response.status_code not in [200, 201]:
-                self.log("✅ Damaged replacement without images correctly rejected")
-                success_count += 1
-            else:
-                self.log("❌ Damaged replacement without images was accepted (should have failed)")
-        except Exception as e:
-            self.log(f"❌ Error testing damaged replacement: {e}")
-        
-        # Test 3: replacement_reason="wrong_product_sent" WITHOUT damage_images (should succeed)
-        self.log("Testing wrong_product_sent replacement without damage images (should succeed)...")
-        wrong_product_data = {
-            "order_id": self.test_order_id,
-            "replacement_reason": "wrong_product_sent",
-            "replacement_type": "full_replacement",
-            "notes": "Wrong product sent"
-        }
-        
-        try:
-            response = self.session.post(f"{BACKEND_URL}/replacement-requests/", json=wrong_product_data)
-            if response.status_code in [200, 201]:
-                self.log("✅ Wrong product replacement without images succeeded (correct)")
-                success_count += 1
-            else:
-                self.log(f"❌ Wrong product replacement without images failed: {response.status_code} - {response.text}")
-        except Exception as e:
-            self.log(f"❌ Error testing wrong product replacement: {e}")
-        
-        # Test 4: replacement_reason="customer_change_of_mind" WITHOUT damage_images (should succeed)
-        self.log("Testing customer_change_of_mind replacement without damage images (should succeed)...")
-        change_mind_data = {
-            "order_id": self.test_order_id,
-            "replacement_reason": "customer_change_of_mind",
-            "replacement_type": "full_replacement",
-            "difference_amount": 0.0,
-            "notes": "Customer changed mind"
-        }
-        
-        try:
-            response = self.session.post(f"{BACKEND_URL}/replacement-requests/", json=change_mind_data)
-            if response.status_code in [200, 201]:
-                self.log("✅ Customer change of mind replacement without images succeeded (correct)")
-                success_count += 1
-            else:
-                self.log(f"❌ Customer change of mind replacement without images failed: {response.status_code} - {response.text}")
-        except Exception as e:
-            self.log(f"❌ Error testing customer change of mind replacement: {e}")
-        
-        # Test 5: replacement_reason="damaged" WITH damage_images (should succeed)
-        self.log("Testing damaged replacement with damage images (should succeed)...")
-        damaged_with_images_data = {
-            "order_id": self.test_order_id,
-            "replacement_reason": "damaged",
-            "replacement_type": "full_replacement",
-            "damage_description": "Product is severely damaged",
-            "damage_images": ["https://example.com/damage1.jpg", "https://example.com/damage2.jpg"],
-            "notes": "Damaged with images"
-        }
-        
-        try:
-            response = self.session.post(f"{BACKEND_URL}/replacement-requests/", json=damaged_with_images_data)
-            if response.status_code in [200, 201]:
-                self.log("✅ Damaged replacement with images succeeded (correct)")
-                success_count += 1
-            else:
-                self.log(f"❌ Damaged replacement with images failed: {response.status_code} - {response.text}")
-        except Exception as e:
-            self.log(f"❌ Error testing damaged replacement with images: {e}")
-        
-        self.log(f"🎯 Bug Fix #3 Results: {success_count}/5 tests passed")
-        return success_count == 5
     
-    def test_bug_4_returns_exclude_status(self):
-        """
-        Bug Fix #4: Returns Endpoint exclude_status Logic
-        Test GET /api/return-requests/ with exclude_status parameter
-        """
-        self.log("\n🐛 TESTING BUG FIX #4: Returns Endpoint exclude_status Logic")
+    def test_return_request_order_filter(self):
+        """Test 1: Return request order_id filter"""
+        print("\n🧪 TEST 1: Return Request order_id Filter")
+        print("=" * 50)
         
-        # Note: There may be existing return records with invalid enum values causing 500 errors
-        # We'll test the exclude_status logic by checking the query parameters are handled correctly
+        # Test filtering by order_id
+        response = self.session.get(f"{BACKEND_URL}/return-requests/?order_id={self.test_order_id}")
         
-        success_count = 0
-        
-        # Test 1: Test that the endpoint accepts exclude_status parameter without crashing
-        self.log("Testing exclude_status parameter handling...")
-        try:
-            # Try with a simple exclude_status that shouldn't match anything
-            response = self.session.get(f"{BACKEND_URL}/return-requests/?exclude_status=nonexistent_status")
-            if response.status_code == 500:
-                # If we get 500, it's likely due to existing data validation issues, not the exclude_status logic
-                self.log("⚠️ Returns endpoint has data validation issues (existing invalid enum values)")
-                self.log("✅ exclude_status parameter is being processed (fix is implemented)")
-                success_count += 1
-            elif response.status_code == 200:
-                self.log("✅ exclude_status parameter working correctly")
-                success_count += 1
+        if response.status_code == 200:
+            results = response.json()
+            print(f"✅ GET /api/return-requests/?order_id={self.test_order_id}")
+            print(f"   Found {len(results)} return requests for this order")
+            
+            # Verify the returned request matches our test order
+            if len(results) > 0 and results[0]["order_id"] == self.test_order_id:
+                print(f"   ✅ Correct order_id filter: {results[0]['order_id']}")
+                return True
             else:
-                self.log(f"❌ Unexpected response: {response.status_code}")
-        except Exception as e:
-            self.log(f"❌ Error testing exclude_status parameter: {e}")
-        
-        # Test 2: Test the query logic by examining the route code
-        self.log("Verifying exclude_status query logic implementation...")
-        try:
-            # Read the return_routes.py file to verify the fix is implemented
-            with open('/app/backend/routes/return_routes.py', 'r') as f:
-                content = f.read()
-                
-            # Check if the exclude_status logic is properly implemented
-            if 'exclude_status' in content and '"$ne": exclude_status' in content:
-                self.log("✅ exclude_status query logic correctly implemented in code")
-                success_count += 1
-            else:
-                self.log("❌ exclude_status query logic not found in code")
-        except Exception as e:
-            self.log(f"❌ Error checking code implementation: {e}")
-        
-        # Test 3: Test combined parameters logic
-        self.log("Verifying combined status and exclude_status logic...")
-        try:
-            # Check if both parameters can be handled together
-            with open('/app/backend/routes/return_routes.py', 'r') as f:
-                content = f.read()
-                
-            # Look for the combined logic
-            if '"$eq": status, "$ne": exclude_status' in content:
-                self.log("✅ Combined status and exclude_status logic correctly implemented")
-                success_count += 1
-            else:
-                self.log("❌ Combined parameters logic not found")
-        except Exception as e:
-            self.log(f"❌ Error checking combined logic: {e}")
-        
-        self.log(f"🎯 Bug Fix #4 Results: {success_count}/3 tests passed")
-        self.log("📝 Note: Runtime testing limited due to existing data validation issues")
-        return success_count == 3
+                print(f"   ❌ Filter not working correctly")
+                return False
+        else:
+            print(f"❌ Failed to filter return requests: {response.status_code} - {response.text}")
+            return False
     
-    def cleanup_test_data(self):
-        """Clean up test data created during testing"""
-        self.log("\n🧹 Cleaning up test data...")
+    def test_replacement_request_order_filter(self):
+        """Test 2: Replacement request order_id filter"""
+        print("\n🧪 TEST 2: Replacement Request order_id Filter")
+        print("=" * 50)
         
-        if self.test_order_id:
-            try:
-                # Delete test order
-                response = self.session.delete(f"{BACKEND_URL}/orders/{self.test_order_id}")
-                if response.status_code in [200, 204, 404]:
-                    self.log("✅ Test order cleaned up")
+        # Test filtering by order_id
+        response = self.session.get(f"{BACKEND_URL}/replacement-requests/?order_id={self.test_order_id}")
+        
+        if response.status_code == 200:
+            results = response.json()
+            print(f"✅ GET /api/replacement-requests/?order_id={self.test_order_id}")
+            print(f"   Found {len(results)} replacement requests for this order")
+            
+            # Verify the returned request matches our test order
+            if len(results) > 0 and results[0]["order_id"] == self.test_order_id:
+                print(f"   ✅ Correct order_id filter: {results[0]['order_id']}")
+                return True
+            else:
+                print(f"   ❌ Filter not working correctly")
+                return False
+        else:
+            print(f"❌ Failed to filter replacement requests: {response.status_code} - {response.text}")
+            return False
+    
+    def create_test_csv_multi_item(self):
+        """Create test CSV with multi-item orders"""
+        csv_content = """order_number,customer_name,phone,sku,product_name,quantity,price,order_date
+TEST-MULTI-001,Alice Johnson,9876543210,CHAIR-RED,Red Office Chair,1,12000,2024-01-15
+TEST-MULTI-001,Alice Johnson,9876543210,TABLE-WOOD,Wooden Desk,1,25000,2024-01-15
+TEST-MULTI-001,Alice Johnson,9876543210,CUSHION-BLUE,Blue Cushion,2,1500,2024-01-15
+TEST-SINGLE-002,Bob Smith,9876543211,LAMP-LED,LED Table Lamp,1,3500,2024-01-16"""
+        
+        # Create temporary file
+        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        temp_file.write(csv_content)
+        temp_file.close()
+        
+        return temp_file.name
+    
+    def test_smart_duplicate_check_multi_item(self):
+        """Test 3A: Smart duplicate check - Multi-item orders should import"""
+        print("\n🧪 TEST 3A: Smart Duplicate Check - Multi-item Orders")
+        print("=" * 50)
+        
+        csv_file = self.create_test_csv_multi_item()
+        
+        try:
+            # Prepare the import request
+            with open(csv_file, 'rb') as f:
+                files = {'file': ('test_multi_item.csv', f, 'text/csv')}
+                
+                # Column mappings for the CSV
+                mappings = {
+                    "order_number": "order_number",
+                    "customer_name": "customer_name", 
+                    "phone": "phone",
+                    "sku": "sku",
+                    "product_name": "product_name",
+                    "quantity": "quantity",
+                    "price": "price",
+                    "order_date": "order_date"
+                }
+                
+                response = self.session.post(
+                    f"{BACKEND_URL}/import/with-mapping?channel=test&column_mappings={urllib.parse.quote(json.dumps(mappings))}&delimiter=,&has_header=true&auto_lookup_master_sku=false",
+                    files=files
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    print(f"✅ Multi-item CSV import successful")
+                    print(f"   Imported: {result['imported']} orders")
+                    print(f"   Skipped: {result['skipped']} orders")
+                    print(f"   Errors: {result['errors']} orders")
+                    
+                    # Should import all 4 items (3 for TEST-MULTI-001, 1 for TEST-SINGLE-002)
+                    if result['imported'] == 4:
+                        print("   ✅ All multi-item orders imported correctly")
+                        return True
+                    else:
+                        print(f"   ❌ Expected 4 imports, got {result['imported']}")
+                        return False
                 else:
-                    self.log(f"⚠️ Could not delete test order: {response.status_code}")
-            except Exception as e:
-                self.log(f"⚠️ Error cleaning up test order: {e}")
+                    print(f"❌ Multi-item import failed: {response.status_code} - {response.text}")
+                    return False
+        
+        finally:
+            # Clean up temp file
+            os.unlink(csv_file)
+    
+    def test_smart_duplicate_check_true_duplicates(self):
+        """Test 3B: Smart duplicate check - True duplicates should be skipped"""
+        print("\n🧪 TEST 3B: Smart Duplicate Check - True Duplicates")
+        print("=" * 50)
+        
+        csv_file = self.create_test_csv_multi_item()
+        
+        try:
+            # Import the same CSV again - should skip all as true duplicates
+            with open(csv_file, 'rb') as f:
+                files = {'file': ('test_duplicate.csv', f, 'text/csv')}
+                
+                mappings = {
+                    "order_number": "order_number",
+                    "customer_name": "customer_name", 
+                    "phone": "phone",
+                    "sku": "sku",
+                    "product_name": "product_name",
+                    "quantity": "quantity",
+                    "price": "price",
+                    "order_date": "order_date"
+                }
+                
+                data = {
+                    'channel': 'test',
+                    'column_mappings': json.dumps(mappings),
+                    'delimiter': ',',
+                    'has_header': 'true',
+                    'auto_lookup_master_sku': 'false'
+                }
+                
+                response = self.session.post(
+                    f"{BACKEND_URL}/import/with-mapping?channel=test&column_mappings={urllib.parse.quote(json.dumps(mappings))}&delimiter=,&has_header=true&auto_lookup_master_sku=false",
+                    files=files
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    print(f"✅ Duplicate CSV import completed")
+                    print(f"   Imported: {result['imported']} orders")
+                    print(f"   Skipped: {result['skipped']} orders")
+                    print(f"   Errors: {result['errors']} orders")
+                    
+                    # Should skip all 4 items as true duplicates (same order_number + same SKU)
+                    if result['skipped'] == 4 and result['imported'] == 0:
+                        print("   ✅ All true duplicates correctly skipped")
+                        return True
+                    else:
+                        print(f"   ❌ Expected 4 skipped, 0 imported. Got {result['skipped']} skipped, {result['imported']} imported")
+                        return False
+                else:
+                    print(f"❌ Duplicate import test failed: {response.status_code} - {response.text}")
+                    return False
+        
+        finally:
+            # Clean up temp file
+            os.unlink(csv_file)
+    
+    def test_smart_duplicate_check_new_sku(self):
+        """Test 3C: Smart duplicate check - Same order_number with NEW SKU should import"""
+        print("\n🧪 TEST 3C: Smart Duplicate Check - New SKU for Existing Order")
+        print("=" * 50)
+        
+        # Create CSV with same order number but new SKU
+        csv_content = """order_number,customer_name,phone,sku,product_name,quantity,price,order_date
+TEST-MULTI-001,Alice Johnson,9876543210,MIRROR-WALL,Wall Mirror,1,8000,2024-01-15"""
+        
+        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+        temp_file.write(csv_content)
+        temp_file.close()
+        
+        try:
+            with open(temp_file.name, 'rb') as f:
+                files = {'file': ('test_new_sku.csv', f, 'text/csv')}
+                
+                mappings = {
+                    "order_number": "order_number",
+                    "customer_name": "customer_name", 
+                    "phone": "phone",
+                    "sku": "sku",
+                    "product_name": "product_name",
+                    "quantity": "quantity",
+                    "price": "price",
+                    "order_date": "order_date"
+                }
+                
+                data = {
+                    'channel': 'test',
+                    'column_mappings': json.dumps(mappings),
+                    'delimiter': ',',
+                    'has_header': 'true',
+                    'auto_lookup_master_sku': 'false'
+                }
+                
+                response = self.session.post(
+                    f"{BACKEND_URL}/import/with-mapping?channel=test&column_mappings={urllib.parse.quote(json.dumps(mappings))}&delimiter=,&has_header=true&auto_lookup_master_sku=false",
+                    files=files
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    print(f"✅ New SKU CSV import completed")
+                    print(f"   Imported: {result['imported']} orders")
+                    print(f"   Skipped: {result['skipped']} orders")
+                    print(f"   Errors: {result['errors']} orders")
+                    
+                    # Should import 1 item (same order_number but NEW SKU)
+                    if result['imported'] == 1 and result['skipped'] == 0:
+                        print("   ✅ New SKU for existing order correctly imported")
+                        return True
+                    else:
+                        print(f"   ❌ Expected 1 imported, 0 skipped. Got {result['imported']} imported, {result['skipped']} skipped")
+                        return False
+                else:
+                    print(f"❌ New SKU import test failed: {response.status_code} - {response.text}")
+                    return False
+        
+        finally:
+            # Clean up temp file
+            os.unlink(temp_file.name)
     
     def run_all_tests(self):
-        """Run all bug fix tests"""
-        self.log("🚀 Starting Furniva CRM Backend Testing - 4 Critical Bug Fixes")
-        self.log("=" * 70)
+        """Run all tests"""
+        print("🚀 Starting Furniva CRM Backend Tests")
+        print("=" * 60)
         
         # Authenticate
         if not self.authenticate():
-            self.log("❌ Authentication failed. Cannot proceed with testing.")
             return False
         
-        # Create test order
+        # Create test data
         if not self.create_test_order():
-            self.log("❌ Test order creation failed. Cannot proceed with testing.")
             return False
         
-        # Run all bug fix tests
-        results = {
-            "Bug Fix #1 - DamageCategory Enum": self.test_bug_1_damage_category_enum(),
-            "Bug Fix #2 - Replacements exclude_status": self.test_bug_2_replacements_exclude_status(),
-            "Bug Fix #3 - Damage Images Validation": self.test_bug_3_damage_images_validation(),
-            "Bug Fix #4 - Returns exclude_status": self.test_bug_4_returns_exclude_status()
-        }
+        if not self.create_test_return_request():
+            return False
         
-        # Clean up
-        self.cleanup_test_data()
+        if not self.create_test_replacement_request():
+            return False
+        
+        # Run tests
+        test_results = []
+        
+        test_results.append(self.test_return_request_order_filter())
+        test_results.append(self.test_replacement_request_order_filter())
+        test_results.append(self.test_smart_duplicate_check_multi_item())
+        test_results.append(self.test_smart_duplicate_check_true_duplicates())
+        test_results.append(self.test_smart_duplicate_check_new_sku())
         
         # Summary
-        self.log("\n" + "=" * 70)
-        self.log("🎯 FINAL TEST RESULTS SUMMARY")
-        self.log("=" * 70)
+        print("\n" + "=" * 60)
+        print("📊 TEST SUMMARY")
+        print("=" * 60)
         
-        passed_tests = 0
-        total_tests = len(results)
+        passed = sum(test_results)
+        total = len(test_results)
         
-        for test_name, result in results.items():
-            status = "✅ PASSED" if result else "❌ FAILED"
-            self.log(f"{test_name}: {status}")
-            if result:
-                passed_tests += 1
+        print(f"✅ Passed: {passed}/{total}")
+        print(f"❌ Failed: {total - passed}/{total}")
         
-        self.log("=" * 70)
-        self.log(f"🏆 OVERALL RESULT: {passed_tests}/{total_tests} bug fixes working correctly")
-        
-        if passed_tests == total_tests:
-            self.log("🎉 ALL CRITICAL BUG FIXES ARE WORKING PERFECTLY!")
-            return True
+        if passed == total:
+            print("\n🎉 ALL TESTS PASSED! Both new features are working correctly.")
         else:
-            self.log("⚠️ Some bug fixes need attention")
-            return False
-
-def main():
-    """Main function to run the tests"""
-    tester = FurnivaAPITester()
-    success = tester.run_all_tests()
-    sys.exit(0 if success else 1)
+            print(f"\n⚠️  {total - passed} test(s) failed. Please check the implementation.")
+        
+        return passed == total
 
 if __name__ == "__main__":
-    main()
+    tester = FurnivaBackendTester()
+    success = tester.run_all_tests()
+    exit(0 if success else 1)

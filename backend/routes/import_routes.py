@@ -171,8 +171,14 @@ async def import_with_column_mapping(
                     skipped_count += 1
                     continue
                 
-                # Check for duplicates
-                existing = await db.orders.find_one({"order_number": order_data["order_number"]}, {"_id": 0})
+                # SMART DUPLICATE CHECK: 
+                # - Skip TRUE duplicates (same order_number + same SKU) - these are re-imports
+                # - Allow multi-item orders (same order_number + different SKU) - these are legitimate
+                sku = order_data.get("sku", "").strip()
+                existing = await db.orders.find_one({
+                    "order_number": order_data["order_number"],
+                    "sku": sku if sku else {"$in": [None, "", sku]}  # Handle empty SKU case
+                }, {"_id": 0})
                 if existing:
                     skipped_count += 1
                     continue

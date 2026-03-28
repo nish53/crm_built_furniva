@@ -33,6 +33,8 @@ export const OrderDetail = () => {
   const [loadingLoss, setLoadingLoss] = useState(false);
   const [editHistory, setEditHistory] = useState([]);
   const [showEditHistory, setShowEditHistory] = useState(false);
+  const [returnRequest, setReturnRequest] = useState(null);
+  const [replacementRequest, setReplacementRequest] = useState(null);
 
   const [returnForm, setReturnForm] = useState({
     return_reason: '',
@@ -55,7 +57,7 @@ export const OrderDetail = () => {
     installation_cost: '', marketplace_commission_rate: '15'
   });
 
-  useEffect(() => { fetchOrder(); fetchLossData(); fetchEditHistory(); }, [id]);
+  useEffect(() => { fetchOrder(); fetchLossData(); fetchEditHistory(); fetchReturnReplacement(); }, [id]);
 
   const fetchOrder = async () => {
     try {
@@ -82,6 +84,28 @@ export const OrderDetail = () => {
       setEditHistory(res.data || []);
     } catch (err) {
       setEditHistory([]);
+    }
+  };
+
+  const fetchReturnReplacement = async () => {
+    try {
+      // Fetch return request for this order
+      const returnRes = await api.get(`/return-requests/?order_id=${id}`);
+      if (returnRes.data && returnRes.data.length > 0) {
+        setReturnRequest(returnRes.data[0]); // Get latest return request
+      }
+    } catch (err) {
+      console.log('No return request found for this order');
+    }
+    
+    try {
+      // Fetch replacement request for this order
+      const replaceRes = await api.get(`/replacement-requests/?order_id=${id}`);
+      if (replaceRes.data && replaceRes.data.length > 0) {
+        setReplacementRequest(replaceRes.data[0]); // Get latest replacement request
+      }
+    } catch (err) {
+      console.log('No replacement request found for this order');
     }
   };
 
@@ -520,6 +544,146 @@ export const OrderDetail = () => {
                     </Button>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Return/Replacement Milestones Card - Shows key checkpoint dates */}
+          {(returnRequest || replacementRequest) && (
+            <Card data-testid="milestones-card" className="border-amber-200 bg-gradient-to-br from-amber-50/50 to-orange-50/30">
+              <CardHeader>
+                <CardTitle className="font-[Manrope] flex items-center gap-2 text-amber-800">
+                  <CheckCircle className="w-5 h-5" />
+                  Return/Replacement Milestones
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Return Request Milestones */}
+                  {returnRequest && (
+                    <>
+                      <MilestoneItem 
+                        label="Return Requested" 
+                        date={safeDateShort(returnRequest.requested_date)} 
+                        active={!!returnRequest.requested_date}
+                        type="return"
+                      />
+                      <MilestoneItem 
+                        label="RTO Initiated" 
+                        date={safeDateShort(returnRequest.return_initiated_date || order.rto_initiated_date)} 
+                        active={!!(returnRequest.return_initiated_date || order.rto_initiated_date)}
+                        type="return"
+                      />
+                      <MilestoneItem 
+                        label="Warehouse Received" 
+                        date={safeDateShort(returnRequest.warehouse_received_date || order.rto_warehouse_received_date)} 
+                        active={!!(returnRequest.warehouse_received_date || order.rto_warehouse_received_date)}
+                        type="return"
+                      />
+                      <MilestoneItem 
+                        label="Condition Checked" 
+                        date={returnRequest.qc_condition ? `✓ ${returnRequest.qc_condition}` : safeDateShort(returnRequest.qc_inspection_date)} 
+                        active={!!(returnRequest.qc_inspection_date || returnRequest.qc_condition)}
+                        type="return"
+                      />
+                      <MilestoneItem 
+                        label="Refund Processed" 
+                        date={returnRequest.refund_processed_amount ? `₹${returnRequest.refund_processed_amount}` : safeDateShort(returnRequest.refund_processed_date || order.refund_date)} 
+                        active={!!(returnRequest.refund_processed_date || order.refund_date)}
+                        type="return"
+                        highlight
+                      />
+                      <MilestoneItem 
+                        label="Return Closed" 
+                        date={safeDateShort(returnRequest.closed_date)} 
+                        active={returnRequest.return_status === 'closed'}
+                        type="return"
+                        highlight
+                      />
+                    </>
+                  )}
+                  
+                  {/* Replacement Request Milestones */}
+                  {replacementRequest && (
+                    <>
+                      <MilestoneItem 
+                        label="Replacement Requested" 
+                        date={safeDateShort(replacementRequest.requested_date)} 
+                        active={!!replacementRequest.requested_date}
+                        type="replacement"
+                      />
+                      <MilestoneItem 
+                        label="Pickup Approved" 
+                        date={safeDateShort(replacementRequest.pickup_approved_date)} 
+                        active={replacementRequest.pickup_approved}
+                        type="replacement"
+                      />
+                      <MilestoneItem 
+                        label="Old Item Picked Up" 
+                        date={safeDateShort(replacementRequest.pickup_date)} 
+                        active={!!replacementRequest.pickup_date}
+                        type="replacement"
+                      />
+                      <MilestoneItem 
+                        label="Warehouse Received" 
+                        date={safeDateShort(replacementRequest.warehouse_received_date)} 
+                        active={!!replacementRequest.warehouse_received_date}
+                        type="replacement"
+                      />
+                      <MilestoneItem 
+                        label="Replacement Approved" 
+                        date={safeDateShort(replacementRequest.replacement_approved_date)} 
+                        active={replacementRequest.replacement_approved}
+                        type="replacement"
+                      />
+                      <MilestoneItem 
+                        label="Replacement Shipped" 
+                        date={replacementRequest.new_tracking_id ? `${safeDateShort(replacementRequest.ship_date)} • ${replacementRequest.new_tracking_id}` : safeDateShort(replacementRequest.ship_date)} 
+                        active={!!replacementRequest.ship_date || !!replacementRequest.new_tracking_id}
+                        type="replacement"
+                        highlight
+                      />
+                      <MilestoneItem 
+                        label="Delivered" 
+                        date={safeDateShort(replacementRequest.delivered_date)} 
+                        active={!!replacementRequest.delivered_date}
+                        type="replacement"
+                        highlight
+                      />
+                      <MilestoneItem 
+                        label="Resolved" 
+                        date={safeDateShort(replacementRequest.resolved_date)} 
+                        active={replacementRequest.replacement_status === 'resolved'}
+                        type="replacement"
+                        highlight
+                      />
+                    </>
+                  )}
+                </div>
+                
+                {/* Navigation buttons */}
+                <div className="flex gap-2 mt-4">
+                  {returnRequest && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 border-orange-300 text-orange-700 hover:bg-orange-50"
+                      onClick={() => navigate(`/returns/${returnRequest.id}`)}
+                    >
+                      View Return Details
+                    </Button>
+                  )}
+                  {replacementRequest && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 border-blue-300 text-blue-700 hover:bg-blue-50"
+                      onClick={() => navigate(`/replacements/${replacementRequest.id}`)}
+                    >
+                      View Replacement Details
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}
@@ -1263,3 +1427,35 @@ const FinBox = ({ label, value, sub, highlight, warn }) => (
     <p className={`text-sm font-bold font-[JetBrains_Mono] ${highlight ? 'text-green-700' : warn ? 'text-red-700' : ''}`}>{value}</p>
   </div>
 );
+
+const MilestoneItem = ({ label, date, active, type, highlight }) => {
+  // Different colors for return (orange) vs replacement (blue)
+  const getStyles = () => {
+    if (!active) {
+      return 'border-gray-200 bg-gray-50/50 opacity-50';
+    }
+    if (highlight && active) {
+      return type === 'return' 
+        ? 'border-green-300 bg-green-50 ring-2 ring-green-200' 
+        : 'border-green-300 bg-green-50 ring-2 ring-green-200';
+    }
+    return type === 'return'
+      ? 'border-orange-200 bg-orange-50'
+      : 'border-blue-200 bg-blue-50';
+  };
+
+  const getTextColor = () => {
+    if (!active) return 'text-gray-400';
+    if (highlight) return 'text-green-700 font-semibold';
+    return type === 'return' ? 'text-orange-800' : 'text-blue-800';
+  };
+
+  return (
+    <div className={`p-2.5 rounded-lg border text-center transition-all ${getStyles()}`}>
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <p className={`text-sm font-medium ${getTextColor()}`}>
+        {active ? (date || '✓') : '-'}
+      </p>
+    </div>
+  );
+};

@@ -218,6 +218,7 @@ async def get_return_requests(
     status: Optional[ReturnStatus] = None,
     exclude_status: Optional[str] = None,  # Can be comma-separated: "closed,rejected"
     open_only: Optional[bool] = None,  # NEW: Quick filter for open returns only
+    order_id: Optional[str] = None,  # Filter by specific order
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     skip: int = 0,
@@ -227,6 +228,10 @@ async def get_return_requests(
 ):
     """Get all return requests with option to exclude closed/rejected returns"""
     query = {}
+    
+    # Filter by order_id if provided
+    if order_id:
+        query["order_id"] = order_id
     
     # Handle open_only flag - excludes both closed and rejected
     if open_only:

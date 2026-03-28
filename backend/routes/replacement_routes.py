@@ -100,11 +100,16 @@ async def get_replacement_requests(
     status: Optional[ReplacementStatus] = None,
     exclude_status: Optional[str] = None,  # NEW: exclude certain statuses
     filter_type: Optional[str] = None,  # NEW: special filters for dual approval
+    order_id: Optional[str] = None,  # Filter by specific order
     current_user: User = Depends(get_current_active_user),
     db = Depends(get_database)
 ):
     """Get all replacement requests with optional status filter and exclusion"""
     query = {}
+    
+    # Filter by order_id if provided
+    if order_id:
+        query["order_id"] = order_id
     
     # Handle special dual approval filters
     if filter_type == "replacement_approval_pending":
