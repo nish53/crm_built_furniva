@@ -16,7 +16,7 @@ import urllib.parse
 from datetime import datetime, timezone
 
 # Backend URL from environment
-BACKEND_URL = "https://agent-crm-hub-6.preview.emergentagent.com/api"
+BACKEND_URL = "https://furniture-flow-pro.preview.emergentagent.com/api"
 
 # Test credentials - will create a test user
 TEST_EMAIL = "test@furniva.com"
