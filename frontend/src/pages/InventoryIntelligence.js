@@ -240,14 +240,29 @@ export const InventoryIntelligence = () => {
   const downloadTemplate = async () => {
     try {
       const res = await api.get('/inventory/csv-template');
-      const csv = res.data.columns.join(',') + '\n' + Object.values(res.data.example_row).join(',');
+      // Backend returns example_rows (array), use first row for simple template
+      const exampleRow = res.data.example_rows?.[0] || {};
+      
+      // Create CSV with header and multiple example rows
+      let csv = res.data.columns.join(',') + '\n';
+      
+      // Add all example rows
+      if (res.data.example_rows && res.data.example_rows.length > 0) {
+        res.data.example_rows.forEach(row => {
+          const values = res.data.columns.map(col => row[col] || '');
+          csv += values.join(',') + '\n';
+        });
+      }
+      
       const blob = new Blob([csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'sku_import_template.csv';
+      a.download = 'inventory_sku_import_template.csv';
       a.click();
-    } catch {
+      toast.success('Template downloaded successfully');
+    } catch (err) {
+      console.error('Template download error:', err);
       toast.error('Failed to download template');
     }
   };
@@ -1160,6 +1175,289 @@ export const InventoryIntelligence = () => {
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   Click Refresh to load purchase orders
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Warehouses Tab - PHASE 4 */}
+        <TabsContent value="warehouses">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="w-5 h-5" />
+                Warehouses
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={fetchWarehouses}>
+                  <RefreshCcw className="w-4 h-4 mr-2" />Refresh
+                </Button>
+                <Button size="sm" onClick={createWarehouse}>
+                  + New Warehouse
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {warehouses ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">Total Warehouses: {warehouses.total}</p>
+                  
+                  {warehouses.warehouses.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {warehouses.warehouses.map((wh, idx) => (
+                        <div key={idx} className="p-4 rounded-lg border bg-card">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-bold">{wh.name}</span>
+                                <Badge variant="outline" className="font-mono">{wh.code}</Badge>
+                                {wh.is_active ? (
+                                  <Badge className="bg-green-600">Active</Badge>
+                                ) : (
+                                  <Badge variant="outline">Inactive</Badge>
+                                )}
+                              </div>
+                              {wh.address && <p className="text-sm text-muted-foreground">{wh.address}</p>}
+                              {wh.city && <p className="text-xs text-muted-foreground">{wh.city}, {wh.state} - {wh.pincode}</p>}
+                            </div>
+                          </div>
+                          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
+                            Created: {wh.created_at?.split('T')[0]}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Truck className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-muted-foreground">No warehouses yet. Create your first warehouse!</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Click Refresh to load warehouses
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Cycle Counts Tab - PHASE 4 */}
+        <TabsContent value="cyclecounts">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Package className="w-5 h-5" />
+                Cycle Counts
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={fetchCycleCounts}>
+                <RefreshCcw className="w-4 h-4 mr-2" />Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {cycleCounts ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">Total Cycle Counts: {cycleCounts.total}</p>
+                  
+                  {cycleCounts.items.length > 0 ? (
+                    <div className="space-y-3">
+                      {cycleCounts.items.map((cc, idx) => (
+                        <div key={idx} className="p-4 rounded-lg border bg-card">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-mono font-bold">{cc.count_number}</span>
+                                <Badge variant="outline">{cc.warehouse_code}</Badge>
+                                <Badge className={
+                                  cc.status === 'completed' ? 'bg-green-600' :
+                                  cc.status === 'in_progress' ? 'bg-blue-600' :
+                                  'bg-yellow-600'
+                                }>{cc.status}</Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {cc.counted_items} / {cc.total_items} items counted
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-muted-foreground">Total Variance</p>
+                              <p className={`text-lg font-bold ${cc.total_variance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                {cc.total_variance || 0}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Created: {cc.created_at?.split('T')[0]}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Package className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-muted-foreground">No cycle counts yet.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Click Refresh to load cycle counts
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Shrinkage Report Tab - PHASE 4 */}
+        <TabsContent value="shrinkage">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-500" />
+                Shrinkage Detection
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={fetchShrinkageReport}>
+                <RefreshCcw className="w-4 h-4 mr-2" />Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {shrinkageReport ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-4 gap-4 mb-6">
+                    <div className="bg-secondary/30 p-3 rounded-lg text-center">
+                      <p className="text-xs text-muted-foreground">Total Items</p>
+                      <p className="text-xl font-bold">{shrinkageReport.total_items}</p>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-lg text-center border border-red-200">
+                      <p className="text-xs text-muted-foreground">High Shrinkage</p>
+                      <p className="text-xl font-bold text-red-700">{shrinkageReport.high_shrinkage_count}</p>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg text-center border border-orange-200">
+                      <p className="text-xs text-muted-foreground">Medium Shrinkage</p>
+                      <p className="text-xl font-bold text-orange-700">{shrinkageReport.medium_shrinkage_count}</p>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg text-center border border-purple-200">
+                      <p className="text-xs text-muted-foreground">Avg Shrinkage %</p>
+                      <p className="text-xl font-bold text-purple-700">{shrinkageReport.avg_shrinkage_percent}%</p>
+                    </div>
+                  </div>
+
+                  {shrinkageReport.items && shrinkageReport.items.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-secondary/30">
+                          <tr>
+                            <th className="text-left p-2">SKU</th>
+                            <th className="text-left p-2">Product</th>
+                            <th className="text-center p-2">Expected</th>
+                            <th className="text-center p-2">Actual</th>
+                            <th className="text-center p-2">Shrinkage</th>
+                            <th className="text-center p-2">%</th>
+                            <th className="text-center p-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {shrinkageReport.items.map((item, idx) => (
+                            <tr key={idx} className="border-b hover:bg-secondary/10">
+                              <td className="p-2 font-mono text-xs">{item.master_sku}</td>
+                              <td className="p-2">{item.product_name}</td>
+                              <td className="p-2 text-center">{item.expected_qty}</td>
+                              <td className="p-2 text-center">{item.actual_qty}</td>
+                              <td className={`p-2 text-center font-bold ${item.shrinkage_qty > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                {item.shrinkage_qty}
+                              </td>
+                              <td className="p-2 text-center">{item.shrinkage_percent}%</td>
+                              <td className="p-2 text-center">
+                                <Badge className={
+                                  item.status.includes('HIGH') ? 'bg-red-600' :
+                                  item.status.includes('MEDIUM') ? 'bg-yellow-600' :
+                                  'bg-blue-600'
+                                }>{item.status.replace(/[🔴🟡🔵]/g, '').trim()}</Badge>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                      <p className="text-muted-foreground">No shrinkage detected!</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Click Refresh to load shrinkage report
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Audit Log Tab - PHASE 4 */}
+        <TabsContent value="audit">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="w-5 h-5" />
+                Audit Log
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={fetchAuditLog}>
+                <RefreshCcw className="w-4 h-4 mr-2" />Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {auditLog ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">Total Entries: {auditLog.total}</p>
+                  
+                  {auditLog.items && auditLog.items.length > 0 ? (
+                    <div className="space-y-2">
+                      {auditLog.items.map((log, idx) => (
+                        <div key={idx} className="p-3 rounded-lg border bg-card hover:bg-secondary/10 transition-colors">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge className={
+                                  log.type === 'ADJUSTMENT' ? 'bg-blue-600' :
+                                  log.type === 'CYCLE_COUNT' ? 'bg-purple-600' :
+                                  log.type === 'PO_RECEIVED' ? 'bg-green-600' :
+                                  'bg-gray-600'
+                                }>{log.type}</Badge>
+                                {log.master_sku && <span className="font-mono text-xs">{log.master_sku}</span>}
+                                {log.reference && <span className="font-mono text-xs text-muted-foreground">{log.reference}</span>}
+                              </div>
+                              <p className="text-sm">
+                                {log.action && <span className="font-medium">{log.action}</span>}
+                                {log.quantity_change && (
+                                  <span className={`ml-2 ${log.quantity_change > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {log.quantity_change > 0 ? '+' : ''}{log.quantity_change}
+                                  </span>
+                                )}
+                              </p>
+                              {log.reason && <p className="text-xs text-muted-foreground mt-1">{log.reason}</p>}
+                            </div>
+                            <div className="text-right text-xs text-muted-foreground">
+                              <p>{log.user_name || log.user_id}</p>
+                              <p>{log.timestamp?.split('T')[0]}</p>
+                              <p>{log.timestamp?.split('T')[1]?.split('.')[0]}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <BarChart3 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                      <p className="text-muted-foreground">No audit entries yet.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Click Refresh to load audit log
                 </div>
               )}
             </CardContent>
