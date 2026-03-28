@@ -32,7 +32,7 @@ async def bulk_import_sku_csv(
     Bulk import Master SKU mappings from CSV.
     
     Expected CSV columns:
-    master_sku, product_name, category, amazon_sku, amazon_asin, amazon_fnsku, 
+    master_sku, product_name, category, amazon_sku, amazon_asin, 
     flipkart_sku, flipkart_fsn, website_sku, cost_price, selling_price
     """
     if not file.filename.endswith('.csv'):
@@ -67,7 +67,6 @@ async def bulk_import_sku_csv(
                 "category": row.get('category', '').strip() or None,
                 "amazon_sku": row.get('amazon_sku', '').strip() or None,
                 "amazon_asin": row.get('amazon_asin', '').strip() or None,
-                "amazon_fnsku": row.get('amazon_fnsku', '').strip() or None,
                 "flipkart_sku": row.get('flipkart_sku', '').strip() or None,
                 "flipkart_fsn": row.get('flipkart_fsn', '').strip() or None,
                 "website_sku": row.get('website_sku', '').strip() or None,
@@ -122,7 +121,6 @@ async def _create_platform_listings(db, mapping: dict):
             "platform": "amazon",
             "platform_sku": mapping.get("amazon_sku") or "",
             "platform_product_id": mapping.get("amazon_asin") or "",
-            "platform_fnsku": mapping.get("amazon_fnsku") or "",
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
@@ -159,7 +157,7 @@ async def get_csv_template():
     return {
         "columns": [
             "master_sku", "product_name", "category", 
-            "amazon_sku", "amazon_asin", "amazon_fnsku",
+            "amazon_sku", "amazon_asin",
             "flipkart_sku", "flipkart_fsn", "website_sku",
             "cost_price", "selling_price"
         ],
@@ -169,7 +167,6 @@ async def get_csv_template():
             "category": "Storage",
             "amazon_sku": "SR-AMZ-001",
             "amazon_asin": "B08XYZ123",
-            "amazon_fnsku": "X001ABC",
             "flipkart_sku": "SR-FK-001",
             "flipkart_fsn": "FKSRACK001",
             "website_sku": "SR-WEB-001",
@@ -574,3 +571,389 @@ async def get_inventory_dashboard(
         "stockout_alerts": stockout_data["total_alerts"],
         "critical_stockouts": stockout_data["critical"]
     }
+
+
+# ============================================
+# PHASE 2: DEMAND FORECASTING
+# ============================================
+
+@router.get("/demand-forecast")
+async def get_demand_forecast(
+    master_sku: Optional[str] = None,
+    forecast_days: int = Query(30, description="Days to forecast"),
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    SKU-level demand forecasting using weighted moving average.
+    Includes seasonal multipliers for festive periods.
+    """
+    now = datetime.now(timezone.utc)
+    
+    # Seasonal multipliers (India-specific)
+    month = now.month
+    if month in [10, 11]:  # Diwali season
+        seasonal_multiplier = 2.0
+        season_name = "Diwali Season"
+    elif month == 12 or month == 1:  # New Year
+        seasonal_multiplier = 1.5
+        season_name = "New Year Season"
+    elif month in [4, 5, 6]:  # Summer (furniture slow)
+        seasonal_multiplier = 0.8
+        season_name = "Summer (Slow)"
+    elif month in [7, 8, 9]:  # Monsoon
+        seasonal_multiplier = 1.1
+        season_name = "Monsoon"
+    else:
+        seasonal_multiplier = 1.0
+        season_name = "Normal"
+    
+    # Get SKUs
+    sku_query = {}
+    if master_sku:
+        sku_query["master_sku"] = master_sku
+    
+    skus = await db.master_sku_mappings.find(sku_query, {"_id": 0}).to_list(None)
+    
+    forecasts = []
+    
+    for sku in skus:
+        sku_id = sku["master_sku"]
+        
+        # Get historical sales (last 90 days in 3 periods for weighted avg)
+        period_sales = []
+        for i in range(3):
+            start = (now - timedelta(days=30*(i+1))).isoformat()
+            end = (now - timedelta(days=30*i)).isoformat()
+            
+            sales = await db.orders.count_documents({
+                "master_sku": sku_id,
+                "status": {"$in": ["delivered", "completed"]},
+                "order_date": {"$gte": start, "$lt": end}
+            })
+            period_sales.append(sales)
+        
+        # Weighted moving average (recent data weighted higher)
+        # Weights: [0.5, 0.3, 0.2] for [last 30d, 31-60d, 61-90d]
+        if sum(period_sales) > 0:
+            weighted_avg = (period_sales[0] * 0.5 + period_sales[1] * 0.3 + period_sales[2] * 0.2)
+            daily_avg = weighted_avg / 30
+        else:
+            daily_avg = 0
+        
+        # Apply seasonal multiplier
+        adjusted_daily = daily_avg * seasonal_multiplier
+        
+        # Forecast for requested period
+        forecast_qty = int(adjusted_daily * forecast_days)
+        
+        # Get current stock
+        procurement = await db.procurement_batches.aggregate([
+            {"$match": {"master_sku": sku_id}},
+            {"$group": {"_id": None, "total": {"$sum": "$quantity"}}}
+        ]).to_list(1)
+        total_procured = procurement[0]["total"] if procurement else 0
+        
+        sold = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["delivered", "completed", "dispatched", "in_transit"]}
+        })
+        current_stock = max(0, total_procured - sold)
+        
+        # Days until stockout
+        days_to_stockout = current_stock / adjusted_daily if adjusted_daily > 0 else float('inf')
+        
+        forecasts.append({
+            "master_sku": sku_id,
+            "product_name": sku.get("product_name", ""),
+            "category": sku.get("category", ""),
+            "historical_sales": {
+                "last_30_days": period_sales[0],
+                "31_60_days": period_sales[1],
+                "61_90_days": period_sales[2]
+            },
+            "daily_avg_base": round(daily_avg, 2),
+            "daily_avg_adjusted": round(adjusted_daily, 2),
+            "seasonal_multiplier": seasonal_multiplier,
+            "forecast_qty": forecast_qty,
+            "current_stock": current_stock,
+            "days_to_stockout": round(days_to_stockout, 1) if days_to_stockout != float('inf') else "∞",
+            "reorder_needed": days_to_stockout < forecast_days
+        })
+    
+    # Sort by reorder urgency
+    forecasts.sort(key=lambda x: x["days_to_stockout"] if isinstance(x["days_to_stockout"], (int, float)) else 9999)
+    
+    return {
+        "forecast_period_days": forecast_days,
+        "season": season_name,
+        "seasonal_multiplier": seasonal_multiplier,
+        "total_skus": len(forecasts),
+        "skus_needing_reorder": len([f for f in forecasts if f["reorder_needed"]]),
+        "forecasts": forecasts
+    }
+
+
+# ============================================
+# PHASE 2: PURCHASE INTELLIGENCE
+# ============================================
+
+@router.get("/purchase-suggestions")
+async def get_purchase_suggestions(
+    buffer_days: int = Query(7, description="Buffer stock days"),
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Smart purchase order suggestions based on:
+    - Forecast demand + buffer - current stock - incoming stock
+    """
+    now = datetime.now(timezone.utc)
+    thirty_days_ago = (now - timedelta(days=30)).isoformat()
+    
+    skus = await db.master_sku_mappings.find({}, {"_id": 0}).to_list(None)
+    
+    suggestions = []
+    
+    for sku in skus:
+        sku_id = sku["master_sku"]
+        
+        # Get 30-day sales
+        sales_30d = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["delivered", "completed"]},
+            "order_date": {"$gte": thirty_days_ago}
+        })
+        
+        daily_avg = sales_30d / 30
+        
+        # Get current stock
+        procurement = await db.procurement_batches.aggregate([
+            {"$match": {"master_sku": sku_id}},
+            {"$group": {"_id": None, "total": {"$sum": "$quantity"}}}
+        ]).to_list(1)
+        total_procured = procurement[0]["total"] if procurement else 0
+        
+        sold = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["delivered", "completed", "dispatched", "in_transit"]}
+        })
+        reserved = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["pending", "confirmed", "processing"]}
+        })
+        
+        current_stock = max(0, total_procured - sold - reserved)
+        
+        # Formula: (30-day forecast + buffer) - current stock
+        # Lead time assumed 14 days, so forecast for 44 days (30 + 14)
+        lead_time_days = 14
+        forecast_period = 30 + lead_time_days
+        
+        forecast_demand = int(daily_avg * forecast_period)
+        buffer_stock = int(daily_avg * buffer_days)
+        
+        suggested_qty = max(0, forecast_demand + buffer_stock - current_stock)
+        
+        if suggested_qty > 0:
+            # Calculate urgency
+            days_to_stockout = current_stock / daily_avg if daily_avg > 0 else 999
+            
+            if days_to_stockout <= 7:
+                urgency = "🔴 URGENT"
+            elif days_to_stockout <= 14:
+                urgency = "🟠 HIGH"
+            elif days_to_stockout <= 21:
+                urgency = "🟡 MEDIUM"
+            else:
+                urgency = "🔵 LOW"
+            
+            suggestions.append({
+                "master_sku": sku_id,
+                "product_name": sku.get("product_name", ""),
+                "category": sku.get("category", ""),
+                "current_stock": current_stock,
+                "daily_avg_sales": round(daily_avg, 2),
+                "forecast_demand": forecast_demand,
+                "buffer_stock": buffer_stock,
+                "suggested_order_qty": suggested_qty,
+                "days_to_stockout": round(days_to_stockout, 1),
+                "urgency": urgency,
+                "estimated_cost": suggested_qty * (sku.get("cost_price") or 0),
+                "lead_time_days": lead_time_days
+            })
+    
+    # Sort by urgency
+    urgency_order = {"🔴 URGENT": 0, "🟠 HIGH": 1, "🟡 MEDIUM": 2, "🔵 LOW": 3}
+    suggestions.sort(key=lambda x: (urgency_order.get(x["urgency"], 4), -x["suggested_order_qty"]))
+    
+    total_cost = sum(s["estimated_cost"] for s in suggestions)
+    
+    return {
+        "buffer_days": buffer_days,
+        "lead_time_assumed": 14,
+        "total_suggestions": len(suggestions),
+        "urgent_count": len([s for s in suggestions if "URGENT" in s["urgency"]]),
+        "total_estimated_cost": total_cost,
+        "suggestions": suggestions
+    }
+
+
+# ============================================
+# PHASE 2: RETURN & DAMAGE INTELLIGENCE
+# ============================================
+
+@router.get("/return-analysis")
+async def get_return_analysis(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    SKU-level return reason analysis.
+    Identifies problematic products and patterns.
+    """
+    skus = await db.master_sku_mappings.find({}, {"_id": 0}).to_list(None)
+    
+    analysis = []
+    
+    for sku in skus:
+        sku_id = sku["master_sku"]
+        
+        # Get total orders
+        total_orders = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["delivered", "completed"]}
+        })
+        
+        if total_orders == 0:
+            continue
+        
+        # Get returns for this SKU
+        returns = await db.return_requests.find({
+            "master_sku": sku_id
+        }, {"_id": 0}).to_list(None)
+        
+        total_returns = len(returns)
+        return_rate = (total_returns / total_orders * 100) if total_orders > 0 else 0
+        
+        # Analyze return reasons
+        reasons = {}
+        conditions = {"mint": 0, "damaged": 0, "defective": 0}
+        
+        for ret in returns:
+            reason = ret.get("return_reason") or ret.get("cancellation_reason") or "Unknown"
+            reasons[reason] = reasons.get(reason, 0) + 1
+            
+            condition = ret.get("qc_condition") or ret.get("received_condition")
+            if condition in conditions:
+                conditions[condition] += 1
+        
+        # Sort reasons by frequency
+        top_reasons = sorted(reasons.items(), key=lambda x: -x[1])[:3]
+        
+        # Calculate damage rate
+        damage_rate = (conditions["damaged"] + conditions["defective"]) / total_returns * 100 if total_returns > 0 else 0
+        
+        # Flag problematic SKUs
+        if return_rate > 10 or damage_rate > 20:
+            status = "🔴 PROBLEM"
+        elif return_rate > 5 or damage_rate > 10:
+            status = "🟡 WATCH"
+        else:
+            status = "✅ HEALTHY"
+        
+        analysis.append({
+            "master_sku": sku_id,
+            "product_name": sku.get("product_name", ""),
+            "category": sku.get("category", ""),
+            "total_orders": total_orders,
+            "total_returns": total_returns,
+            "return_rate_percent": round(return_rate, 2),
+            "top_return_reasons": [{"reason": r[0], "count": r[1]} for r in top_reasons],
+            "condition_breakdown": conditions,
+            "damage_rate_percent": round(damage_rate, 2),
+            "status": status
+        })
+    
+    # Sort by return rate
+    analysis.sort(key=lambda x: -x["return_rate_percent"])
+    
+    # Summary
+    total_returns_all = sum(a["total_returns"] for a in analysis)
+    total_orders_all = sum(a["total_orders"] for a in analysis)
+    overall_return_rate = (total_returns_all / total_orders_all * 100) if total_orders_all > 0 else 0
+    
+    return {
+        "overall_return_rate": round(overall_return_rate, 2),
+        "total_returns": total_returns_all,
+        "total_orders": total_orders_all,
+        "problem_skus": len([a for a in analysis if "PROBLEM" in a["status"]]),
+        "watch_skus": len([a for a in analysis if "WATCH" in a["status"]]),
+        "analysis": analysis
+    }
+
+
+@router.get("/courier-damage-analysis")
+async def get_courier_damage_analysis(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Courier-wise damage rate analysis.
+    Identifies which couriers have highest damage rates.
+    """
+    # Get all orders with courier info
+    orders = await db.orders.find({
+        "courier_name": {"$exists": True, "$ne": None}
+    }, {"_id": 0, "courier_name": 1, "id": 1}).to_list(None)
+    
+    courier_stats = {}
+    
+    for order in orders:
+        courier = order.get("courier_name", "Unknown")
+        if courier not in courier_stats:
+            courier_stats[courier] = {"total": 0, "damaged": 0, "returns": 0}
+        courier_stats[courier]["total"] += 1
+    
+    # Get damage/return info
+    returns = await db.return_requests.find({
+        "qc_condition": {"$in": ["damaged", "defective"]}
+    }, {"_id": 0, "order_id": 1}).to_list(None)
+    
+    return_order_ids = {r["order_id"] for r in returns}
+    
+    # Match returns to couriers
+    for order in orders:
+        courier = order.get("courier_name", "Unknown")
+        if order.get("id") in return_order_ids:
+            courier_stats[courier]["damaged"] += 1
+            courier_stats[courier]["returns"] += 1
+    
+    # Calculate rates
+    courier_analysis = []
+    for courier, stats in courier_stats.items():
+        damage_rate = (stats["damaged"] / stats["total"] * 100) if stats["total"] > 0 else 0
+        
+        if damage_rate > 5:
+            status = "🔴 HIGH DAMAGE"
+        elif damage_rate > 2:
+            status = "🟡 MODERATE"
+        else:
+            status = "✅ GOOD"
+        
+        courier_analysis.append({
+            "courier_name": courier,
+            "total_shipments": stats["total"],
+            "damaged_shipments": stats["damaged"],
+            "damage_rate_percent": round(damage_rate, 2),
+            "status": status
+        })
+    
+    courier_analysis.sort(key=lambda x: -x["damage_rate_percent"])
+    
+    return {
+        "total_couriers": len(courier_analysis),
+        "high_damage_couriers": len([c for c in courier_analysis if "HIGH" in c["status"]]),
+        "analysis": courier_analysis
+    }
+

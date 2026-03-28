@@ -77,7 +77,8 @@ A comprehensive e-commerce operations management platform for Furniva furniture 
    - Removed redundant "pickup_in_transit" step
    - Flow: Requested → Accepted → Picked Up (In Transit) → Warehouse Received → Refund Processed → Closed
 
-### Phase 4 - Inventory Intelligence System (Mar 28, 2026) ✅ PHASE 1 COMPLETE
+### Phase 4 - Inventory Intelligence System (Mar 28, 2026) ✅ PHASE 1 & 2 COMPLETE
+**Phase 1 - Core Analytics:**
 1. **Bulk CSV Import for SKU Mappings**:
    - Upload CSV with master_sku, product_name, category, amazon/flipkart/website SKUs
    - Merge mode (skip existing) or Replace mode (update existing)
@@ -97,10 +98,28 @@ A comprehensive e-commerce operations management platform for Furniva furniture 
    - Critical/High/Medium priority
    - Current stock, avg daily sales, days to stockout
    - Suggested reorder quantity
-5. **Inventory Intelligence Dashboard**:
-   - Summary cards: Total SKUs, Categories, Stale Stock, Dead Stock, Alerts
-   - 4 tabs: Dashboard, Stock Buckets, Aging Analysis, Stockout Alerts
-   - Accessible from Inventory page via "Intelligence" button
+
+**Phase 2 - Intelligence:**
+5. **Demand Forecasting**:
+   - 30-day SKU-level forecasting
+   - Weighted moving average (recent data weighted higher)
+   - Seasonal multipliers (Diwali 2x, New Year 1.5x, Summer 0.8x)
+   - Days to stockout calculation
+   - Reorder flag
+6. **Purchase Intelligence**:
+   - Smart order quantity formula: (forecast + buffer) - current stock
+   - 14-day lead time assumption
+   - Urgency levels: URGENT (≤7d), HIGH (≤14d), MEDIUM (≤21d), LOW
+   - Estimated cost per suggestion
+   - Total PO cost summary
+7. **Return & Damage Analysis**:
+   - SKU-level return rate analysis
+   - Top return reasons per SKU
+   - Condition breakdown (mint/damaged/defective)
+   - Problem SKU flagging (>10% return rate or >20% damage)
+   - Watch SKU flagging (>5% return rate)
+
+**Dashboard** - 7 tabs: Dashboard, Stock, Aging, Alerts, Forecast, Purchase, Returns
 
 ### Bug Fixes (Feb 26, 2026)
 1. Fixed corrupted models.py - duplicate class fields in ProcurementBatchCreate and ChannelCreate

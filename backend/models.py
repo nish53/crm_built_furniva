@@ -321,7 +321,6 @@ class MasterSKUMapping(BaseModel):
     category: Optional[str] = None
     amazon_sku: Optional[str] = None
     amazon_asin: Optional[str] = None
-    amazon_fnsku: Optional[str] = None
     flipkart_sku: Optional[str] = None
     flipkart_fsn: Optional[str] = None
     website_sku: Optional[str] = None
@@ -341,7 +340,6 @@ class MasterSKUMappingCreate(BaseModel):
     category: Optional[str] = None
     amazon_sku: Optional[str] = None
     amazon_asin: Optional[str] = None
-    amazon_fnsku: Optional[str] = None
     flipkart_sku: Optional[str] = None
     flipkart_fsn: Optional[str] = None
     website_sku: Optional[str] = None

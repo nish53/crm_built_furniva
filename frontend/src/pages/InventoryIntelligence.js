@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import {
   Package, AlertTriangle, Clock, TrendingUp, Upload, RefreshCcw,
-  BarChart3, AlertCircle, CheckCircle, Download, Layers
+  BarChart3, AlertCircle, CheckCircle, Download, Layers, ShoppingCart, Truck
 } from 'lucide-react';
 
 export const InventoryIntelligence = () => {
@@ -17,6 +17,9 @@ export const InventoryIntelligence = () => {
   const [stockSummary, setStockSummary] = useState(null);
   const [agingData, setAgingData] = useState(null);
   const [stockoutAlerts, setStockoutAlerts] = useState(null);
+  const [demandForecast, setDemandForecast] = useState(null);
+  const [purchaseSuggestions, setPurchaseSuggestions] = useState(null);
+  const [returnAnalysis, setReturnAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
@@ -63,11 +66,41 @@ export const InventoryIntelligence = () => {
     }
   };
 
+  const fetchDemandForecast = async () => {
+    try {
+      const res = await api.get('/inventory/demand-forecast?forecast_days=30');
+      setDemandForecast(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch demand forecast');
+    }
+  };
+
+  const fetchPurchaseSuggestions = async () => {
+    try {
+      const res = await api.get('/inventory/purchase-suggestions?buffer_days=7');
+      setPurchaseSuggestions(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch purchase suggestions');
+    }
+  };
+
+  const fetchReturnAnalysis = async () => {
+    try {
+      const res = await api.get('/inventory/return-analysis');
+      setReturnAnalysis(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch return analysis');
+    }
+  };
+
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     if (tab === 'stock' && !stockSummary) fetchStockSummary();
     if (tab === 'aging' && !agingData) fetchAgingAnalysis();
     if (tab === 'alerts' && !stockoutAlerts) fetchStockoutAlerts();
+    if (tab === 'forecast' && !demandForecast) fetchDemandForecast();
+    if (tab === 'purchase' && !purchaseSuggestions) fetchPurchaseSuggestions();
+    if (tab === 'returns' && !returnAnalysis) fetchReturnAnalysis();
   };
 
   const handleFileUpload = async (event) => {
@@ -209,11 +242,14 @@ export const InventoryIntelligence = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="stock">Stock Buckets</TabsTrigger>
-          <TabsTrigger value="aging">Aging Analysis</TabsTrigger>
-          <TabsTrigger value="alerts">Stockout Alerts</TabsTrigger>
+          <TabsTrigger value="stock">Stock</TabsTrigger>
+          <TabsTrigger value="aging">Aging</TabsTrigger>
+          <TabsTrigger value="alerts">Alerts</TabsTrigger>
+          <TabsTrigger value="forecast">Forecast</TabsTrigger>
+          <TabsTrigger value="purchase">Purchase</TabsTrigger>
+          <TabsTrigger value="returns">Returns</TabsTrigger>
         </TabsList>
 
         {/* Dashboard Tab */}
@@ -509,6 +545,254 @@ export const InventoryIntelligence = () => {
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   Click Refresh to check stockout alerts
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Demand Forecast Tab */}
+        <TabsContent value="forecast">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Demand Forecast (30 Days)
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={fetchDemandForecast}>
+                <RefreshCcw className="w-4 h-4 mr-2" />Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {demandForecast ? (
+                <div className="space-y-4">
+                  {/* Season Info */}
+                  <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="bg-purple-50 p-3 rounded-lg text-center border border-purple-200">
+                      <p className="text-xs text-muted-foreground">Current Season</p>
+                      <p className="text-lg font-bold text-purple-700">{demandForecast.season}</p>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg text-center border border-blue-200">
+                      <p className="text-xs text-muted-foreground">Seasonal Multiplier</p>
+                      <p className="text-lg font-bold text-blue-700">{demandForecast.seasonal_multiplier}x</p>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg text-center border border-orange-200">
+                      <p className="text-xs text-muted-foreground">SKUs Needing Reorder</p>
+                      <p className="text-lg font-bold text-orange-700">{demandForecast.skus_needing_reorder}</p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-secondary/30">
+                        <tr>
+                          <th className="text-left p-2">SKU</th>
+                          <th className="text-left p-2">Product</th>
+                          <th className="text-center p-2">30d Sales</th>
+                          <th className="text-center p-2">Daily Avg</th>
+                          <th className="text-center p-2">Forecast</th>
+                          <th className="text-center p-2">Stock</th>
+                          <th className="text-center p-2">Days Left</th>
+                          <th className="text-center p-2">Reorder?</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {demandForecast.forecasts.map((item, idx) => (
+                          <tr key={idx} className="border-b hover:bg-secondary/10">
+                            <td className="p-2 font-mono text-xs">{item.master_sku}</td>
+                            <td className="p-2">{item.product_name}</td>
+                            <td className="p-2 text-center">{item.historical_sales.last_30_days}</td>
+                            <td className="p-2 text-center">{item.daily_avg_adjusted}</td>
+                            <td className="p-2 text-center font-bold">{item.forecast_qty}</td>
+                            <td className="p-2 text-center">{item.current_stock}</td>
+                            <td className="p-2 text-center">{item.days_to_stockout}</td>
+                            <td className="p-2 text-center">
+                              {item.reorder_needed ? (
+                                <Badge className="bg-red-600">YES</Badge>
+                              ) : (
+                                <Badge className="bg-green-600">NO</Badge>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Click Refresh to load demand forecast
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Purchase Suggestions Tab */}
+        <TabsContent value="purchase">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5" />
+                Purchase Suggestions
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={fetchPurchaseSuggestions}>
+                <RefreshCcw className="w-4 h-4 mr-2" />Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {purchaseSuggestions ? (
+                <div className="space-y-4">
+                  {/* Summary */}
+                  <div className="grid grid-cols-4 gap-4 mb-6">
+                    <div className="bg-secondary/30 p-3 rounded-lg text-center">
+                      <p className="text-xs text-muted-foreground">Total Suggestions</p>
+                      <p className="text-xl font-bold">{purchaseSuggestions.total_suggestions}</p>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-lg text-center border border-red-200">
+                      <p className="text-xs text-muted-foreground">Urgent</p>
+                      <p className="text-xl font-bold text-red-700">{purchaseSuggestions.urgent_count}</p>
+                    </div>
+                    <div className="bg-green-50 p-3 rounded-lg text-center border border-green-200">
+                      <p className="text-xs text-muted-foreground">Est. Total Cost</p>
+                      <p className="text-xl font-bold text-green-700">₹{purchaseSuggestions.total_estimated_cost?.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg text-center border border-blue-200">
+                      <p className="text-xs text-muted-foreground">Lead Time</p>
+                      <p className="text-xl font-bold text-blue-700">{purchaseSuggestions.lead_time_assumed} days</p>
+                    </div>
+                  </div>
+
+                  {purchaseSuggestions.suggestions.length > 0 ? (
+                    <div className="space-y-3">
+                      {purchaseSuggestions.suggestions.map((item, idx) => (
+                        <div key={idx} className={`p-4 rounded-lg border ${
+                          item.urgency.includes('URGENT') ? 'bg-red-50 border-red-200' :
+                          item.urgency.includes('HIGH') ? 'bg-orange-50 border-orange-200' :
+                          item.urgency.includes('MEDIUM') ? 'bg-yellow-50 border-yellow-200' :
+                          'bg-blue-50 border-blue-200'
+                        }`}>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-mono text-sm font-medium">{item.master_sku}</span>
+                                <Badge className={
+                                  item.urgency.includes('URGENT') ? 'bg-red-600' :
+                                  item.urgency.includes('HIGH') ? 'bg-orange-600' :
+                                  item.urgency.includes('MEDIUM') ? 'bg-yellow-600' :
+                                  'bg-blue-600'
+                                }>{item.urgency}</Badge>
+                              </div>
+                              <p className="text-sm">{item.product_name}</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Stock: {item.current_stock} | Daily Avg: {item.daily_avg_sales} | Stockout in: {item.days_to_stockout} days
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-muted-foreground">Order Qty</p>
+                              <p className="text-2xl font-bold text-green-600">{item.suggested_order_qty}</p>
+                              <p className="text-sm text-muted-foreground">≈ ₹{item.estimated_cost?.toLocaleString()}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                      <p className="text-muted-foreground">No purchase suggestions needed. Stock levels are optimal!</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Click Refresh to load purchase suggestions
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Return Analysis Tab */}
+        <TabsContent value="returns">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="w-5 h-5" />
+                Return & Damage Analysis
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={fetchReturnAnalysis}>
+                <RefreshCcw className="w-4 h-4 mr-2" />Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {returnAnalysis ? (
+                <div className="space-y-4">
+                  {/* Summary */}
+                  <div className="grid grid-cols-4 gap-4 mb-6">
+                    <div className="bg-secondary/30 p-3 rounded-lg text-center">
+                      <p className="text-xs text-muted-foreground">Total Orders</p>
+                      <p className="text-xl font-bold">{returnAnalysis.total_orders}</p>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg text-center border border-orange-200">
+                      <p className="text-xs text-muted-foreground">Total Returns</p>
+                      <p className="text-xl font-bold text-orange-700">{returnAnalysis.total_returns}</p>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg text-center border border-purple-200">
+                      <p className="text-xs text-muted-foreground">Return Rate</p>
+                      <p className="text-xl font-bold text-purple-700">{returnAnalysis.overall_return_rate}%</p>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-lg text-center border border-red-200">
+                      <p className="text-xs text-muted-foreground">Problem SKUs</p>
+                      <p className="text-xl font-bold text-red-700">{returnAnalysis.problem_skus}</p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-secondary/30">
+                        <tr>
+                          <th className="text-left p-2">SKU</th>
+                          <th className="text-left p-2">Product</th>
+                          <th className="text-center p-2">Orders</th>
+                          <th className="text-center p-2">Returns</th>
+                          <th className="text-center p-2">Rate %</th>
+                          <th className="text-left p-2">Top Reasons</th>
+                          <th className="text-center p-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {returnAnalysis.analysis.map((item, idx) => (
+                          <tr key={idx} className="border-b hover:bg-secondary/10">
+                            <td className="p-2 font-mono text-xs">{item.master_sku}</td>
+                            <td className="p-2">{item.product_name}</td>
+                            <td className="p-2 text-center">{item.total_orders}</td>
+                            <td className="p-2 text-center text-orange-600">{item.total_returns}</td>
+                            <td className="p-2 text-center font-bold">{item.return_rate_percent}%</td>
+                            <td className="p-2 text-xs">
+                              {item.top_return_reasons.map((r, i) => (
+                                <span key={i} className="mr-2">{r.reason} ({r.count})</span>
+                              ))}
+                            </td>
+                            <td className="p-2 text-center">
+                              <Badge className={
+                                item.status.includes('PROBLEM') ? 'bg-red-600' :
+                                item.status.includes('WATCH') ? 'bg-yellow-600' :
+                                'bg-green-600'
+                              }>{item.status.replace(/[🔴🟡✅]/g, '').trim()}</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                        {returnAnalysis.analysis.length === 0 && (
+                          <tr><td colSpan="7" className="p-4 text-center text-muted-foreground">No return data</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Click Refresh to load return analysis
                 </div>
               )}
             </CardContent>

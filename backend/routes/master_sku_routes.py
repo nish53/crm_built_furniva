@@ -151,7 +151,7 @@ async def lookup_by_platform_sku(
 ):
     """Lookup Master SKU by platform-specific SKU"""
     field_map = {
-        "amazon": ["amazon_sku", "amazon_asin", "amazon_fnsku"],
+        "amazon": ["amazon_sku", "amazon_asin"],
         "flipkart": ["flipkart_sku", "flipkart_fsn"],
         "website": ["website_sku"]
     }
