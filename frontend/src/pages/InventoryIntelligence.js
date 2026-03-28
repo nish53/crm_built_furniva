@@ -23,6 +23,10 @@ export const InventoryIntelligence = () => {
   const [liquidationSuggestions, setLiquidationSuggestions] = useState(null);
   const [smartAlerts, setSmartAlerts] = useState(null);
   const [purchaseOrders, setPurchaseOrders] = useState(null);
+  const [warehouses, setWarehouses] = useState(null);
+  const [cycleCounts, setCycleCounts] = useState(null);
+  const [shrinkageReport, setShrinkageReport] = useState(null);
+  const [auditLog, setAuditLog] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
@@ -123,6 +127,66 @@ export const InventoryIntelligence = () => {
     }
   };
 
+  const fetchWarehouses = async () => {
+    try {
+      const res = await api.get('/inventory/warehouses');
+      setWarehouses(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch warehouses');
+    }
+  };
+
+  const fetchCycleCounts = async () => {
+    try {
+      const res = await api.get('/inventory/cycle-counts');
+      setCycleCounts(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch cycle counts');
+    }
+  };
+
+  const fetchShrinkageReport = async () => {
+    try {
+      const res = await api.get('/inventory/shrinkage-report');
+      setShrinkageReport(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch shrinkage report');
+    }
+  };
+
+  const fetchAuditLog = async () => {
+    try {
+      const res = await api.get('/inventory/audit-log?limit=50');
+      setAuditLog(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch audit log');
+    }
+  };
+
+  const createWarehouse = async () => {
+    const name = prompt('Warehouse Name:');
+    const code = prompt('Warehouse Code (e.g., WH-DEL):');
+    if (name && code) {
+      try {
+        await api.post(`/inventory/warehouses?name=${encodeURIComponent(name)}&code=${encodeURIComponent(code)}`);
+        toast.success('Warehouse created!');
+        fetchWarehouses();
+      } catch (err) {
+        toast.error(err.response?.data?.detail || 'Failed to create warehouse');
+      }
+    }
+  };
+
+  const startCycleCount = async (warehouseCode) => {
+    try {
+      const res = await api.post(`/inventory/cycle-count?warehouse_code=${warehouseCode}&sku_count=10`);
+      toast.success(`Cycle count ${res.data.count_number} created!`);
+      fetchCycleCounts();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to start cycle count');
+    }
+  };
+
   const createPO = async (masterSku, quantity) => {
     try {
       const res = await api.post(`/inventory/auto-create-po?master_sku=${masterSku}&quantity=${quantity}`);
@@ -145,6 +209,10 @@ export const InventoryIntelligence = () => {
     if (tab === 'liquidation' && !liquidationSuggestions) fetchLiquidationSuggestions();
     if (tab === 'smartalerts' && !smartAlerts) fetchSmartAlerts();
     if (tab === 'pos' && !purchaseOrders) fetchPurchaseOrders();
+    if (tab === 'warehouses' && !warehouses) fetchWarehouses();
+    if (tab === 'cyclecounts' && !cycleCounts) fetchCycleCounts();
+    if (tab === 'shrinkage' && !shrinkageReport) fetchShrinkageReport();
+    if (tab === 'audit' && !auditLog) fetchAuditLog();
   };
 
   const handleFileUpload = async (event) => {
@@ -284,20 +352,28 @@ export const InventoryIntelligence = () => {
         </div>
       )}
 
-      {/* Tabs */}
+      {/* Tabs - Two rows */}
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10">
-          <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-          <TabsTrigger value="stock">Stock</TabsTrigger>
-          <TabsTrigger value="aging">Aging</TabsTrigger>
-          <TabsTrigger value="alerts">Stockout</TabsTrigger>
-          <TabsTrigger value="forecast">Forecast</TabsTrigger>
-          <TabsTrigger value="purchase">Purchase</TabsTrigger>
-          <TabsTrigger value="returns">Returns</TabsTrigger>
-          <TabsTrigger value="liquidation">Liquidate</TabsTrigger>
-          <TabsTrigger value="smartalerts">All Alerts</TabsTrigger>
-          <TabsTrigger value="pos">POs</TabsTrigger>
-        </TabsList>
+        <div className="space-y-2 mb-4">
+          <TabsList className="grid w-full grid-cols-7">
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="stock">Stock</TabsTrigger>
+            <TabsTrigger value="aging">Aging</TabsTrigger>
+            <TabsTrigger value="alerts">Stockout</TabsTrigger>
+            <TabsTrigger value="forecast">Forecast</TabsTrigger>
+            <TabsTrigger value="purchase">Purchase</TabsTrigger>
+            <TabsTrigger value="returns">Returns</TabsTrigger>
+          </TabsList>
+          <TabsList className="grid w-full grid-cols-7">
+            <TabsTrigger value="liquidation">Liquidate</TabsTrigger>
+            <TabsTrigger value="smartalerts">All Alerts</TabsTrigger>
+            <TabsTrigger value="pos">POs</TabsTrigger>
+            <TabsTrigger value="warehouses">Warehouses</TabsTrigger>
+            <TabsTrigger value="cyclecounts">Cycle Count</TabsTrigger>
+            <TabsTrigger value="shrinkage">Shrinkage</TabsTrigger>
+            <TabsTrigger value="audit">Audit Log</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Dashboard Tab */}
         <TabsContent value="dashboard">

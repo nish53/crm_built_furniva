@@ -118,14 +118,22 @@ A comprehensive e-commerce operations management platform for Furniva furniture 
 4. Fixed order_id filter for return-requests and replacement-requests endpoints
 
 ## Key API Endpoints
+
+### Authentication
 - `POST /api/auth/login` - Authentication
+
+### Orders
 - `GET/POST /api/orders/` - Orders CRUD
 - `POST /api/orders/import-csv` - Import CSV/TXT
 - `POST /api/import/with-mapping` - Smart import with duplicate check (order_number + SKU)
+
+### Inventory - Master SKU & Listings
 - `GET/POST /api/master-sku/` - Master SKU CRUD
 - `GET/POST /api/platform-listings/` - Platform listings CRUD
 - `GET/POST /api/procurement-batches/` - Procurement with box details
 - `GET /api/procurement-batches/average-cost/{sku}` - Weighted avg cost
+
+### Returns & Replacements
 - `GET/POST /api/return-requests/` - Returns CRUD (supports ?order_id filter)
 - `POST /api/return-requests/{id}/advance` - Advance return workflow
 - `POST /api/return-requests/{id}/undo` - Undo last status change
@@ -135,18 +143,44 @@ A comprehensive e-commerce operations management platform for Furniva furniture 
 - `POST /api/replacement-requests/{id}/advance-pickup` - Advance pickup workflow
 - `POST /api/replacement-requests/{id}/advance-shipment` - Advance shipment workflow
 - `GET /api/replacement-requests/analytics/counts-v2` - Dashboard counters
+
+### Financials
 - `POST /api/financials/calculate/{order_id}` - Per-order financials
 - `GET /api/financials/profit-analysis` - Aggregated analysis
+
+### Inventory Intelligence (NEW)
+- `POST /api/inventory/bulk-import-csv` - Bulk import SKUs with multiple listings
+- `GET /api/inventory/csv-template` - Get CSV template for import
+- `GET /api/inventory/stock-summary` - Real-time stock buckets
+- `GET /api/inventory/aging-analysis` - Inventory aging (5 buckets)
+- `GET /api/inventory/stockout-alerts` - Stockout alerts with priority
+- `GET /api/inventory/demand-forecast` - 30-day demand forecasting
+- `GET /api/inventory/purchase-suggestions` - Smart PO suggestions
+- `GET /api/inventory/return-analysis` - SKU-level return analysis
+- `GET /api/inventory/courier-damage-analysis` - Courier damage rates
+- `GET /api/inventory/liquidation-suggestions` - Dead stock liquidation
+- `GET /api/inventory/smart-alerts` - Combined alerts dashboard
+- `POST /api/inventory/auto-create-po` - Auto-create purchase order
+- `GET /api/inventory/purchase-orders` - List purchase orders
+- `PATCH /api/inventory/purchase-orders/{po_id}/status` - Update PO status
+- `GET /api/inventory/listings-by-sku/{master_sku}` - Get all listings for SKU
+- `GET /api/inventory/dashboard` - Inventory dashboard summary
 
 ## Known Issues
 1. WhatsApp webhook blocked by Meta (external - needs custom domain for production)
 2. Communication checklist currently read-only; will be automated via WhatsApp CRM integration
 
-## Next Steps (Priority Order)
+## Next Steps - Phase 4: Advanced Inventory Features
+1. **Multi-Warehouse Support** - Warehouse CRUD, warehouse-wise stock tracking, transfer orders
+2. **Cycle Counts** - Partial inventory checks, variance detection, random SKU selection
+3. **Shrinkage Detection** - Expected vs actual stock, shrinkage alerts
+4. **Stock Adjustments** - Manual adjustments with reason codes, approval workflows
+5. **Audit Logs** - All stock movements with user accountability
+
+## Future Phases
 1. P1 - Installation Management module (installer assignments, scheduling, ratings)
 2. P1 - Quality Control tracking (pre-dispatch QC checklists with photo proof)
 3. P2 - Escalation System (auto-flag high-value orders, late deliveries)
 4. P2 - Advanced Courier Intelligence (RTO%, damage%, claim rates)
 5. P2 - Marketplace Health Monitoring
 6. P3 - CRM & Risk Management
-7. P3 - Inventory Intelligence Reports

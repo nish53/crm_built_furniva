@@ -1357,3 +1357,522 @@ async def get_listings_by_sku(
         "listings": listings
     }
 
+
+# ============================================
+# PHASE 4: MULTI-WAREHOUSE & AUDIT CONTROL
+# ============================================
+
+# --- WAREHOUSE MANAGEMENT ---
+
+@router.post("/warehouses")
+async def create_warehouse(
+    name: str,
+    code: str,
+    address: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    pincode: Optional[str] = None,
+    is_active: bool = True,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Create a new warehouse"""
+    existing = await db.warehouses.find_one({"code": code})
+    if existing:
+        raise HTTPException(status_code=400, detail="Warehouse code already exists")
+    
+    warehouse = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "code": code.upper(),
+        "address": address,
+        "city": city,
+        "state": state,
+        "pincode": pincode,
+        "is_active": is_active,
+        "created_by": current_user.id,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.warehouses.insert_one(warehouse)
+    return warehouse
+
+
+@router.get("/warehouses")
+async def get_warehouses(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get all warehouses"""
+    warehouses = await db.warehouses.find({}, {"_id": 0}).to_list(None)
+    return {"warehouses": warehouses, "total": len(warehouses)}
+
+
+@router.get("/warehouse-stock/{warehouse_code}")
+async def get_warehouse_stock(
+    warehouse_code: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get stock levels for a specific warehouse"""
+    warehouse = await db.warehouses.find_one({"code": warehouse_code.upper()})
+    if not warehouse:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    
+    # Get all stock entries for this warehouse
+    stock = await db.warehouse_stock.find(
+        {"warehouse_code": warehouse_code.upper()},
+        {"_id": 0}
+    ).to_list(None)
+    
+    # Enrich with product names
+    for item in stock:
+        sku = await db.master_sku_mappings.find_one(
+            {"master_sku": item["master_sku"]},
+            {"product_name": 1}
+        )
+        item["product_name"] = sku.get("product_name", "") if sku else ""
+    
+    total_units = sum(s.get("quantity", 0) for s in stock)
+    
+    return {
+        "warehouse": warehouse,
+        "stock": stock,
+        "total_skus": len(stock),
+        "total_units": total_units
+    }
+
+
+# --- STOCK ADJUSTMENTS ---
+
+@router.post("/stock-adjustment")
+async def create_stock_adjustment(
+    master_sku: str,
+    warehouse_code: str,
+    adjustment_type: str,  # "add", "remove", "set"
+    quantity: int,
+    reason: str,
+    reference: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Create a stock adjustment with audit trail.
+    Types: add (increase), remove (decrease), set (override)
+    """
+    # Verify SKU exists
+    sku = await db.master_sku_mappings.find_one({"master_sku": master_sku})
+    if not sku:
+        raise HTTPException(status_code=404, detail="Master SKU not found")
+    
+    # Get current stock
+    current = await db.warehouse_stock.find_one({
+        "master_sku": master_sku,
+        "warehouse_code": warehouse_code.upper()
+    })
+    current_qty = current.get("quantity", 0) if current else 0
+    
+    # Calculate new quantity
+    if adjustment_type == "add":
+        new_qty = current_qty + quantity
+    elif adjustment_type == "remove":
+        new_qty = max(0, current_qty - quantity)
+    elif adjustment_type == "set":
+        new_qty = quantity
+    else:
+        raise HTTPException(status_code=400, detail="Invalid adjustment_type")
+    
+    # Create adjustment record (audit)
+    adjustment = {
+        "id": str(uuid.uuid4()),
+        "master_sku": master_sku,
+        "warehouse_code": warehouse_code.upper(),
+        "adjustment_type": adjustment_type,
+        "quantity_change": quantity if adjustment_type == "add" else -quantity if adjustment_type == "remove" else new_qty - current_qty,
+        "quantity_before": current_qty,
+        "quantity_after": new_qty,
+        "reason": reason,
+        "reference": reference,
+        "created_by": current_user.id,
+        "created_by_name": current_user.name,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.stock_adjustments.insert_one(adjustment)
+    
+    # Update warehouse stock
+    if current:
+        await db.warehouse_stock.update_one(
+            {"master_sku": master_sku, "warehouse_code": warehouse_code.upper()},
+            {"$set": {"quantity": new_qty, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    else:
+        await db.warehouse_stock.insert_one({
+            "id": str(uuid.uuid4()),
+            "master_sku": master_sku,
+            "warehouse_code": warehouse_code.upper(),
+            "quantity": new_qty,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    
+    return {
+        "success": True,
+        "adjustment": adjustment
+    }
+
+
+@router.get("/stock-adjustments")
+async def get_stock_adjustments(
+    master_sku: Optional[str] = None,
+    warehouse_code: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get stock adjustment history (audit log)"""
+    query = {}
+    if master_sku:
+        query["master_sku"] = master_sku
+    if warehouse_code:
+        query["warehouse_code"] = warehouse_code.upper()
+    
+    adjustments = await db.stock_adjustments.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.stock_adjustments.count_documents(query)
+    
+    return {"items": adjustments, "total": total}
+
+
+# --- CYCLE COUNTS ---
+
+@router.post("/cycle-count")
+async def create_cycle_count(
+    warehouse_code: str,
+    sku_count: int = Query(10, description="Number of SKUs to count"),
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Create a new cycle count with randomly selected SKUs.
+    """
+    import random
+    
+    # Get all SKUs with stock in this warehouse
+    stock_items = await db.warehouse_stock.find(
+        {"warehouse_code": warehouse_code.upper(), "quantity": {"$gt": 0}},
+        {"master_sku": 1, "quantity": 1}
+    ).to_list(None)
+    
+    if not stock_items:
+        raise HTTPException(status_code=400, detail="No stock items in warehouse")
+    
+    # Random selection
+    selected = random.sample(stock_items, min(sku_count, len(stock_items)))
+    
+    # Create cycle count
+    count_id = str(uuid.uuid4())
+    count_number = f"CC-{datetime.now().strftime('%Y%m%d')}-{count_id[:6].upper()}"
+    
+    items = []
+    for item in selected:
+        sku = await db.master_sku_mappings.find_one({"master_sku": item["master_sku"]})
+        items.append({
+            "master_sku": item["master_sku"],
+            "product_name": sku.get("product_name", "") if sku else "",
+            "system_qty": item["quantity"],
+            "counted_qty": None,
+            "variance": None,
+            "counted": False
+        })
+    
+    cycle_count = {
+        "id": count_id,
+        "count_number": count_number,
+        "warehouse_code": warehouse_code.upper(),
+        "status": "pending",
+        "items": items,
+        "total_items": len(items),
+        "counted_items": 0,
+        "total_variance": 0,
+        "created_by": current_user.id,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.cycle_counts.insert_one(cycle_count)
+    
+    return cycle_count
+
+
+@router.get("/cycle-counts")
+async def get_cycle_counts(
+    warehouse_code: Optional[str] = None,
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 20,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get cycle count history"""
+    query = {}
+    if warehouse_code:
+        query["warehouse_code"] = warehouse_code.upper()
+    if status:
+        query["status"] = status
+    
+    counts = await db.cycle_counts.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.cycle_counts.count_documents(query)
+    
+    return {"items": counts, "total": total}
+
+
+@router.patch("/cycle-count/{count_id}/item")
+async def update_cycle_count_item(
+    count_id: str,
+    master_sku: str,
+    counted_qty: int,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Update counted quantity for a cycle count item"""
+    cycle_count = await db.cycle_counts.find_one({"id": count_id})
+    if not cycle_count:
+        raise HTTPException(status_code=404, detail="Cycle count not found")
+    
+    # Find and update the item
+    items = cycle_count["items"]
+    item_found = False
+    counted_items = 0
+    total_variance = 0
+    
+    for item in items:
+        if item["master_sku"] == master_sku:
+            item["counted_qty"] = counted_qty
+            item["variance"] = counted_qty - item["system_qty"]
+            item["counted"] = True
+            item["counted_by"] = current_user.id
+            item["counted_at"] = datetime.now(timezone.utc).isoformat()
+            item_found = True
+        
+        if item["counted"]:
+            counted_items += 1
+            total_variance += abs(item.get("variance", 0))
+    
+    if not item_found:
+        raise HTTPException(status_code=404, detail="SKU not in this cycle count")
+    
+    # Update cycle count
+    status = "completed" if counted_items == len(items) else "in_progress"
+    
+    await db.cycle_counts.update_one(
+        {"id": count_id},
+        {"$set": {
+            "items": items,
+            "counted_items": counted_items,
+            "total_variance": total_variance,
+            "status": status,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"success": True, "counted_items": counted_items, "status": status}
+
+
+# --- SHRINKAGE DETECTION ---
+
+@router.get("/shrinkage-report")
+async def get_shrinkage_report(
+    warehouse_code: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Detect shrinkage by comparing expected vs actual stock.
+    Expected = Opening + Received - Sold - Returns - Damaged
+    """
+    query = {}
+    if warehouse_code:
+        query["warehouse_code"] = warehouse_code.upper()
+    
+    # Get all SKUs
+    skus = await db.master_sku_mappings.find({}, {"_id": 0, "master_sku": 1, "product_name": 1}).to_list(None)
+    
+    shrinkage_items = []
+    
+    for sku in skus:
+        sku_id = sku["master_sku"]
+        
+        # Get actual stock (from warehouse_stock or calculated)
+        if warehouse_code:
+            actual = await db.warehouse_stock.find_one({
+                "master_sku": sku_id,
+                "warehouse_code": warehouse_code.upper()
+            })
+            actual_qty = actual.get("quantity", 0) if actual else 0
+        else:
+            # Sum across all warehouses
+            actual_sum = await db.warehouse_stock.aggregate([
+                {"$match": {"master_sku": sku_id}},
+                {"$group": {"_id": None, "total": {"$sum": "$quantity"}}}
+            ]).to_list(1)
+            actual_qty = actual_sum[0]["total"] if actual_sum else 0
+        
+        # Calculate expected stock
+        # Received (procurement)
+        procurement = await db.procurement_batches.aggregate([
+            {"$match": {"master_sku": sku_id}},
+            {"$group": {"_id": None, "total": {"$sum": "$quantity"}}}
+        ]).to_list(1)
+        received = procurement[0]["total"] if procurement else 0
+        
+        # Sold (completed orders)
+        sold = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["delivered", "completed"]}
+        })
+        
+        # In transit (not yet delivered)
+        in_transit = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["dispatched", "in_transit", "out_for_delivery"]}
+        })
+        
+        # Reserved (pending orders)
+        reserved = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["pending", "confirmed", "processing"]}
+        })
+        
+        expected_qty = received - sold - in_transit - reserved
+        
+        # Calculate shrinkage
+        shrinkage = expected_qty - actual_qty
+        shrinkage_percent = (shrinkage / expected_qty * 100) if expected_qty > 0 else 0
+        
+        if abs(shrinkage) > 0:
+            status = "🔴 HIGH" if abs(shrinkage_percent) > 5 else "🟡 MEDIUM" if abs(shrinkage_percent) > 2 else "🔵 LOW"
+            
+            shrinkage_items.append({
+                "master_sku": sku_id,
+                "product_name": sku.get("product_name", ""),
+                "expected_qty": expected_qty,
+                "actual_qty": actual_qty,
+                "shrinkage_qty": shrinkage,
+                "shrinkage_percent": round(shrinkage_percent, 2),
+                "status": status,
+                "breakdown": {
+                    "received": received,
+                    "sold": sold,
+                    "in_transit": in_transit,
+                    "reserved": reserved
+                }
+            })
+    
+    # Sort by shrinkage amount
+    shrinkage_items.sort(key=lambda x: -abs(x["shrinkage_qty"]))
+    
+    total_shrinkage = sum(s["shrinkage_qty"] for s in shrinkage_items)
+    high_shrinkage_count = len([s for s in shrinkage_items if "HIGH" in s["status"]])
+    
+    return {
+        "warehouse_code": warehouse_code or "ALL",
+        "total_skus_with_variance": len(shrinkage_items),
+        "total_shrinkage_units": total_shrinkage,
+        "high_shrinkage_count": high_shrinkage_count,
+        "items": shrinkage_items
+    }
+
+
+# --- AUDIT TRAIL ---
+
+@router.get("/audit-log")
+async def get_audit_log(
+    entity_type: Optional[str] = None,  # "stock_adjustment", "cycle_count", "po", etc.
+    master_sku: Optional[str] = None,
+    user_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get comprehensive audit log of all inventory movements"""
+    logs = []
+    
+    # Stock adjustments
+    if not entity_type or entity_type == "stock_adjustment":
+        query = {}
+        if master_sku:
+            query["master_sku"] = master_sku
+        if user_id:
+            query["created_by"] = user_id
+        if start_date:
+            query["created_at"] = {"$gte": start_date}
+        if end_date:
+            query.setdefault("created_at", {})["$lte"] = end_date
+        
+        adjustments = await db.stock_adjustments.find(query, {"_id": 0}).to_list(None)
+        for adj in adjustments:
+            logs.append({
+                "type": "ADJUSTMENT",
+                "entity_id": adj["id"],
+                "master_sku": adj["master_sku"],
+                "action": adj["adjustment_type"],
+                "quantity_change": adj["quantity_change"],
+                "reason": adj["reason"],
+                "user_id": adj["created_by"],
+                "user_name": adj.get("created_by_name", ""),
+                "timestamp": adj["created_at"]
+            })
+    
+    # Cycle counts
+    if not entity_type or entity_type == "cycle_count":
+        query = {}
+        if start_date:
+            query["created_at"] = {"$gte": start_date}
+        
+        counts = await db.cycle_counts.find(query, {"_id": 0}).to_list(None)
+        for cc in counts:
+            variance_items = [i for i in cc.get("items", []) if i.get("variance", 0) != 0]
+            logs.append({
+                "type": "CYCLE_COUNT",
+                "entity_id": cc["id"],
+                "reference": cc["count_number"],
+                "warehouse": cc["warehouse_code"],
+                "action": cc["status"],
+                "items_counted": cc.get("counted_items", 0),
+                "total_variance": cc.get("total_variance", 0),
+                "user_id": cc["created_by"],
+                "timestamp": cc["created_at"]
+            })
+    
+    # Purchase orders received
+    if not entity_type or entity_type == "po":
+        query = {"status": "received"}
+        if master_sku:
+            query["master_sku"] = master_sku
+        
+        pos = await db.purchase_orders.find(query, {"_id": 0}).to_list(None)
+        for po in pos:
+            logs.append({
+                "type": "PO_RECEIVED",
+                "entity_id": po["id"],
+                "reference": po["po_number"],
+                "master_sku": po["master_sku"],
+                "action": "received",
+                "quantity_change": po.get("received_quantity", po["quantity"]),
+                "user_id": po["created_by"],
+                "timestamp": po.get("received_at", po["created_at"])
+            })
+    
+    # Sort by timestamp
+    logs.sort(key=lambda x: x["timestamp"], reverse=True)
+    
+    # Paginate
+    total = len(logs)
+    logs = logs[skip:skip+limit]
+    
+    return {
+        "items": logs,
+        "total": total
+    }
+
