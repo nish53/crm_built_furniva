@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -8,11 +9,12 @@ import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
 import {
   Plus, Search, Trash2, ShoppingCart, X,
-  Package, Edit, Layers, Tag
+  Package, Edit, Layers, Tag, BarChart3
 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export const Inventory = () => {
+  const navigate = useNavigate();
   const [masterSKUs, setMasterSKUs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -261,9 +263,14 @@ export const Inventory = () => {
           <h1 className="text-3xl font-bold font-[Manrope]">Inventory</h1>
           <p className="text-muted-foreground mt-1">Master SKUs, Platform Listings & Procurement</p>
         </div>
-        <Button onClick={() => setShowCreateForm(true)} data-testid="add-master-sku-btn">
-          <Plus className="w-4 h-4 mr-2" />Add Master SKU
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/inventory/intelligence')}>
+            <BarChart3 className="w-4 h-4 mr-2" />Intelligence
+          </Button>
+          <Button onClick={() => setShowCreateForm(true)} data-testid="add-master-sku-btn">
+            <Plus className="w-4 h-4 mr-2" />Add Master SKU
+          </Button>
+        </div>
       </div>
 
       <div className="relative">

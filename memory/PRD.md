@@ -61,13 +61,10 @@ A comprehensive e-commerce operations management platform for Furniva furniture 
    - Replacement Approval (approve sending new item)
    - Dual status badges on overview tiles (🔄 Pickup | 📦 Shipment)
    - Independent pickup and shipment tracking
-3. **Counter Cards for Replacements**:
-   - Open Replacements (total active)
-   - Replacement Approval (pending new item approval)
-   - Pickup Approval (pending old item pickup approval)
-   - Pickups In Transit (old items being returned)
-   - Shipments Pending (approved but not shipped)
-   - Shipments In Transit (replacements on way to customer)
+3. **Counter Cards for Replacements** (7 tiles):
+   - Open Replacements, Replacement Approval, Pickup Approval
+   - Pickups Pending, Pickups In Transit
+   - Shipments Pending, Shipments In Transit
 4. **Smart CSV Import Duplicate Check**:
    - Multi-item orders (same order_id, different SKUs) → import correctly
    - True duplicates (same order_id + same SKU) → skip automatically
@@ -79,6 +76,31 @@ A comprehensive e-commerce operations management platform for Furniva furniture 
 6. **Streamlined Post-Delivery Return Workflow**:
    - Removed redundant "pickup_in_transit" step
    - Flow: Requested → Accepted → Picked Up (In Transit) → Warehouse Received → Refund Processed → Closed
+
+### Phase 4 - Inventory Intelligence System (Mar 28, 2026) ✅ PHASE 1 COMPLETE
+1. **Bulk CSV Import for SKU Mappings**:
+   - Upload CSV with master_sku, product_name, category, amazon/flipkart/website SKUs
+   - Merge mode (skip existing) or Replace mode (update existing)
+   - Auto-creates platform listings
+   - CSV template download
+2. **Real-Time Stock Buckets**:
+   - Total Procured, Reserved (pending orders), In Transit, Sold
+   - Available (sellable), Damaged/Blocked, Restockable Returns
+   - ATP (Available to Promise) calculation
+3. **Inventory Aging Analysis**:
+   - 5 aging buckets: 0-30 (Fast), 31-60 (Normal), 61-90 (Slow), 91-180 (Stale), 180+ (Dead)
+   - Per-SKU days since last sale
+   - 30-day sales velocity
+   - Suggested actions per bucket
+4. **Stockout Alerts**:
+   - 7-day threshold alerts
+   - Critical/High/Medium priority
+   - Current stock, avg daily sales, days to stockout
+   - Suggested reorder quantity
+5. **Inventory Intelligence Dashboard**:
+   - Summary cards: Total SKUs, Categories, Stale Stock, Dead Stock, Alerts
+   - 4 tabs: Dashboard, Stock Buckets, Aging Analysis, Stockout Alerts
+   - Accessible from Inventory page via "Intelligence" button
 
 ### Bug Fixes (Feb 26, 2026)
 1. Fixed corrupted models.py - duplicate class fields in ProcurementBatchCreate and ChannelCreate

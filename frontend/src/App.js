@@ -10,6 +10,7 @@ import { NewOrder } from './pages/NewOrder';
 import { WhatsAppCRM } from './pages/WhatsAppCRM';
 import { Tasks } from './pages/Tasks';
 import { Inventory } from './pages/Inventory';
+import { InventoryIntelligence } from './pages/InventoryIntelligence';
 import { Analytics } from './pages/Analytics';
 import { ImportWizard } from './pages/ImportWizard';
 import { HistoricalImport } from './pages/HistoricalImport';
@@ -97,6 +98,7 @@ function App() {
             <Route path="whatsapp" element={<WhatsAppCRM />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="inventory" element={<Inventory />} />
+            <Route path="inventory/intelligence" element={<InventoryIntelligence />} />
             <Route path="analytics" element={<Analytics />} />
             <Route
               path="team"
