@@ -37,6 +37,7 @@ class OrderChannel(str, Enum):
     WEBSITE = "website"
     PHONE = "phone"
     HISTORICAL = "historical"
+    TEST = "test"  # For testing purposes
 
 class TaskStatus(str, Enum):
     PENDING = "pending"
