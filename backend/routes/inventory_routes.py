@@ -29,11 +29,18 @@ async def bulk_import_sku_csv(
     db = Depends(get_database)
 ):
     """
-    Bulk import Master SKU mappings from CSV.
+    Bulk import Master SKU mappings and Platform Listings from CSV.
+    
+    Supports MULTIPLE listings per master SKU - just add multiple rows with same master_sku.
     
     Expected CSV columns:
-    master_sku, product_name, category, amazon_sku, amazon_asin, 
-    flipkart_sku, flipkart_fsn, website_sku, cost_price, selling_price
+    master_sku, product_name, category, platform, platform_sku, platform_product_id, 
+    listing_title, cost_price, selling_price
+    
+    Example rows:
+    FRN-001, Shoe Rack, Storage, amazon, AMZ-001, B08XYZ123, Shoe Rack 3 Tier, 1500, 2999
+    FRN-001, Shoe Rack, Storage, amazon, AMZ-002, B09ABC456, Shoe Rack Premium, 1500, 3499
+    FRN-001, Shoe Rack, Storage, flipkart, FK-001, FSRACK001, Shoe Rack 3 Tier, 1500, 2899
     """
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are supported")
@@ -42,137 +49,164 @@ async def bulk_import_sku_csv(
     decoded = content.decode('utf-8')
     reader = csv.DictReader(io.StringIO(decoded))
     
-    imported = 0
-    updated = 0
-    skipped = 0
+    master_skus_created = 0
+    master_skus_updated = 0
+    listings_created = 0
+    listings_skipped = 0
     errors = []
     
-    for row_num, row in enumerate(reader, start=2):  # Start from 2 (header is row 1)
+    # Track processed master SKUs to avoid duplicates
+    processed_master_skus = set()
+    
+    for row_num, row in enumerate(reader, start=2):
         try:
             master_sku = row.get('master_sku', '').strip()
             product_name = row.get('product_name', '').strip()
+            platform = row.get('platform', '').strip().lower()
             
             if not master_sku:
                 errors.append({"row": row_num, "error": "master_sku is required"})
                 continue
             
-            if not product_name:
-                errors.append({"row": row_num, "error": "product_name is required"})
-                continue
-            
-            # Build mapping dict
-            mapping_dict = {
-                "master_sku": master_sku,
-                "product_name": product_name,
-                "category": row.get('category', '').strip() or None,
-                "amazon_sku": row.get('amazon_sku', '').strip() or None,
-                "amazon_asin": row.get('amazon_asin', '').strip() or None,
-                "flipkart_sku": row.get('flipkart_sku', '').strip() or None,
-                "flipkart_fsn": row.get('flipkart_fsn', '').strip() or None,
-                "website_sku": row.get('website_sku', '').strip() or None,
-                "cost_price": float(row.get('cost_price', 0) or 0) if row.get('cost_price') else None,
-                "selling_price": float(row.get('selling_price', 0) or 0) if row.get('selling_price') else None,
-            }
-            
-            # Check if exists
-            existing = await db.master_sku_mappings.find_one({"master_sku": master_sku})
-            
-            if existing:
-                if mode == "replace":
-                    mapping_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
-                    await db.master_sku_mappings.update_one(
-                        {"master_sku": master_sku},
-                        {"$set": mapping_dict}
-                    )
-                    updated += 1
-                else:
-                    skipped += 1
-            else:
-                mapping_dict["id"] = str(uuid.uuid4())
-                mapping_dict["created_at"] = datetime.now(timezone.utc).isoformat()
-                await db.master_sku_mappings.insert_one(mapping_dict)
+            # Create/Update Master SKU (only once per unique master_sku)
+            if master_sku not in processed_master_skus:
+                if not product_name:
+                    errors.append({"row": row_num, "error": "product_name is required for new master_sku"})
+                    continue
                 
-                # Auto-create platform listings
-                await _create_platform_listings(db, mapping_dict)
-                imported += 1
+                existing_master = await db.master_sku_mappings.find_one({"master_sku": master_sku})
+                
+                if existing_master:
+                    if mode == "replace":
+                        await db.master_sku_mappings.update_one(
+                            {"master_sku": master_sku},
+                            {"$set": {
+                                "product_name": product_name,
+                                "category": row.get('category', '').strip() or None,
+                                "cost_price": float(row.get('cost_price', 0) or 0) if row.get('cost_price') else None,
+                                "selling_price": float(row.get('selling_price', 0) or 0) if row.get('selling_price') else None,
+                                "updated_at": datetime.now(timezone.utc).isoformat()
+                            }}
+                        )
+                        master_skus_updated += 1
+                else:
+                    # Create new master SKU
+                    await db.master_sku_mappings.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "master_sku": master_sku,
+                        "product_name": product_name,
+                        "category": row.get('category', '').strip() or None,
+                        "cost_price": float(row.get('cost_price', 0) or 0) if row.get('cost_price') else None,
+                        "selling_price": float(row.get('selling_price', 0) or 0) if row.get('selling_price') else None,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    })
+                    master_skus_created += 1
+                
+                processed_master_skus.add(master_sku)
+            
+            # Create Platform Listing (if platform specified)
+            if platform:
+                platform_sku = row.get('platform_sku', '').strip() or None
+                platform_product_id = row.get('platform_product_id', '').strip() or None
+                listing_title = row.get('listing_title', '').strip() or None
+                
+                # Check for duplicate listing (same master_sku + platform + platform_sku + platform_product_id)
+                existing_listing = await db.platform_listings.find_one({
+                    "master_sku": master_sku,
+                    "platform": platform,
+                    "platform_sku": platform_sku,
+                    "platform_product_id": platform_product_id
+                })
+                
+                if existing_listing:
+                    if mode == "replace":
+                        await db.platform_listings.update_one(
+                            {"id": existing_listing["id"]},
+                            {"$set": {
+                                "listing_title": listing_title,
+                                "updated_at": datetime.now(timezone.utc).isoformat()
+                            }}
+                        )
+                    listings_skipped += 1
+                else:
+                    # Create new listing
+                    await db.platform_listings.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "master_sku": master_sku,
+                        "platform": platform,
+                        "platform_sku": platform_sku,
+                        "platform_product_id": platform_product_id,
+                        "listing_title": listing_title,
+                        "is_active": True,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    })
+                    listings_created += 1
                 
         except Exception as e:
             errors.append({"row": row_num, "error": str(e)})
     
     return {
         "success": True,
-        "imported": imported,
-        "updated": updated,
-        "skipped": skipped,
-        "errors": errors[:20],  # Limit errors shown
+        "master_skus_created": master_skus_created,
+        "master_skus_updated": master_skus_updated,
+        "listings_created": listings_created,
+        "listings_skipped": listings_skipped,
+        "errors": errors[:20],
         "total_errors": len(errors),
         "mode": mode
     }
 
-async def _create_platform_listings(db, mapping: dict):
-    """Helper to create platform listings from mapping"""
-    master_sku = mapping["master_sku"]
-    
-    # Amazon
-    if mapping.get("amazon_sku") or mapping.get("amazon_asin"):
-        listing = {
-            "id": str(uuid.uuid4()),
-            "master_sku": master_sku,
-            "platform": "amazon",
-            "platform_sku": mapping.get("amazon_sku") or "",
-            "platform_product_id": mapping.get("amazon_asin") or "",
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.platform_listings.insert_one(listing)
-    
-    # Flipkart
-    if mapping.get("flipkart_sku") or mapping.get("flipkart_fsn"):
-        listing = {
-            "id": str(uuid.uuid4()),
-            "master_sku": master_sku,
-            "platform": "flipkart",
-            "platform_sku": mapping.get("flipkart_sku") or "",
-            "platform_product_id": mapping.get("flipkart_fsn") or "",
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.platform_listings.insert_one(listing)
-    
-    # Website
-    if mapping.get("website_sku"):
-        listing = {
-            "id": str(uuid.uuid4()),
-            "master_sku": master_sku,
-            "platform": "website",
-            "platform_sku": mapping.get("website_sku") or "",
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
-        await db.platform_listings.insert_one(listing)
-
 @router.get("/csv-template")
 async def get_csv_template():
-    """Get CSV template for bulk SKU import"""
+    """Get CSV template for bulk SKU import with multiple listings support"""
     return {
+        "description": "One master SKU can have MULTIPLE listings. Add multiple rows with same master_sku for different platform listings.",
         "columns": [
             "master_sku", "product_name", "category", 
-            "amazon_sku", "amazon_asin",
-            "flipkart_sku", "flipkart_fsn", "website_sku",
+            "platform", "platform_sku", "platform_product_id", "listing_title",
             "cost_price", "selling_price"
         ],
-        "example_row": {
-            "master_sku": "FRN-SR-001",
-            "product_name": "Shoe Rack 3 Tier",
-            "category": "Storage",
-            "amazon_sku": "SR-AMZ-001",
-            "amazon_asin": "B08XYZ123",
-            "flipkart_sku": "SR-FK-001",
-            "flipkart_fsn": "FKSRACK001",
-            "website_sku": "SR-WEB-001",
-            "cost_price": "1500",
-            "selling_price": "2999"
-        }
+        "example_rows": [
+            {
+                "master_sku": "FRN-SR-001",
+                "product_name": "Shoe Rack 3 Tier",
+                "category": "Storage",
+                "platform": "amazon",
+                "platform_sku": "AMZ-SR-001",
+                "platform_product_id": "B08XYZ123",
+                "listing_title": "Shoe Rack 3 Tier - Black",
+                "cost_price": "1500",
+                "selling_price": "2999"
+            },
+            {
+                "master_sku": "FRN-SR-001",
+                "product_name": "Shoe Rack 3 Tier",
+                "category": "Storage",
+                "platform": "amazon",
+                "platform_sku": "AMZ-SR-002",
+                "platform_product_id": "B09ABC456",
+                "listing_title": "Shoe Rack 3 Tier - White",
+                "cost_price": "1500",
+                "selling_price": "3199"
+            },
+            {
+                "master_sku": "FRN-SR-001",
+                "product_name": "Shoe Rack 3 Tier",
+                "category": "Storage",
+                "platform": "flipkart",
+                "platform_sku": "FK-SR-001",
+                "platform_product_id": "FSRACK001",
+                "listing_title": "Shoe Rack 3 Tier",
+                "cost_price": "1500",
+                "selling_price": "2899"
+            }
+        ],
+        "notes": [
+            "Same master_sku can appear in multiple rows for different listings",
+            "platform: amazon, flipkart, website, meesho, etc.",
+            "platform_sku: Your seller SKU on that platform",
+            "platform_product_id: ASIN for Amazon, FSN for Flipkart, etc."
+        ]
     }
 
 
@@ -955,5 +989,371 @@ async def get_courier_damage_analysis(
         "total_couriers": len(courier_analysis),
         "high_damage_couriers": len([c for c in courier_analysis if "HIGH" in c["status"]]),
         "analysis": courier_analysis
+    }
+
+
+# ============================================
+# PHASE 3: AUTOMATION ENGINE
+# ============================================
+
+@router.post("/auto-create-po")
+async def auto_create_purchase_order(
+    master_sku: str,
+    quantity: int,
+    supplier_name: Optional[str] = None,
+    notes: Optional[str] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Auto-create a Purchase Order based on intelligent suggestions.
+    """
+    # Verify SKU exists
+    sku = await db.master_sku_mappings.find_one({"master_sku": master_sku})
+    if not sku:
+        raise HTTPException(status_code=404, detail="Master SKU not found")
+    
+    po_id = str(uuid.uuid4())
+    po_number = f"PO-{datetime.now().strftime('%Y%m%d')}-{po_id[:6].upper()}"
+    
+    po = {
+        "id": po_id,
+        "po_number": po_number,
+        "master_sku": master_sku,
+        "product_name": sku.get("product_name", ""),
+        "quantity": quantity,
+        "unit_cost": sku.get("cost_price", 0) or 0,
+        "total_cost": quantity * (sku.get("cost_price", 0) or 0),
+        "supplier_name": supplier_name or "Default Supplier",
+        "status": "pending",
+        "notes": notes or "Auto-generated by Purchase Intelligence",
+        "created_by": current_user.id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expected_delivery": (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()
+    }
+    
+    await db.purchase_orders.insert_one(po)
+    
+    return {
+        "success": True,
+        "po_number": po_number,
+        "purchase_order": po
+    }
+
+
+@router.get("/purchase-orders")
+async def get_purchase_orders(
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get all purchase orders"""
+    query = {}
+    if status:
+        query["status"] = status
+    
+    pos = await db.purchase_orders.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.purchase_orders.count_documents(query)
+    
+    return {
+        "items": pos,
+        "total": total
+    }
+
+
+@router.patch("/purchase-orders/{po_id}/status")
+async def update_po_status(
+    po_id: str,
+    status: str,
+    received_quantity: Optional[int] = None,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Update purchase order status (pending, confirmed, shipped, received, cancelled)"""
+    po = await db.purchase_orders.find_one({"id": po_id})
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+    
+    update = {
+        "status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if status == "received" and received_quantity:
+        update["received_quantity"] = received_quantity
+        update["received_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Create procurement batch entry
+        await db.procurement_batches.insert_one({
+            "id": str(uuid.uuid4()),
+            "master_sku": po["master_sku"],
+            "quantity": received_quantity,
+            "unit_cost": po.get("unit_cost", 0),
+            "total_cost": received_quantity * po.get("unit_cost", 0),
+            "supplier": po.get("supplier_name"),
+            "po_number": po.get("po_number"),
+            "procurement_date": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    
+    await db.purchase_orders.update_one({"id": po_id}, {"$set": update})
+    
+    return {"success": True, "status": status}
+
+
+@router.get("/liquidation-suggestions")
+async def get_liquidation_suggestions(
+    min_age_days: int = Query(90, description="Minimum age for liquidation"),
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Get liquidation suggestions for slow/dead stock.
+    Suggests price drops, bundling, or clearance actions.
+    """
+    now = datetime.now(timezone.utc)
+    skus = await db.master_sku_mappings.find({}, {"_id": 0}).to_list(None)
+    
+    suggestions = []
+    
+    for sku in skus:
+        sku_id = sku["master_sku"]
+        
+        # Get last sale date
+        last_order = await db.orders.find_one(
+            {"master_sku": sku_id, "status": {"$in": ["delivered", "completed"]}},
+            {"order_date": 1},
+            sort=[("order_date", -1)]
+        )
+        
+        if last_order and last_order.get("order_date"):
+            try:
+                last_sale = datetime.fromisoformat(str(last_order["order_date"]).replace("Z", "+00:00"))
+                age_days = (now - last_sale).days
+            except:
+                age_days = 999
+        else:
+            age_days = 999
+        
+        if age_days < min_age_days:
+            continue
+        
+        # Get current stock
+        procurement = await db.procurement_batches.aggregate([
+            {"$match": {"master_sku": sku_id}},
+            {"$group": {"_id": None, "total": {"$sum": "$quantity"}}}
+        ]).to_list(1)
+        total_procured = procurement[0]["total"] if procurement else 0
+        
+        sold = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["delivered", "completed", "dispatched"]}
+        })
+        current_stock = max(0, total_procured - sold)
+        
+        if current_stock == 0:
+            continue
+        
+        # Calculate suggested discount
+        cost_price = sku.get("cost_price", 0) or 0
+        selling_price = sku.get("selling_price", 0) or 0
+        
+        if age_days > 180:
+            suggested_discount = 40  # Aggressive
+            action = "🔴 LIQUIDATE NOW - Wholesale or 40% off clearance"
+            priority = "CRITICAL"
+        elif age_days > 120:
+            suggested_discount = 25
+            action = "🟠 CLEARANCE SALE - 25% off + Bundle offers"
+            priority = "HIGH"
+        else:
+            suggested_discount = 15
+            action = "🟡 PRICE DROP - 15% discount recommended"
+            priority = "MEDIUM"
+        
+        suggested_price = selling_price * (1 - suggested_discount/100)
+        potential_loss = (cost_price - suggested_price) * current_stock if suggested_price < cost_price else 0
+        
+        suggestions.append({
+            "master_sku": sku_id,
+            "product_name": sku.get("product_name", ""),
+            "category": sku.get("category", ""),
+            "age_days": age_days,
+            "current_stock": current_stock,
+            "cost_price": cost_price,
+            "current_price": selling_price,
+            "suggested_discount_percent": suggested_discount,
+            "suggested_price": round(suggested_price, 2),
+            "potential_loss": round(potential_loss, 2),
+            "stock_value": current_stock * cost_price,
+            "priority": priority,
+            "suggested_action": action
+        })
+    
+    # Sort by age
+    suggestions.sort(key=lambda x: -x["age_days"])
+    
+    total_stock_value = sum(s["stock_value"] for s in suggestions)
+    
+    return {
+        "min_age_days": min_age_days,
+        "total_items": len(suggestions),
+        "total_stock_value": total_stock_value,
+        "critical_count": len([s for s in suggestions if s["priority"] == "CRITICAL"]),
+        "high_count": len([s for s in suggestions if s["priority"] == "HIGH"]),
+        "suggestions": suggestions
+    }
+
+
+@router.get("/smart-alerts")
+async def get_smart_alerts(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Get all smart alerts for inventory management.
+    Combines stockout, aging, and return alerts.
+    """
+    now = datetime.now(timezone.utc)
+    thirty_days_ago = (now - timedelta(days=30)).isoformat()
+    
+    alerts = []
+    
+    skus = await db.master_sku_mappings.find({}, {"_id": 0}).to_list(None)
+    
+    for sku in skus:
+        sku_id = sku["master_sku"]
+        
+        # Stock data
+        procurement = await db.procurement_batches.aggregate([
+            {"$match": {"master_sku": sku_id}},
+            {"$group": {"_id": None, "total": {"$sum": "$quantity"}}}
+        ]).to_list(1)
+        total_procured = procurement[0]["total"] if procurement else 0
+        
+        sold = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["delivered", "completed", "dispatched", "in_transit"]}
+        })
+        reserved = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["pending", "confirmed", "processing"]}
+        })
+        current_stock = max(0, total_procured - sold - reserved)
+        
+        # Sales data
+        recent_sales = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["delivered", "completed"]},
+            "order_date": {"$gte": thirty_days_ago}
+        })
+        daily_avg = recent_sales / 30 if recent_sales > 0 else 0
+        
+        # ALERT 1: Stockout Warning
+        if daily_avg > 0:
+            days_to_stockout = current_stock / daily_avg
+            if days_to_stockout <= 7:
+                alerts.append({
+                    "type": "STOCKOUT",
+                    "priority": "🔴 CRITICAL" if days_to_stockout <= 3 else "🟠 HIGH",
+                    "master_sku": sku_id,
+                    "product_name": sku.get("product_name", ""),
+                    "message": f"Will stockout in {round(days_to_stockout, 1)} days",
+                    "current_stock": current_stock,
+                    "daily_avg_sales": round(daily_avg, 2),
+                    "action": "Create PO immediately"
+                })
+        
+        # ALERT 2: Dead Stock
+        last_order = await db.orders.find_one(
+            {"master_sku": sku_id, "status": {"$in": ["delivered", "completed"]}},
+            {"order_date": 1},
+            sort=[("order_date", -1)]
+        )
+        
+        if last_order and last_order.get("order_date"):
+            try:
+                last_sale = datetime.fromisoformat(str(last_order["order_date"]).replace("Z", "+00:00"))
+                age_days = (now - last_sale).days
+                if age_days > 90 and current_stock > 0:
+                    alerts.append({
+                        "type": "DEAD_STOCK",
+                        "priority": "🔴 CRITICAL" if age_days > 180 else "🟠 HIGH" if age_days > 120 else "🟡 MEDIUM",
+                        "master_sku": sku_id,
+                        "product_name": sku.get("product_name", ""),
+                        "message": f"No sales in {age_days} days",
+                        "current_stock": current_stock,
+                        "age_days": age_days,
+                        "action": "Consider liquidation"
+                    })
+            except:
+                pass
+        
+        # ALERT 3: High Return Rate
+        total_orders = await db.orders.count_documents({
+            "master_sku": sku_id,
+            "status": {"$in": ["delivered", "completed"]}
+        })
+        total_returns = await db.return_requests.count_documents({"master_sku": sku_id})
+        
+        if total_orders > 5:  # Minimum sample size
+            return_rate = (total_returns / total_orders * 100)
+            if return_rate > 10:
+                alerts.append({
+                    "type": "HIGH_RETURNS",
+                    "priority": "🔴 CRITICAL" if return_rate > 20 else "🟠 HIGH",
+                    "master_sku": sku_id,
+                    "product_name": sku.get("product_name", ""),
+                    "message": f"Return rate: {round(return_rate, 1)}%",
+                    "total_orders": total_orders,
+                    "total_returns": total_returns,
+                    "action": "Investigate quality issues"
+                })
+    
+    # Sort by priority
+    priority_order = {"🔴 CRITICAL": 0, "🟠 HIGH": 1, "🟡 MEDIUM": 2}
+    alerts.sort(key=lambda x: priority_order.get(x["priority"], 3))
+    
+    return {
+        "total_alerts": len(alerts),
+        "critical": len([a for a in alerts if "CRITICAL" in a["priority"]]),
+        "high": len([a for a in alerts if "HIGH" in a["priority"]]),
+        "by_type": {
+            "stockout": len([a for a in alerts if a["type"] == "STOCKOUT"]),
+            "dead_stock": len([a for a in alerts if a["type"] == "DEAD_STOCK"]),
+            "high_returns": len([a for a in alerts if a["type"] == "HIGH_RETURNS"])
+        },
+        "alerts": alerts
+    }
+
+
+@router.get("/listings-by-sku/{master_sku}")
+async def get_listings_by_sku(
+    master_sku: str,
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """Get all platform listings for a master SKU"""
+    listings = await db.platform_listings.find(
+        {"master_sku": master_sku},
+        {"_id": 0}
+    ).to_list(None)
+    
+    # Group by platform
+    by_platform = {}
+    for listing in listings:
+        platform = listing.get("platform", "unknown")
+        if platform not in by_platform:
+            by_platform[platform] = []
+        by_platform[platform].append(listing)
+    
+    return {
+        "master_sku": master_sku,
+        "total_listings": len(listings),
+        "platforms": list(by_platform.keys()),
+        "by_platform": by_platform,
+        "listings": listings
     }
 

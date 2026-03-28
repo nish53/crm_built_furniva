@@ -20,6 +20,9 @@ export const InventoryIntelligence = () => {
   const [demandForecast, setDemandForecast] = useState(null);
   const [purchaseSuggestions, setPurchaseSuggestions] = useState(null);
   const [returnAnalysis, setReturnAnalysis] = useState(null);
+  const [liquidationSuggestions, setLiquidationSuggestions] = useState(null);
+  const [smartAlerts, setSmartAlerts] = useState(null);
+  const [purchaseOrders, setPurchaseOrders] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
@@ -93,6 +96,44 @@ export const InventoryIntelligence = () => {
     }
   };
 
+  const fetchLiquidationSuggestions = async () => {
+    try {
+      const res = await api.get('/inventory/liquidation-suggestions?min_age_days=90');
+      setLiquidationSuggestions(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch liquidation suggestions');
+    }
+  };
+
+  const fetchSmartAlerts = async () => {
+    try {
+      const res = await api.get('/inventory/smart-alerts');
+      setSmartAlerts(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch smart alerts');
+    }
+  };
+
+  const fetchPurchaseOrders = async () => {
+    try {
+      const res = await api.get('/inventory/purchase-orders');
+      setPurchaseOrders(res.data);
+    } catch (err) {
+      toast.error('Failed to fetch purchase orders');
+    }
+  };
+
+  const createPO = async (masterSku, quantity) => {
+    try {
+      const res = await api.post(`/inventory/auto-create-po?master_sku=${masterSku}&quantity=${quantity}`);
+      toast.success(`PO ${res.data.po_number} created!`);
+      fetchPurchaseOrders();
+      fetchPurchaseSuggestions();
+    } catch (err) {
+      toast.error('Failed to create PO');
+    }
+  };
+
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     if (tab === 'stock' && !stockSummary) fetchStockSummary();
@@ -101,6 +142,9 @@ export const InventoryIntelligence = () => {
     if (tab === 'forecast' && !demandForecast) fetchDemandForecast();
     if (tab === 'purchase' && !purchaseSuggestions) fetchPurchaseSuggestions();
     if (tab === 'returns' && !returnAnalysis) fetchReturnAnalysis();
+    if (tab === 'liquidation' && !liquidationSuggestions) fetchLiquidationSuggestions();
+    if (tab === 'smartalerts' && !smartAlerts) fetchSmartAlerts();
+    if (tab === 'pos' && !purchaseOrders) fetchPurchaseOrders();
   };
 
   const handleFileUpload = async (event) => {
@@ -242,14 +286,17 @@ export const InventoryIntelligence = () => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10">
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="stock">Stock</TabsTrigger>
           <TabsTrigger value="aging">Aging</TabsTrigger>
-          <TabsTrigger value="alerts">Alerts</TabsTrigger>
+          <TabsTrigger value="alerts">Stockout</TabsTrigger>
           <TabsTrigger value="forecast">Forecast</TabsTrigger>
           <TabsTrigger value="purchase">Purchase</TabsTrigger>
           <TabsTrigger value="returns">Returns</TabsTrigger>
+          <TabsTrigger value="liquidation">Liquidate</TabsTrigger>
+          <TabsTrigger value="smartalerts">All Alerts</TabsTrigger>
+          <TabsTrigger value="pos">POs</TabsTrigger>
         </TabsList>
 
         {/* Dashboard Tab */}
@@ -692,6 +739,13 @@ export const InventoryIntelligence = () => {
                               <p className="text-xs text-muted-foreground">Order Qty</p>
                               <p className="text-2xl font-bold text-green-600">{item.suggested_order_qty}</p>
                               <p className="text-sm text-muted-foreground">≈ ₹{item.estimated_cost?.toLocaleString()}</p>
+                              <Button 
+                                size="sm" 
+                                className="mt-2"
+                                onClick={() => createPO(item.master_sku, item.suggested_order_qty)}
+                              >
+                                Create PO
+                              </Button>
                             </div>
                           </div>
                         </div>
@@ -793,6 +847,243 @@ export const InventoryIntelligence = () => {
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   Click Refresh to load return analysis
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Liquidation Suggestions Tab */}
+        <TabsContent value="liquidation">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-orange-500" />
+                Liquidation Suggestions
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={fetchLiquidationSuggestions}>
+                <RefreshCcw className="w-4 h-4 mr-2" />Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {liquidationSuggestions ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-4 gap-4 mb-6">
+                    <div className="bg-secondary/30 p-3 rounded-lg text-center">
+                      <p className="text-xs text-muted-foreground">Items to Liquidate</p>
+                      <p className="text-xl font-bold">{liquidationSuggestions.total_items}</p>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-lg text-center border border-red-200">
+                      <p className="text-xs text-muted-foreground">Critical</p>
+                      <p className="text-xl font-bold text-red-700">{liquidationSuggestions.critical_count}</p>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg text-center border border-orange-200">
+                      <p className="text-xs text-muted-foreground">High Priority</p>
+                      <p className="text-xl font-bold text-orange-700">{liquidationSuggestions.high_count}</p>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg text-center border border-purple-200">
+                      <p className="text-xs text-muted-foreground">Total Stock Value</p>
+                      <p className="text-xl font-bold text-purple-700">₹{liquidationSuggestions.total_stock_value?.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {liquidationSuggestions.suggestions.length > 0 ? (
+                    <div className="space-y-3">
+                      {liquidationSuggestions.suggestions.map((item, idx) => (
+                        <div key={idx} className={`p-4 rounded-lg border ${
+                          item.priority === 'CRITICAL' ? 'bg-red-50 border-red-200' :
+                          item.priority === 'HIGH' ? 'bg-orange-50 border-orange-200' :
+                          'bg-yellow-50 border-yellow-200'
+                        }`}>
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="font-mono text-sm font-medium">{item.master_sku}</span>
+                                <Badge className={
+                                  item.priority === 'CRITICAL' ? 'bg-red-600' :
+                                  item.priority === 'HIGH' ? 'bg-orange-600' : 'bg-yellow-600'
+                                }>{item.priority}</Badge>
+                                <Badge variant="outline">{item.age_days} days old</Badge>
+                              </div>
+                              <p className="text-sm">{item.product_name}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{item.suggested_action}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-muted-foreground">Stock: {item.current_stock}</p>
+                              <p className="text-sm line-through text-muted-foreground">₹{item.current_price}</p>
+                              <p className="text-lg font-bold text-green-600">₹{item.suggested_price}</p>
+                              <p className="text-xs text-red-500">-{item.suggested_discount_percent}%</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                      <p className="text-muted-foreground">No items need liquidation!</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Click Refresh to load liquidation suggestions
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Smart Alerts Tab */}
+        <TabsContent value="smartalerts">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+                All Smart Alerts
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={fetchSmartAlerts}>
+                <RefreshCcw className="w-4 h-4 mr-2" />Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {smartAlerts ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-5 gap-4 mb-6">
+                    <div className="bg-secondary/30 p-3 rounded-lg text-center">
+                      <p className="text-xs text-muted-foreground">Total Alerts</p>
+                      <p className="text-xl font-bold">{smartAlerts.total_alerts}</p>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-lg text-center border border-red-200">
+                      <p className="text-xs text-muted-foreground">Critical</p>
+                      <p className="text-xl font-bold text-red-700">{smartAlerts.critical}</p>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg text-center border border-orange-200">
+                      <p className="text-xs text-muted-foreground">High</p>
+                      <p className="text-xl font-bold text-orange-700">{smartAlerts.high}</p>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg text-center border border-blue-200">
+                      <p className="text-xs text-muted-foreground">Stockout</p>
+                      <p className="text-xl font-bold text-blue-700">{smartAlerts.by_type?.stockout || 0}</p>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg text-center border border-purple-200">
+                      <p className="text-xs text-muted-foreground">Dead Stock</p>
+                      <p className="text-xl font-bold text-purple-700">{smartAlerts.by_type?.dead_stock || 0}</p>
+                    </div>
+                  </div>
+
+                  {smartAlerts.alerts.length > 0 ? (
+                    <div className="space-y-3">
+                      {smartAlerts.alerts.map((alert, idx) => (
+                        <div key={idx} className={`p-4 rounded-lg border ${
+                          alert.priority.includes('CRITICAL') ? 'bg-red-50 border-red-200' :
+                          alert.priority.includes('HIGH') ? 'bg-orange-50 border-orange-200' :
+                          'bg-yellow-50 border-yellow-200'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Badge className={
+                                  alert.type === 'STOCKOUT' ? 'bg-blue-600' :
+                                  alert.type === 'DEAD_STOCK' ? 'bg-purple-600' : 'bg-orange-600'
+                                }>{alert.type.replace('_', ' ')}</Badge>
+                                <span className="font-mono text-sm font-medium">{alert.master_sku}</span>
+                                <Badge variant="outline">{alert.priority}</Badge>
+                              </div>
+                              <p className="text-sm">{alert.product_name}</p>
+                              <p className="text-sm font-medium mt-1">{alert.message}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-muted-foreground">{alert.action}</p>
+                              {alert.current_stock !== undefined && (
+                                <p className="text-sm">Stock: {alert.current_stock}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                      <p className="text-muted-foreground">No alerts! Everything looks good.</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Click Refresh to load all alerts
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Purchase Orders Tab */}
+        <TabsContent value="pos">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5" />
+                Purchase Orders
+              </CardTitle>
+              <Button variant="outline" size="sm" onClick={fetchPurchaseOrders}>
+                <RefreshCcw className="w-4 h-4 mr-2" />Refresh
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {purchaseOrders ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">Total POs: {purchaseOrders.total}</p>
+                  
+                  {purchaseOrders.items.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-secondary/30">
+                          <tr>
+                            <th className="text-left p-2">PO Number</th>
+                            <th className="text-left p-2">SKU</th>
+                            <th className="text-left p-2">Product</th>
+                            <th className="text-center p-2">Qty</th>
+                            <th className="text-center p-2">Total Cost</th>
+                            <th className="text-center p-2">Status</th>
+                            <th className="text-left p-2">Supplier</th>
+                            <th className="text-left p-2">Created</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {purchaseOrders.items.map((po, idx) => (
+                            <tr key={idx} className="border-b hover:bg-secondary/10">
+                              <td className="p-2 font-mono text-xs">{po.po_number}</td>
+                              <td className="p-2 font-mono text-xs">{po.master_sku}</td>
+                              <td className="p-2">{po.product_name}</td>
+                              <td className="p-2 text-center font-bold">{po.quantity}</td>
+                              <td className="p-2 text-center">₹{po.total_cost?.toLocaleString()}</td>
+                              <td className="p-2 text-center">
+                                <Badge className={
+                                  po.status === 'received' ? 'bg-green-600' :
+                                  po.status === 'shipped' ? 'bg-blue-600' :
+                                  po.status === 'confirmed' ? 'bg-purple-600' :
+                                  po.status === 'cancelled' ? 'bg-red-600' :
+                                  'bg-yellow-600'
+                                }>{po.status}</Badge>
+                              </td>
+                              <td className="p-2">{po.supplier_name}</td>
+                              <td className="p-2 text-xs">{po.created_at?.split('T')[0]}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No purchase orders yet. Create one from the Purchase tab.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  Click Refresh to load purchase orders
                 </div>
               )}
             </CardContent>

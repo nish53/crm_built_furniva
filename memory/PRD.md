@@ -77,49 +77,32 @@ A comprehensive e-commerce operations management platform for Furniva furniture 
    - Removed redundant "pickup_in_transit" step
    - Flow: Requested → Accepted → Picked Up (In Transit) → Warehouse Received → Refund Processed → Closed
 
-### Phase 4 - Inventory Intelligence System (Mar 28, 2026) ✅ PHASE 1 & 2 COMPLETE
+### Phase 4 - Inventory Intelligence System (Mar 28, 2026) ✅ PHASE 1, 2 & 3 COMPLETE
+
 **Phase 1 - Core Analytics:**
-1. **Bulk CSV Import for SKU Mappings**:
-   - Upload CSV with master_sku, product_name, category, amazon/flipkart/website SKUs
-   - Merge mode (skip existing) or Replace mode (update existing)
-   - Auto-creates platform listings
-   - CSV template download
-2. **Real-Time Stock Buckets**:
-   - Total Procured, Reserved (pending orders), In Transit, Sold
-   - Available (sellable), Damaged/Blocked, Restockable Returns
-   - ATP (Available to Promise) calculation
-3. **Inventory Aging Analysis**:
-   - 5 aging buckets: 0-30 (Fast), 31-60 (Normal), 61-90 (Slow), 91-180 (Stale), 180+ (Dead)
-   - Per-SKU days since last sale
-   - 30-day sales velocity
-   - Suggested actions per bucket
-4. **Stockout Alerts**:
-   - 7-day threshold alerts
-   - Critical/High/Medium priority
-   - Current stock, avg daily sales, days to stockout
-   - Suggested reorder quantity
+1. **Bulk CSV Import** (supports MULTIPLE listings per master SKU)
+2. **Real-Time Stock Buckets** (Reserved, Available, In Transit, Damaged)
+3. **Inventory Aging Analysis** (5 age buckets with suggested actions)
+4. **Stockout Alerts** (7-day threshold with priority levels)
 
 **Phase 2 - Intelligence:**
-5. **Demand Forecasting**:
-   - 30-day SKU-level forecasting
-   - Weighted moving average (recent data weighted higher)
-   - Seasonal multipliers (Diwali 2x, New Year 1.5x, Summer 0.8x)
-   - Days to stockout calculation
-   - Reorder flag
-6. **Purchase Intelligence**:
-   - Smart order quantity formula: (forecast + buffer) - current stock
-   - 14-day lead time assumption
-   - Urgency levels: URGENT (≤7d), HIGH (≤14d), MEDIUM (≤21d), LOW
-   - Estimated cost per suggestion
-   - Total PO cost summary
-7. **Return & Damage Analysis**:
-   - SKU-level return rate analysis
-   - Top return reasons per SKU
-   - Condition breakdown (mint/damaged/defective)
-   - Problem SKU flagging (>10% return rate or >20% damage)
-   - Watch SKU flagging (>5% return rate)
+5. **Demand Forecasting** (30-day, seasonal multipliers, weighted moving average)
+6. **Purchase Intelligence** (smart order qty formula, urgency levels)
+7. **Return & Damage Analysis** (SKU-level return rates, problem detection)
 
-**Dashboard** - 7 tabs: Dashboard, Stock, Aging, Alerts, Forecast, Purchase, Returns
+**Phase 3 - Automation:**
+8. **Auto-Create Purchase Orders** (one-click PO from suggestions)
+9. **Purchase Order Management** (track PO status: pending → confirmed → shipped → received)
+10. **Liquidation Suggestions** (age-based, discount recommendations, priority levels)
+11. **Smart Alerts Dashboard** (combines stockout + dead stock + high returns alerts)
+12. **Multiple Platform Listings per SKU** (same master SKU → multiple Amazon ASINs, Flipkart FSNs, etc.)
+
+**Dashboard - 10 tabs:** Dashboard, Stock, Aging, Stockout, Forecast, Purchase, Returns, Liquidate, All Alerts, POs
+
+**CSV Import Format (NEW):**
+- Supports multiple rows per master_sku for different platform listings
+- Columns: master_sku, product_name, category, platform, platform_sku, platform_product_id, listing_title, cost_price, selling_price
+- Example: FRN-001 can have multiple Amazon listings with different ASINs, plus Flipkart listings
 
 ### Bug Fixes (Feb 26, 2026)
 1. Fixed corrupted models.py - duplicate class fields in ProcurementBatchCreate and ChannelCreate
