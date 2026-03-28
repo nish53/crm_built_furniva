@@ -382,34 +382,17 @@ export const Replacements = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => navigate(`/replacements/${replacement.id}`)}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/replacements/${replacement.id}`); }}
                         className="flex items-center gap-2"
                       >
                         <Eye className="w-4 h-4" />
                         View Details
                       </Button>
                       
-                      {getNextActions(replacement).map((action, idx) => (
-                        <Button
-                          key={idx}
-                          size="sm"
-                          onClick={() => {
-                            setSelectedReplacement(replacement);
-                            if (action.needsInput) {
-                              setShowStatusModal(true);
-                            } else {
-                              updateStatus(replacement.id, action.status);
-                            }
-                          }}
-                        >
-                          {action.label}
-                        </Button>
-                      ))}
-                      
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(replacement.id)}
+                        onClick={(e) => { e.stopPropagation(); handleDelete(replacement.id); }}
                         className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-2"
                       >
                         <Trash2 className="w-4 h-4" />

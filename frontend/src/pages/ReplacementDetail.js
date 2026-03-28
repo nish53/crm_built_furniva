@@ -302,15 +302,54 @@ export const ReplacementDetail = () => {
 
   const getPickupProgress = () => {
     if (!replacement) return -1;
-    const pickupStatuses = ['pickup_scheduled', 'picked_up', 'pickup_in_transit', 'warehouse_received', 'condition_checked'];
-    return pickupStatuses.indexOf(replacement.replacement_status);
+    
+    // Check if pickup is not required
+    if (replacement.pickup_not_required) return -1;
+    
+    // Check if pickup is not approved yet
+    if (!replacement.pickup_approved) return 0; // pending (index 0)
+    
+    // Use pickup_status field for tracking progress
+    const pickupStatus = replacement.pickup_status || 'approved';
+    
+    // Map pickup_status to PICKUP_STAGES indices
+    // PICKUP_STAGES: pending(0), approved(1), picked_up(2), in_transit(3), warehouse_received(4), condition_checked(5), closed(6)
+    const pickupMap = {
+      'pending': 0,
+      'approved': 1,
+      'picked_up': 2,
+      'in_transit': 3,
+      'warehouse_received': 4,
+      'condition_checked': 5,
+      'closed': 6
+    };
+    
+    return pickupMap[pickupStatus] ?? 1; // Default to approved if pickup_approved is true
   };
 
   const getShipmentProgress = () => {
     if (!replacement) return -1;
-    // Match the SHIPMENT_STAGES array exactly (no 'requested')
-    const shipmentStatuses = ['approved', 'new_shipment_dispatched', 'parts_shipped', 'delivered', 'resolved'];
-    return shipmentStatuses.indexOf(replacement.replacement_status);
+    
+    // Check if replacement is not approved yet
+    if (!replacement.replacement_approved) return 0; // pending (index 0)
+    
+    // Use shipment_status field for tracking progress
+    const shipmentStatus = replacement.shipment_status || 'approved';
+    
+    // Map shipment_status to SHIPMENT_STAGES indices
+    // SHIPMENT_STAGES: pending(0), approved(1), dispatched(2), parts_shipped(3), delivered(4), closed(5)
+    const shipmentMap = {
+      'pending': 0,
+      'approved': 1,
+      'dispatched': 2,
+      'new_shipment_dispatched': 2,
+      'parts_shipped': 3,
+      'delivered': 4,
+      'closed': 5,
+      'resolved': 5
+    };
+    
+    return shipmentMap[shipmentStatus] ?? 1; // Default to approved
   };
 
   const isPickupPhase = () => {
