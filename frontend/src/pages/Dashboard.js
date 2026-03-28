@@ -89,7 +89,7 @@ export const Dashboard = () => {
       color: 'text-amber-600',
       bgColor: 'bg-amber-100',
       gradient: 'from-amber-50 to-amber-100',
-      onClick: () => navigate('/orders?status=pending'),
+      onClick: () => navigate('/orders?undispatched=true'),
       clickable: true,
     },
     {
@@ -153,7 +153,7 @@ export const Dashboard = () => {
       color: 'text-fuchsia-600',
       bgColor: 'bg-fuchsia-100',
       gradient: 'from-fuchsia-50 to-fuchsia-100',
-      onClick: () => navigate('/orders?status=dispatched'),
+      onClick: () => navigate('/orders?delayed=true'),
       clickable: true,
     },
   ] : [];

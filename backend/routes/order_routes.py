@@ -27,6 +27,8 @@ async def get_orders(
     state: Optional[str] = None,
     dispatch_date: Optional[str] = None,  # For "dispatched today" filter
     confirmed: Optional[str] = None,  # 'true' or 'false'
+    undispatched: Optional[str] = None,  # 'true' - shows pending + confirmed orders
+    delayed: Optional[str] = None,  # 'true' - shows dispatched orders past delivery date
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     current_user: User = Depends(get_current_active_user),
@@ -35,7 +37,17 @@ async def get_orders(
     """Get orders with optional filters and pagination"""
     query = {}
     
-    if status:
+    # Special filter: Undispatched orders (pending + confirmed)
+    if undispatched == 'true':
+        query["status"] = {"$in": ["pending", "confirmed"]}
+    # Special filter: Delayed orders (dispatched but past delivery date)
+    elif delayed == 'true':
+        from datetime import datetime, timezone
+        today = datetime.now(timezone.utc).date().isoformat()
+        query["status"] = "dispatched"
+        query["delivery_by"] = {"$lt": today}
+    # Regular status filter
+    elif status:
         query["status"] = status
     if channel:
         query["channel"] = channel
