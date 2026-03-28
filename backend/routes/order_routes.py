@@ -451,7 +451,11 @@ async def import_historical_orders(
                     val = str(value).upper().strip()
                     return val in ['YES', 'DONE', 'COMPLETED', 'TRUE', '1', 'SENT']
                 
-                # Parse SKU and quantity for multi-item support
+                # Check if order confirmation call is done - auto-upgrade status from pending to confirmed
+                order_conf_calling_done = parse_bool(row.get("Order Conf Calling"))
+                if order_conf_calling_done and status == "pending":
+                    status = "confirmed"
+                
                 sku_value = row.get("SKU", "")
                 qty_value = row.get("Qty", "1")
                 price_value = row.get("Price", "0")
@@ -506,17 +510,12 @@ async def import_historical_orders(
                     
                     "pickup_status": pickup_status,
                     "cancellation_reason": "",  # Will be set below based on mapping
-                    "internal_notes": f"Imported from historical data. Original status: {live_status}",
+                    "internal_notes": f"Imported from historical data. Original status: {live_status}" + (
+                        " | Auto-confirmed: Order confirmation call marked as done" if order_conf_calling_done and status == "confirmed" else ""
+                    ),
                     "created_at": datetime.now(timezone.utc).isoformat(),
                     "is_historical": True
                 }
-                
-                # AUTO-SET ORDER STATUS TO 'confirmed' IF ORDER CONFIRMATION CALL IS DONE
-                # This prevents orders with completed confirmation calls from showing as 'pending'
-                if order.get("order_conf_calling") == True and status == "pending":
-                    status = "confirmed"
-                    order["status"] = "confirmed"
-                    order["internal_notes"] += " | Auto-confirmed: Order confirmation call marked as done"
                 
                 # NEW: Map "Reason for Cancellation/Replacement" to correct cancellation_reason
                 reason_from_csv = row.get("Reason for Cancellation/Replacement", "").strip()

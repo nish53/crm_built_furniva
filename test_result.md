@@ -2615,24 +2615,24 @@ agent_communication:
 
   - agent: "testing"
     message: |
-      🎯 BUG FIX TESTING RESULTS - CRITICAL ISSUES IDENTIFIED
+      🎯 BUG FIX RE-TESTING RESULTS - BOTH FIXES STILL NOT WORKING
       
       === COMPREHENSIVE VALIDATION RESULTS ===
       Date: 2026-03-28 Testing Session
-      Test Coverage: 2 specific bug fixes requested for testing
+      Test Coverage: 2 specific bug fixes requested for re-testing
       
-      **❌ BUG FIX #1: HISTORICAL ORDER AUTO-CONFIRMATION - PARTIALLY WORKING**
+      **❌ BUG FIX #1: HISTORICAL ORDER AUTO-CONFIRMATION - NOT WORKING**
       
-      ISSUE IDENTIFIED: Auto-confirmation logic is not working correctly
+      ISSUE IDENTIFIED: Auto-confirmation logic fails to trigger properly
       
       TEST RESULTS:
-      - ✅ Historical order import: Successfully imported test order with "Order Conf Calling" = "Yes"
-      - ✅ Order retrieval: Test order found in database with order_conf_calling: true
-      - ❌ Auto-confirmation logic: Order status is "delivered" instead of expected "confirmed"
-      - ❌ Auto-confirmation note: Missing "Auto-confirmed: Order confirmation call marked as done" in internal_notes
+      - ✅ CSV Import: Successfully imported test order with "Order Conf Calling" = "Yes"
+      - ✅ Database Storage: order_conf_calling field correctly set to true
+      - ❌ Status Logic: Order status is "delivered" instead of expected "confirmed"
+      - ❌ Auto-confirmation Note: Missing "Auto-confirmed: Order confirmation call marked as done" in internal_notes
       
       ROOT CAUSE ANALYSIS:
-      - Auto-confirmation logic exists in order_routes.py lines 516-519
+      - Auto-confirmation logic exists in order_routes.py lines 456-457
       - Logic only triggers when status == "pending" AND order_conf_calling == true
       - However, status mapping logic (lines 431-445) sets default status to "delivered"
       - This prevents auto-confirmation from triggering even for "Pending" Live Status
@@ -2658,7 +2658,9 @@ agent_communication:
       ROOT CAUSE ANALYSIS:
       - Replacement creation logic in replacement_routes.py lines 76-78 sets original_tracking_number and original_courier
       - However, existing replacement requests don't have these fields populated
-      - The enrichment logic in lines 177-194 should backfill missing data but appears not to be working
+      - The enrichment logic in lines 177-194 should backfill missing data but has field name mismatch
+      - Line 179 queries for "courier_name" but order has "courier_partner" field
+      - Line 183 checks order.get("courier_name") which returns None
       
       EXPECTED BEHAVIOR:
       - All replacement requests should have original_tracking_number and original_courier fields
@@ -2671,19 +2673,19 @@ agent_communication:
       **🔧 CRITICAL FIXES REQUIRED:**
       
       1. **Historical Order Auto-Confirmation Fix:**
-         - Status mapping logic should preserve "pending" status for orders with "Pending" Live Status
-         - Auto-confirmation should trigger AFTER status mapping, not before
-         - Consider case-insensitive matching for "Pending" status
+         - Add "pending": "pending" to status_mapping dictionary (lines 431-439)
+         - OR move auto-confirmation check before status mapping
+         - OR check live_status directly instead of mapped status
       
       2. **Replacement Original Shipment Details Fix:**
-         - Ensure original_tracking_number and original_courier are populated during replacement creation
-         - Implement proper backfilling for existing replacement requests
-         - Verify enrichment logic is working correctly
+         - Change line 179: {"tracking_number": 1, "courier_name": 1} to {"tracking_number": 1, "courier_partner": 1}
+         - Change line 183: order.get("courier_name") to order.get("courier_partner")
+         - Also check line 78 in creation logic for same field name issue
       
       **📊 FINAL TEST STATISTICS:**
-      - Total Tests: 6
-      - ✅ Passed: 3 (50% success rate)
-      - ❌ Failed: 3 (both critical bug fixes have issues)
+      - Total Tests: 2
+      - ✅ Passed: 0 (0% success rate)
+      - ❌ Failed: 2 (both critical bug fixes have issues)
       
       **🚨 PRODUCTION IMPACT:**
       - Historical order imports may not auto-confirm orders as expected
@@ -2696,7 +2698,7 @@ agent_communication:
     implemented: true
     working: false
     file: "/app/backend/routes/order_routes.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "critical"
     needs_retesting: false
     status_history:
@@ -2721,12 +2723,34 @@ agent_communication:
           ACTUAL: Order becomes status "delivered" with no auto-confirm note
           
           CRITICAL FIX NEEDED: Adjust status mapping or auto-confirmation logic order
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ RE-TESTED HISTORICAL ORDER AUTO-CONFIRMATION - STILL NOT WORKING
+          
+          DETAILED ROOT CAUSE ANALYSIS:
+          1. Line 445: status = status_mapping.get(live_status, "delivered") 
+             - "pending" is not in status_mapping dictionary
+             - So "Pending" Live Status gets mapped to default "delivered"
+          2. Lines 456-457: Auto-confirmation only triggers if status == "pending"
+             - But status is already "delivered" at this point
+             - So auto-confirmation never executes
+          
+          SPECIFIC FIX REQUIRED:
+          - Add "pending": "pending" to status_mapping dictionary (line 431-439)
+          - OR move auto-confirmation check before status mapping
+          - OR check live_status directly instead of mapped status
+          
+          TEST EVIDENCE:
+          - Order imported with Live Status: "Pending", Order Conf Calling: "Yes"
+          - Result: Status = "delivered", no auto-confirmation note
+          - Expected: Status = "confirmed", with "Auto-confirmed" note
 
   - task: "Replacement Original Shipment Details Bug Fix"
     implemented: true
     working: false
     file: "/app/backend/routes/replacement_routes.py"
-    stuck_count: 0
+    stuck_count: 1
     priority: "critical"
     needs_retesting: false
     status_history:
@@ -2754,3 +2778,26 @@ agent_communication:
           ACTUAL: Replacement requests have null values for both original shipment fields
           
           CRITICAL FIX NEEDED: Ensure proper population and backfilling of original shipment details
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ RE-TESTED REPLACEMENT ORIGINAL SHIPMENT DETAILS - STILL NOT WORKING
+          
+          DETAILED ROOT CAUSE ANALYSIS:
+          1. Enrichment logic (line 179) queries for "courier_name" field
+          2. But actual order has "courier_partner" field, not "courier_name"
+          3. Line 183: if not replacement.get("original_courier") and order.get("courier_name"):
+             - order.get("courier_name") returns None because field doesn't exist
+             - So original_courier never gets populated
+          
+          SPECIFIC FIX REQUIRED:
+          - Change line 179: {"tracking_number": 1, "courier_name": 1} 
+            to {"tracking_number": 1, "courier_partner": 1}
+          - Change line 183: order.get("courier_name") 
+            to order.get("courier_partner")
+          - Also check line 78 in creation logic for same issue
+          
+          TEST EVIDENCE:
+          - Order has tracking_number: "53642984021" and courier_partner: "Bluedart"
+          - Replacement has original_tracking_number: null, original_courier: null
+          - Enrichment logic fails because it looks for wrong field name

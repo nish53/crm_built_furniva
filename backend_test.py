@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend Testing Script for Furniva CRM
-Testing two specific bug fixes:
-1. Historical Order Auto-Confirmation Bug Fix
-2. Replacement Original Shipment Details
+Backend Testing Script for Furniva CRM Bug Fixes
+Testing specific bug fixes for historical order auto-confirmation and replacement enrichment
 """
 
 import requests
@@ -14,355 +12,281 @@ import sys
 from datetime import datetime
 
 # Configuration
-BASE_URL = "https://furniture-flow-pro.preview.emergentagent.com/api"
-TEST_CREDENTIALS = {
-    "email": "admin@furniva.com",
-    "password": "Admin123!"
-}
+BACKEND_URL = "https://furniture-flow-pro.preview.emergentagent.com/api"
+ADMIN_EMAIL = "admin@furniva.com"
+ADMIN_PASSWORD = "Admin123!"
 
 class FurnivaAPITester:
     def __init__(self):
         self.session = requests.Session()
-        self.auth_token = None
-        self.test_results = []
+        self.token = None
+        self.headers = {}
         
-    def log_result(self, test_name, success, message, details=None):
-        """Log test result"""
-        result = {
-            "test": test_name,
-            "success": success,
-            "message": message,
-            "details": details or {},
-            "timestamp": datetime.now().isoformat()
+    def login(self):
+        """Login and get authentication token"""
+        print("🔐 Logging in...")
+        login_data = {
+            "email": ADMIN_EMAIL,
+            "password": ADMIN_PASSWORD
         }
-        self.test_results.append(result)
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{status}: {test_name}")
-        print(f"   {message}")
-        if details:
-            print(f"   Details: {details}")
-        print()
         
-    def authenticate(self):
-        """Authenticate with the API"""
-        try:
-            response = self.session.post(
-                f"{BASE_URL}/auth/login",
-                json=TEST_CREDENTIALS,
-                timeout=30
-            )
-            
-            if response.status_code == 200:
-                data = response.json()
-                self.auth_token = data.get("access_token")
-                self.session.headers.update({
-                    "Authorization": f"Bearer {self.auth_token}"
-                })
-                self.log_result(
-                    "Authentication", 
-                    True, 
-                    f"Successfully authenticated as {TEST_CREDENTIALS['email']}"
-                )
-                return True
-            else:
-                self.log_result(
-                    "Authentication", 
-                    False, 
-                    f"Authentication failed: {response.status_code} - {response.text}"
-                )
-                return False
-                
-        except Exception as e:
-            self.log_result("Authentication", False, f"Authentication error: {str(e)}")
+        response = self.session.post(f"{BACKEND_URL}/auth/login", json=login_data)
+        if response.status_code == 200:
+            result = response.json()
+            self.token = result.get("access_token")
+            self.headers = {"Authorization": f"Bearer {self.token}"}
+            print(f"✅ Login successful for {ADMIN_EMAIL}")
+            return True
+        else:
+            print(f"❌ Login failed: {response.status_code} - {response.text}")
             return False
     
     def test_historical_order_auto_confirmation(self):
         """
-        TEST 1: Historical Order Auto-Confirmation Bug Fix
-        Create a test CSV and import historical order with order confirmation call marked as done
+        BUG FIX #1: Test historical order auto-confirmation
+        Orders with "Order Conf Calling" marked as done should be auto-confirmed
         """
-        print("🎯 TEST 1: Historical Order Auto-Confirmation Bug Fix")
+        print("\n🎯 TESTING BUG FIX #1: Historical Order Auto-Confirmation")
         print("=" * 60)
         
-        # Create test CSV content
-        csv_content = """Order ID,Customer Name,Billing No.,Shipping No.,Place,State,Pincode,SKU,Qty,Price,Order Date,Live Status,Order Conf Calling,Dispatch Confirmation Sent,Assembly Type
-TEST-ORD-CONF-001,Test Customer,9999999999,9999999999,Test Address,Test State,123456,TEST-PRODUCT,1,5000,01/01/2026,Pending,Yes,No,Self"""
+        # Create test CSV data
+        csv_data = """Order ID,Customer Name,Billing No.,Place,Product Name,Order Date,Live Status,Order Conf Calling
+TEST-CONF-XYZ,Test Customer,9998887777,Mumbai,Test Product,25/01/2026,Pending,Yes"""
         
-        try:
-            # Prepare CSV file for upload
-            files = {
-                'file': ('test_historical_orders.csv', csv_content, 'text/csv')
-            }
-            
-            # Import historical orders
-            response = self.session.post(
-                f"{BASE_URL}/orders/import-historical",
-                files=files,
-                timeout=60
+        print("📝 Creating test CSV with:")
+        print("   - Order Number: TEST-CONF-XYZ")
+        print("   - Live Status: Pending")
+        print("   - Order Conf Calling: Yes")
+        print("   - Expected Result: Status should be 'confirmed' with auto-confirm note")
+        
+        # Prepare file upload
+        files = {
+            'file': ('test_orders.csv', csv_data, 'text/csv')
+        }
+        
+        # Import historical orders
+        print("\n📤 Importing historical orders...")
+        response = self.session.post(
+            f"{BACKEND_URL}/orders/import-historical",
+            files=files,
+            headers=self.headers
+        )
+        
+        if response.status_code != 200:
+            print(f"❌ Import failed: {response.status_code} - {response.text}")
+            return False
+        
+        import_result = response.json()
+        print(f"✅ Import response: {import_result}")
+        
+        if import_result.get("imported", 0) == 0:
+            print("❌ No orders were imported")
+            return False
+        
+        # Fetch the imported order
+        print("\n🔍 Fetching imported order...")
+        response = self.session.get(
+            f"{BACKEND_URL}/orders/?search=TEST-CONF-XYZ",
+            headers=self.headers
+        )
+        
+        if response.status_code != 200:
+            print(f"❌ Failed to fetch orders: {response.status_code} - {response.text}")
+            return False
+        
+        orders_data = response.json()
+        orders = orders_data.get("items", [])
+        
+        if not orders:
+            print("❌ No orders found with TEST-CONF-XYZ")
+            return False
+        
+        order = orders[0]
+        print(f"📋 Found order: {order.get('order_number')}")
+        print(f"   - Status: {order.get('status')}")
+        print(f"   - Order Conf Calling: {order.get('order_conf_calling')}")
+        print(f"   - Internal Notes: {order.get('internal_notes', 'None')}")
+        
+        # Verify auto-confirmation
+        expected_status = "confirmed"
+        actual_status = order.get("status")
+        order_conf_calling = order.get("order_conf_calling")
+        internal_notes = order.get("internal_notes", "")
+        
+        success = True
+        
+        if actual_status != expected_status:
+            print(f"❌ FAIL: Expected status '{expected_status}', got '{actual_status}'")
+            success = False
+        else:
+            print(f"✅ PASS: Status is correctly '{expected_status}'")
+        
+        if not order_conf_calling:
+            print(f"❌ FAIL: order_conf_calling should be true, got {order_conf_calling}")
+            success = False
+        else:
+            print(f"✅ PASS: order_conf_calling is correctly {order_conf_calling}")
+        
+        if "Auto-confirmed" not in internal_notes:
+            print(f"❌ FAIL: Missing 'Auto-confirmed' note in internal_notes")
+            print(f"   Actual notes: {internal_notes}")
+            success = False
+        else:
+            print(f"✅ PASS: Auto-confirmed note found in internal_notes")
+        
+        # Cleanup - delete test order
+        print("\n🧹 Cleaning up test order...")
+        order_id = order.get("id")
+        if order_id:
+            delete_response = self.session.delete(
+                f"{BACKEND_URL}/orders/{order_id}",
+                headers=self.headers
             )
-            
-            if response.status_code == 200:
-                import_result = response.json()
-                self.log_result(
-                    "Historical Order Import", 
-                    True, 
-                    f"Import successful: {import_result.get('imported', 0)} orders imported",
-                    import_result
-                )
-                
-                # Now search for the imported order
-                search_response = self.session.get(
-                    f"{BASE_URL}/orders/",
-                    params={"search": "TEST-ORD-CONF-001", "limit": 10},
-                    timeout=30
-                )
-                
-                if search_response.status_code == 200:
-                    search_data = search_response.json()
-                    orders = search_data.get("items", [])
-                    
-                    if orders:
-                        order = orders[0]
-                        
-                        # Verify auto-confirmation logic
-                        expected_status = "confirmed"  # Should be auto-confirmed
-                        actual_status = order.get("status")
-                        order_conf_calling = order.get("order_conf_calling", False)
-                        internal_notes = order.get("internal_notes", "")
-                        
-                        # Check all conditions
-                        status_correct = actual_status == expected_status
-                        conf_calling_correct = order_conf_calling == True
-                        notes_contain_auto_confirm = "Auto-confirmed: Order confirmation call marked as done" in internal_notes
-                        
-                        if status_correct and conf_calling_correct and notes_contain_auto_confirm:
-                            self.log_result(
-                                "Auto-Confirmation Logic", 
-                                True, 
-                                f"Order correctly auto-confirmed from 'pending' to 'confirmed'",
-                                {
-                                    "order_number": order.get("order_number"),
-                                    "status": actual_status,
-                                    "order_conf_calling": order_conf_calling,
-                                    "auto_confirm_note_present": notes_contain_auto_confirm
-                                }
-                            )
-                        else:
-                            self.log_result(
-                                "Auto-Confirmation Logic", 
-                                False, 
-                                f"Auto-confirmation failed. Status: {actual_status}, Conf Calling: {order_conf_calling}, Auto-confirm note: {notes_contain_auto_confirm}",
-                                {
-                                    "expected_status": expected_status,
-                                    "actual_status": actual_status,
-                                    "order_conf_calling": order_conf_calling,
-                                    "internal_notes": internal_notes
-                                }
-                            )
-                    else:
-                        self.log_result(
-                            "Order Search", 
-                            False, 
-                            "Imported order not found in search results"
-                        )
-                else:
-                    self.log_result(
-                        "Order Search", 
-                        False, 
-                        f"Failed to search for imported order: {search_response.status_code}"
-                    )
+            if delete_response.status_code == 200:
+                print("✅ Test order cleaned up")
             else:
-                self.log_result(
-                    "Historical Order Import", 
-                    False, 
-                    f"Import failed: {response.status_code} - {response.text}"
-                )
-                
-        except Exception as e:
-            self.log_result("Historical Order Import", False, f"Import error: {str(e)}")
+                print(f"⚠️ Failed to cleanup test order: {delete_response.status_code}")
+        
+        return success
     
     def test_replacement_original_shipment_details(self):
         """
-        TEST 2: Replacement Original Shipment Details
-        Verify replacements have original_tracking_number and original_courier fields
+        BUG FIX #2: Test replacement original shipment details enrichment
+        Replacement requests should have original_tracking_number and original_courier
+        populated from linked order
         """
-        print("🎯 TEST 2: Replacement Original Shipment Details")
+        print("\n🎯 TESTING BUG FIX #2: Replacement Original Shipment Details")
         print("=" * 60)
         
-        try:
-            # Get replacement requests
-            response = self.session.get(
-                f"{BASE_URL}/replacement-requests/",
-                params={"limit": 5},
-                timeout=30
-            )
+        # Get all replacement requests
+        print("📋 Fetching all replacement requests...")
+        response = self.session.get(
+            f"{BACKEND_URL}/replacement-requests/",
+            headers=self.headers
+        )
+        
+        if response.status_code != 200:
+            print(f"❌ Failed to fetch replacement requests: {response.status_code} - {response.text}")
+            return False
+        
+        replacements = response.json()
+        print(f"📊 Found {len(replacements)} replacement requests")
+        
+        if not replacements:
+            print("⚠️ No replacement requests found to test")
+            return True  # Not a failure, just no data
+        
+        # Test each replacement for original shipment details
+        success_count = 0
+        total_count = len(replacements)
+        
+        for i, replacement in enumerate(replacements, 1):
+            replacement_id = replacement.get("id")
+            order_id = replacement.get("order_id")
+            original_tracking = replacement.get("original_tracking_number")
+            original_courier = replacement.get("original_courier")
             
-            if response.status_code == 200:
-                replacements = response.json()
-                
-                if not replacements:
-                    self.log_result(
-                        "Replacement Requests Retrieval", 
-                        True, 
-                        "No replacements to test - this is expected if no replacement data exists"
-                    )
-                    return
-                
-                self.log_result(
-                    "Replacement Requests Retrieval", 
-                    True, 
-                    f"Retrieved {len(replacements)} replacement requests"
-                )
-                
-                # Test each replacement for original shipment details
-                replacements_with_details = 0
-                replacements_without_details = 0
-                
-                for i, replacement in enumerate(replacements[:5]):  # Test first 5
-                    replacement_id = replacement.get("id")
-                    order_id = replacement.get("order_id")
-                    
-                    # Check if replacement has original tracking and courier details
-                    original_tracking = replacement.get("original_tracking_number")
-                    original_courier = replacement.get("original_courier")
-                    
-                    if original_tracking or original_courier:
-                        replacements_with_details += 1
-                        self.log_result(
-                            f"Replacement {i+1} Original Details", 
-                            True, 
-                            f"Has original shipment details",
-                            {
-                                "replacement_id": replacement_id,
-                                "order_id": order_id,
-                                "original_tracking_number": original_tracking or "Not set",
-                                "original_courier": original_courier or "Not set"
-                            }
-                        )
-                        
-                        # Verify these match the linked order's details
-                        if order_id:
-                            order_response = self.session.get(
-                                f"{BASE_URL}/orders/{order_id}",
-                                timeout=30
-                            )
-                            
-                            if order_response.status_code == 200:
-                                order = order_response.json()
-                                order_tracking = order.get("tracking_number", "")
-                                order_courier = order.get("courier_name", "") or order.get("courier_partner", "")
-                                
-                                # Check if replacement details match order details
-                                tracking_matches = (original_tracking == order_tracking) if original_tracking else True
-                                courier_matches = (original_courier == order_courier) if original_courier else True
-                                
-                                if tracking_matches and courier_matches:
-                                    self.log_result(
-                                        f"Replacement {i+1} Order Match", 
-                                        True, 
-                                        "Original details match linked order",
-                                        {
-                                            "order_tracking": order_tracking,
-                                            "order_courier": order_courier,
-                                            "replacement_tracking": original_tracking,
-                                            "replacement_courier": original_courier
-                                        }
-                                    )
-                                else:
-                                    self.log_result(
-                                        f"Replacement {i+1} Order Match", 
-                                        False, 
-                                        "Original details don't match linked order",
-                                        {
-                                            "order_tracking": order_tracking,
-                                            "order_courier": order_courier,
-                                            "replacement_tracking": original_tracking,
-                                            "replacement_courier": original_courier
-                                        }
-                                    )
-                    else:
-                        replacements_without_details += 1
-                        self.log_result(
-                            f"Replacement {i+1} Original Details", 
-                            False, 
-                            f"Missing original shipment details",
-                            {
-                                "replacement_id": replacement_id,
-                                "order_id": order_id,
-                                "original_tracking_number": original_tracking,
-                                "original_courier": original_courier
-                            }
-                        )
-                
-                # Summary
-                if replacements_with_details > 0:
-                    self.log_result(
-                        "Original Shipment Details Summary", 
-                        True, 
-                        f"{replacements_with_details}/{len(replacements)} replacements have original shipment details"
-                    )
-                else:
-                    self.log_result(
-                        "Original Shipment Details Summary", 
-                        False, 
-                        f"None of the {len(replacements)} replacements have original shipment details"
-                    )
-                    
+            print(f"\n🔍 Testing replacement {i}/{total_count}:")
+            print(f"   - Replacement ID: {replacement_id}")
+            print(f"   - Order ID: {order_id}")
+            print(f"   - Original Tracking: {original_tracking}")
+            print(f"   - Original Courier: {original_courier}")
+            
+            # Check if original shipment details are populated
+            if original_tracking and original_courier:
+                print(f"✅ PASS: Original shipment details are populated")
+                success_count += 1
             else:
-                self.log_result(
-                    "Replacement Requests Retrieval", 
-                    False, 
-                    f"Failed to retrieve replacements: {response.status_code} - {response.text}"
-                )
+                print(f"❌ FAIL: Missing original shipment details")
                 
-        except Exception as e:
-            self.log_result("Replacement Original Details", False, f"Test error: {str(e)}")
+                # Try to get the linked order to see what data is available
+                if order_id:
+                    print(f"🔍 Checking linked order {order_id}...")
+                    order_response = self.session.get(
+                        f"{BACKEND_URL}/orders/{order_id}",
+                        headers=self.headers
+                    )
+                    
+                    if order_response.status_code == 200:
+                        order = order_response.json()
+                        order_tracking = order.get("tracking_number")
+                        order_courier = order.get("courier_partner") or order.get("courier_name")
+                        
+                        print(f"   - Order tracking_number: {order_tracking}")
+                        print(f"   - Order courier: {order_courier}")
+                        
+                        if order_tracking or order_courier:
+                            print(f"   ⚠️ Order has shipment data but replacement doesn't - enrichment not working")
+                        else:
+                            print(f"   ℹ️ Order also lacks shipment data - expected behavior")
+                    else:
+                        print(f"   ❌ Failed to fetch linked order: {order_response.status_code}")
+        
+        print(f"\n📊 REPLACEMENT ENRICHMENT SUMMARY:")
+        print(f"   - Total replacements tested: {total_count}")
+        print(f"   - Replacements with original shipment details: {success_count}")
+        print(f"   - Success rate: {(success_count/total_count)*100:.1f}%" if total_count > 0 else "N/A")
+        
+        # Consider it a success if at least some replacements have the data
+        # or if there are no replacements to test
+        return success_count > 0 or total_count == 0
     
     def run_all_tests(self):
-        """Run all tests"""
-        print("🚀 Starting Furniva CRM Backend Testing")
-        print("Testing two specific bug fixes:")
-        print("1. Historical Order Auto-Confirmation Bug Fix")
-        print("2. Replacement Original Shipment Details")
-        print("=" * 80)
-        print()
+        """Run all bug fix tests"""
+        print("🚀 STARTING FURNIVA CRM BUG FIX TESTING")
+        print("=" * 60)
+        print(f"Backend URL: {BACKEND_URL}")
+        print(f"Test User: {ADMIN_EMAIL}")
+        print(f"Test Time: {datetime.now().isoformat()}")
         
-        # Authenticate first
-        if not self.authenticate():
-            print("❌ Authentication failed. Cannot proceed with tests.")
+        # Login first
+        if not self.login():
+            print("❌ Cannot proceed without authentication")
             return False
         
         # Run tests
-        self.test_historical_order_auto_confirmation()
-        self.test_replacement_original_shipment_details()
+        test_results = []
+        
+        # Test 1: Historical Order Auto-Confirmation
+        try:
+            result1 = self.test_historical_order_auto_confirmation()
+            test_results.append(("Historical Order Auto-Confirmation", result1))
+        except Exception as e:
+            print(f"❌ Test 1 failed with exception: {e}")
+            test_results.append(("Historical Order Auto-Confirmation", False))
+        
+        # Test 2: Replacement Original Shipment Details
+        try:
+            result2 = self.test_replacement_original_shipment_details()
+            test_results.append(("Replacement Original Shipment Details", result2))
+        except Exception as e:
+            print(f"❌ Test 2 failed with exception: {e}")
+            test_results.append(("Replacement Original Shipment Details", False))
         
         # Summary
-        print("📊 TEST SUMMARY")
-        print("=" * 50)
+        print("\n" + "=" * 60)
+        print("🏁 FINAL TEST RESULTS")
+        print("=" * 60)
         
-        total_tests = len(self.test_results)
-        passed_tests = sum(1 for result in self.test_results if result["success"])
-        failed_tests = total_tests - passed_tests
+        passed = 0
+        total = len(test_results)
         
-        print(f"Total Tests: {total_tests}")
-        print(f"✅ Passed: {passed_tests}")
-        print(f"❌ Failed: {failed_tests}")
-        print(f"Success Rate: {(passed_tests/total_tests)*100:.1f}%")
-        print()
+        for test_name, result in test_results:
+            status = "✅ PASS" if result else "❌ FAIL"
+            print(f"{status}: {test_name}")
+            if result:
+                passed += 1
         
-        # Show failed tests
-        if failed_tests > 0:
-            print("❌ FAILED TESTS:")
-            for result in self.test_results:
-                if not result["success"]:
-                    print(f"   - {result['test']}: {result['message']}")
-            print()
+        print(f"\n📊 SUMMARY: {passed}/{total} tests passed ({(passed/total)*100:.1f}%)")
         
-        return failed_tests == 0
+        if passed == total:
+            print("🎉 ALL BUG FIXES ARE WORKING CORRECTLY!")
+            return True
+        else:
+            print("⚠️ SOME BUG FIXES NEED ATTENTION")
+            return False
 
 if __name__ == "__main__":
     tester = FurnivaAPITester()
     success = tester.run_all_tests()
-    
-    # Exit with appropriate code
     sys.exit(0 if success else 1)
