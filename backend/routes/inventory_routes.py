@@ -217,6 +217,27 @@ async def get_csv_template():
                 "platform": "amazon",
                 "platform_sku": "AMZ-SR-002",
                 "platform_product_id": "B09ABC456",
+                "listing_title": "Shoe Rack 3 Tier - White",
+                "cost_price": "1500",
+                "selling_price": "2999"
+            },
+            {
+                "master_sku": "FRN-SR-001",
+                "product_name": "Shoe Rack 3 Tier",
+                "category": "Storage",
+                "platform": "flipkart",
+                "platform_sku": "FK-SR-001",
+                "platform_product_id": "FSRACK3TIER",
+                "listing_title": "Shoe Rack 3 Tier - Flipkart",
+                "cost_price": "1500",
+                "selling_price": "2899"
+            }
+        ],
+        "notes": [
+            "Same master_sku can appear in multiple rows for different listings",
+            "platform_product_id: ASIN for Amazon, FSN for Flipkart, etc."
+        ]
+    }
 
 @router.post("/sync-skus-to-orders")
 async def sync_skus_to_orders(
@@ -268,30 +289,6 @@ async def sync_skus_to_orders(
         "orders_synced": sync_count,
         "total_unmapped_orders": len(unmapped_orders),
         "synced_orders": synced_orders[:50]  # Show first 50
-    }
-
-                "listing_title": "Shoe Rack 3 Tier - White",
-                "cost_price": "1500",
-                "selling_price": "3199"
-            },
-            {
-                "master_sku": "FRN-SR-001",
-                "product_name": "Shoe Rack 3 Tier",
-                "category": "Storage",
-                "platform": "flipkart",
-                "platform_sku": "FK-SR-001",
-                "platform_product_id": "FSRACK001",
-                "listing_title": "Shoe Rack 3 Tier",
-                "cost_price": "1500",
-                "selling_price": "2899"
-            }
-        ],
-        "notes": [
-            "Same master_sku can appear in multiple rows for different listings",
-            "platform: amazon, flipkart, website, meesho, etc.",
-            "platform_sku: Your seller SKU on that platform",
-            "platform_product_id: ASIN for Amazon, FSN for Flipkart, etc."
-        ]
     }
 
 
@@ -1587,6 +1584,49 @@ async def create_stock_adjustment(
         "warehouse_code": warehouse_code.upper(),
         "adjustment_type": adjustment_type,
         "quantity_change": quantity if adjustment_type == "add" else -quantity if adjustment_type == "remove" else new_qty - current_qty,
+        "quantity_before": current_qty,
+        "quantity_after": new_qty,
+        "reason": reason,
+        "reference": reference,
+        "created_by": current_user.id,
+        "created_by_name": current_user.name,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.stock_adjustments.insert_one(adjustment)
+    
+    # Update warehouse stock
+    if current:
+        await db.warehouse_stock.update_one(
+            {"master_sku": master_sku, "warehouse_code": warehouse_code.upper()},
+            {"$set": {"quantity": new_qty, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    else:
+        await db.warehouse_stock.insert_one({
+            "id": str(uuid.uuid4()),
+            "master_sku": master_sku,
+            "warehouse_code": warehouse_code.upper(),
+            "quantity": new_qty,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    
+    # Return adjustment without MongoDB _id
+    return {
+        "success": True,
+        "adjustment": {
+            "id": adjustment["id"],
+            "master_sku": adjustment["master_sku"],
+            "warehouse_code": adjustment["warehouse_code"],
+            "adjustment_type": adjustment["adjustment_type"],
+            "quantity_change": adjustment["quantity_change"],
+            "quantity_before": adjustment["quantity_before"],
+            "quantity_after": adjustment["quantity_after"],
+            "reason": adjustment["reason"],
+            "reference": adjustment["reference"],
+            "created_by": adjustment["created_by"],
+            "created_by_name": adjustment["created_by_name"],
+            "created_at": adjustment["created_at"]
+        }
+    }
 
 @router.post("/initial-stock-entry")
 async def add_initial_stock_entry(
@@ -1685,50 +1725,6 @@ async def add_initial_stock_entry(
             "new_stock": new_qty,
             "procurement_date": procurement["procurement_date"],
             "supplier": procurement["supplier"]
-        }
-    }
-
-        "quantity_before": current_qty,
-        "quantity_after": new_qty,
-        "reason": reason,
-        "reference": reference,
-        "created_by": current_user.id,
-        "created_by_name": current_user.name,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    await db.stock_adjustments.insert_one(adjustment)
-    
-    # Update warehouse stock
-    if current:
-        await db.warehouse_stock.update_one(
-            {"master_sku": master_sku, "warehouse_code": warehouse_code.upper()},
-            {"$set": {"quantity": new_qty, "updated_at": datetime.now(timezone.utc).isoformat()}}
-        )
-    else:
-        await db.warehouse_stock.insert_one({
-            "id": str(uuid.uuid4()),
-            "master_sku": master_sku,
-            "warehouse_code": warehouse_code.upper(),
-            "quantity": new_qty,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        })
-    
-    # Return adjustment without MongoDB _id
-    return {
-        "success": True,
-        "adjustment": {
-            "id": adjustment["id"],
-            "master_sku": adjustment["master_sku"],
-            "warehouse_code": adjustment["warehouse_code"],
-            "adjustment_type": adjustment["adjustment_type"],
-            "quantity_change": adjustment["quantity_change"],
-            "quantity_before": adjustment["quantity_before"],
-            "quantity_after": adjustment["quantity_after"],
-            "reason": adjustment["reason"],
-            "reference": adjustment["reference"],
-            "created_by": adjustment["created_by"],
-            "created_by_name": adjustment["created_by_name"],
-            "created_at": adjustment["created_at"]
         }
     }
 
