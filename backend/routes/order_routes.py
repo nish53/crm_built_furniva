@@ -742,3 +742,37 @@ async def get_resolved_orders_stats(
         "recent_orders": recent_orders,
         "message": f"Total {total_resolved} orders with resolved issues"
     }
+
+
+
+@router.post("/fix-confirmation-status")
+async def fix_confirmation_status(
+    current_user: User = Depends(get_current_active_user),
+    db = Depends(get_database)
+):
+    """
+    Force update: Set status to 'confirmed' for all orders where 
+    order_conf_calling is true but status is still 'pending'
+    """
+    # Find all orders with order_conf_calling=true but status=pending
+    orders_to_update = await db.orders.find({
+        "order_conf_calling": True,
+        "status": "pending"
+    }, {"_id": 0, "id": 1, "order_number": 1}).to_list(None)
+    
+    updated_count = 0
+    for order in orders_to_update:
+        await db.orders.update_one(
+            {"id": order["id"]},
+            {"$set": {
+                "status": "confirmed",
+                "internal_notes": f"{order.get('internal_notes', '')} | Auto-confirmed: Order confirmation call marked as done"
+            }}
+        )
+        updated_count += 1
+    
+    return {
+        "success": True,
+        "orders_updated": updated_count,
+        "message": f"Updated {updated_count} orders from pending to confirmed"
+    }

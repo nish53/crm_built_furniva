@@ -15,9 +15,8 @@ async def get_dashboard_stats(
     
     total_orders = await db.orders.count_documents({})
     
-    # PENDING ORDERS = Orders NOT yet dispatched
-    # This includes BOTH "pending" AND "confirmed" status orders
-    # Basically all orders waiting to be shipped
+    # PENDING ORDERS = Orders NOT yet dispatched (both pending and confirmed status)
+    # These are orders waiting to be shipped
     pending_orders = await db.orders.count_documents({
         "status": {"$in": ["pending", "confirmed"]}
     })
@@ -31,9 +30,14 @@ async def get_dashboard_stats(
     # PENDING CONFIRMATION = Orders where:
     # 1. Status = "pending" (NOT yet confirmed)
     # 2. dispatch_by is TODAY or PAST (urgent - needs confirmation now)
+    # 3. order_conf_calling is NOT true (not yet called/confirmed)
     pending_confirmation = await db.orders.count_documents({
         "status": "pending",
-        "dispatch_by": {"$lte": today}
+        "dispatch_by": {"$lte": today},
+        "$or": [
+            {"order_conf_calling": {"$ne": True}},
+            {"order_conf_calling": {"$exists": False}}
+        ]
     })
     
     low_stock_items = await db.products.count_documents({

@@ -2397,61 +2397,38 @@ agent_communication:
 agent_communication:
   - agent: "main"
     message: |
-      BUG FIXES AND NEW FEATURES COMPLETED - SESSION JULY 2026
+      ORDER CONFIRMATION STATUS FIXES - SESSION CONTINUED
       
-      **CRITICAL BUG FIXES:**
+      **FIX 1: Force Confirmed Status for Orders with Confirmation Call Done ✅**
+      - Issue: Orders with order_conf_calling=true (green highlight) showing status="pending"
+      - Solution: Created endpoint POST /api/orders/fix-confirmation-status
+      - Execution: Updated 17 orders from "pending" to "confirmed"
+      - Auto-import: New historical imports auto-upgrade pending→confirmed when call done
+      - File: /app/backend/routes/order_routes.py (lines 456-458, 746-773)
       
-      1. ✅ Historical Order Auto-Confirmation (FIXED)
-         - Issue: Orders with "Order Conf Calling" done showing as "pending"
-         - Root Cause: Status mapping defaulted to "delivered" before auto-confirmation check
-         - Fix: Added "pending": "pending" to mapping, default changed to "pending"
-         - Auto-confirmation now properly upgrades pending→confirmed when order_conf_calling=true
-         - File: /app/backend/routes/order_routes.py
+      **FIX 2: Pending Confirmation Tile Logic (Corrected) ✅**
+      - Issue: Tile showing ALL pending orders instead of only urgent ones needing calls
+      - Old Logic: status="pending" AND dispatch_by<=today
+      - New Logic: status="pending" AND dispatch_by<=today AND order_conf_calling≠true
+      - File: /app/backend/routes/dashboard_routes.py (lines 31-42)
       
-      2. ✅ Replacement Original Tracking Bug (FIXED)
-         - Issue: Replacement tiles not showing original tracking/courier details
-         - Root Cause: Field name mismatch (courier_name vs courier_partner)
-         - Fix: Updated to use courier_partner with fallback to courier_name
-         - Added enrichment to populate existing replacements
-         - Frontend now shows original shipment (blue box) + new tracking (green box)
-         - Files: /app/backend/routes/replacement_routes.py, /app/frontend/src/pages/Replacements.js
+      **DASHBOARD TILES NOW WORKING CORRECTLY:**
+      - Pending Orders (21): All not dispatched (pending + confirmed status)
+      - Pending Confirmation (1): URGENT orders needing call today, not yet called
+      - Delayed Orders (2): Dispatched but past delivery date
       
-      3. ✅ SKU Mapping Not Syncing to Orders (FIXED)
-         - Issue: SKU import showed in listings but orders still "SKU Not Mapped"
-         - Fix: Added auto-sync after CSV import using platform_product_id (ASIN)
-         - New endpoint: POST /api/inventory/sync-skus-to-orders (manual sync)
-         - Import response now shows orders_synced count
-         - File: /app/backend/routes/inventory_routes.py
+      **PREVIOUS FIXES STILL ACTIVE:**
+      1. ✅ Historical order auto-confirmation during import
+      2. ✅ Replacement original tracking display
+      3. ✅ SKU mapping sync to orders
+      4. ✅ Initial stock entry endpoint
+      5. ✅ Delayed orders dashboard tile
+      6. ✅ Inventory Phase 4 (all 4 tabs)
+      7. ✅ Orders page syntax errors fixed
       
-      **NEW FEATURES:**
+      See /app/CONFIRMATION_STATUS_FIX.md for detailed documentation.
       
-      4. ✅ Initial Stock Entry Endpoint (NEW)
-         - Purpose: Add historical/previous procurement and opening stock
-         - Endpoint: POST /api/inventory/initial-stock-entry
-         - Parameters: master_sku, warehouse_code, initial_quantity, procurement_date, cost, supplier, notes
-         - Creates procurement record marked as initial stock
-         - Updates warehouse stock and audit log
-         - Enables proper stock calculations by deducting delivered orders from initial stock
-         - File: /app/backend/routes/inventory_routes.py (lines 1590-1682)
-      
-      5. ✅ Delayed Orders Dashboard Tile (NEW)
-         - Shows orders dispatched but past delivery_by date
-         - Purple/fuchsia colored tile on dashboard
-         - Clickable - navigates to dispatched orders
-         - Real-time count updates
-         - Files: /app/backend/models.py, dashboard_routes.py, Dashboard.js
-      
-      **INVENTORY PHASE 4 RECAP (Previously Completed):**
-      - CSV template download bug fixed
-      - Multi-warehouse UI (warehouses tab)
-      - Cycle counts UI (cycle counts tab)
-      - Shrinkage detection UI (shrinkage tab)
-      - Audit log UI (audit tab)
-      
-      **TESTING GUIDANCE:**
-      See /app/FIXES_SUMMARY.md for detailed testing instructions.
-      
-      User will test all features. No automated testing requested.
+      User to test: Order confirmation status and dashboard tile counts.
   - agent: "testing"
     message: |
       🎉 TESTING COMPLETED - BOTH NEW FEATURES WORKING PERFECTLY!
