@@ -511,6 +511,13 @@ async def import_historical_orders(
                     "is_historical": True
                 }
                 
+                # AUTO-SET ORDER STATUS TO 'confirmed' IF ORDER CONFIRMATION CALL IS DONE
+                # This prevents orders with completed confirmation calls from showing as 'pending'
+                if order.get("order_conf_calling") == True and status == "pending":
+                    status = "confirmed"
+                    order["status"] = "confirmed"
+                    order["internal_notes"] += " | Auto-confirmed: Order confirmation call marked as done"
+                
                 # NEW: Map "Reason for Cancellation/Replacement" to correct cancellation_reason
                 reason_from_csv = row.get("Reason for Cancellation/Replacement", "").strip()
                 

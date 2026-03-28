@@ -72,6 +72,11 @@ async def create_replacement_request(
     replacement_dict["created_at"] = datetime.now(timezone.utc).isoformat()
     replacement_dict["pickup_not_required"] = False
     replacement_dict["delivery_confirmed"] = False
+    
+    # Add original shipment details for reference
+    replacement_dict["original_tracking_number"] = order.get("tracking_number", "")
+    replacement_dict["original_courier"] = order.get("courier_name", "")
+    
     replacement_dict["status_history"] = [{
         "status": ReplacementStatus.REQUESTED,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -167,6 +172,26 @@ async def get_replacement_requests(
         query["replacement_status"] = {"$ne": exclude_status}
     
     replacements = await db.replacement_requests.find(query, {"_id": 0}).sort("requested_date", -1).to_list(None)
+    
+    # Enrich replacements with original tracking/courier from order if missing
+    for replacement in replacements:
+        if not replacement.get("original_tracking_number") or not replacement.get("original_courier"):
+            order = await db.orders.find_one({"id": replacement["order_id"]}, {"_id": 0, "tracking_number": 1, "courier_name": 1})
+            if order:
+                if not replacement.get("original_tracking_number") and order.get("tracking_number"):
+                    replacement["original_tracking_number"] = order.get("tracking_number", "")
+                if not replacement.get("original_courier") and order.get("courier_name"):
+                    replacement["original_courier"] = order.get("courier_name", "")
+                
+                # Update the database with these values for next time
+                await db.replacement_requests.update_one(
+                    {"id": replacement["id"]},
+                    {"$set": {
+                        "original_tracking_number": replacement.get("original_tracking_number", ""),
+                        "original_courier": replacement.get("original_courier", "")
+                    }}
+                )
+    
     return replacements
 
 @router.get("/{replacement_id}", response_model=ReplacementRequest)

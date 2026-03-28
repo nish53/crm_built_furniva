@@ -2611,6 +2611,146 @@ agent_communication:
       - Warehouse management fully functional  
       - Stock adjustments with proper audit trail
       - Comprehensive dashboard and analytics
-      - No MongoDB serialization issues remaining
-      
       **PRODUCTION READY:** Inventory Management Phase 4 is complete and ready for production use.
+
+  - agent: "testing"
+    message: |
+      🎯 BUG FIX TESTING RESULTS - CRITICAL ISSUES IDENTIFIED
+      
+      === COMPREHENSIVE VALIDATION RESULTS ===
+      Date: 2026-03-28 Testing Session
+      Test Coverage: 2 specific bug fixes requested for testing
+      
+      **❌ BUG FIX #1: HISTORICAL ORDER AUTO-CONFIRMATION - PARTIALLY WORKING**
+      
+      ISSUE IDENTIFIED: Auto-confirmation logic is not working correctly
+      
+      TEST RESULTS:
+      - ✅ Historical order import: Successfully imported test order with "Order Conf Calling" = "Yes"
+      - ✅ Order retrieval: Test order found in database with order_conf_calling: true
+      - ❌ Auto-confirmation logic: Order status is "delivered" instead of expected "confirmed"
+      - ❌ Auto-confirmation note: Missing "Auto-confirmed: Order confirmation call marked as done" in internal_notes
+      
+      ROOT CAUSE ANALYSIS:
+      - Auto-confirmation logic exists in order_routes.py lines 516-519
+      - Logic only triggers when status == "pending" AND order_conf_calling == true
+      - However, status mapping logic (lines 431-445) sets default status to "delivered"
+      - This prevents auto-confirmation from triggering even for "Pending" Live Status
+      
+      EXPECTED BEHAVIOR:
+      - Order with "Live Status: Pending" and "Order Conf Calling: Yes" should be auto-confirmed to "confirmed" status
+      - internal_notes should contain "Auto-confirmed: Order confirmation call marked as done"
+      
+      ACTUAL BEHAVIOR:
+      - Order gets status "delivered" instead of "confirmed"
+      - No auto-confirmation note added
+      
+      **❌ BUG FIX #2: REPLACEMENT ORIGINAL SHIPMENT DETAILS - NOT WORKING**
+      
+      ISSUE IDENTIFIED: Replacement requests missing original tracking and courier details
+      
+      TEST RESULTS:
+      - ✅ Replacement requests retrieval: Found 1 replacement request in system
+      - ❌ Original tracking number: Missing (null) - should be populated from linked order
+      - ❌ Original courier: Missing (null) - should be populated from linked order
+      - ✅ Linked order verification: Order has tracking_number: "53642984021" and courier_partner: "Bluedart"
+      
+      ROOT CAUSE ANALYSIS:
+      - Replacement creation logic in replacement_routes.py lines 76-78 sets original_tracking_number and original_courier
+      - However, existing replacement requests don't have these fields populated
+      - The enrichment logic in lines 177-194 should backfill missing data but appears not to be working
+      
+      EXPECTED BEHAVIOR:
+      - All replacement requests should have original_tracking_number and original_courier fields
+      - These should match the linked order's tracking_number and courier_partner/courier_name
+      
+      ACTUAL BEHAVIOR:
+      - Replacement requests have null values for original_tracking_number and original_courier
+      - No backfilling of missing data from linked orders
+      
+      **🔧 CRITICAL FIXES REQUIRED:**
+      
+      1. **Historical Order Auto-Confirmation Fix:**
+         - Status mapping logic should preserve "pending" status for orders with "Pending" Live Status
+         - Auto-confirmation should trigger AFTER status mapping, not before
+         - Consider case-insensitive matching for "Pending" status
+      
+      2. **Replacement Original Shipment Details Fix:**
+         - Ensure original_tracking_number and original_courier are populated during replacement creation
+         - Implement proper backfilling for existing replacement requests
+         - Verify enrichment logic is working correctly
+      
+      **📊 FINAL TEST STATISTICS:**
+      - Total Tests: 6
+      - ✅ Passed: 3 (50% success rate)
+      - ❌ Failed: 3 (both critical bug fixes have issues)
+      
+      **🚨 PRODUCTION IMPACT:**
+      - Historical order imports may not auto-confirm orders as expected
+      - Replacement requests lack original shipment reference information
+      - Both issues affect operational efficiency and data integrity
+      
+      **RECOMMENDATION:** Both bug fixes require additional development work before deployment.
+
+  - task: "Historical Order Auto-Confirmation Bug Fix"
+    implemented: true
+    working: false
+    file: "/app/backend/routes/order_routes.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ HISTORICAL ORDER AUTO-CONFIRMATION BUG FIX - NOT WORKING CORRECTLY
+          
+          ISSUE IDENTIFIED: Auto-confirmation logic fails to trigger properly
+          
+          TEST RESULTS:
+          - ✅ CSV Import: Successfully imported test order with "Order Conf Calling" = "Yes"
+          - ✅ Database Storage: order_conf_calling field correctly set to true
+          - ❌ Status Logic: Order status is "delivered" instead of expected "confirmed"
+          - ❌ Auto-confirmation Note: Missing expected note in internal_notes
+          
+          ROOT CAUSE: Status mapping logic (lines 431-445) sets default status to "delivered",
+          preventing auto-confirmation logic (lines 516-519) from triggering even when
+          Live Status is "Pending" and Order Conf Calling is "Yes".
+          
+          EXPECTED: Order with "Pending" + "Yes" should become status "confirmed" with auto-confirm note
+          ACTUAL: Order becomes status "delivered" with no auto-confirm note
+          
+          CRITICAL FIX NEEDED: Adjust status mapping or auto-confirmation logic order
+
+  - task: "Replacement Original Shipment Details Bug Fix"
+    implemented: true
+    working: false
+    file: "/app/backend/routes/replacement_routes.py"
+    stuck_count: 0
+    priority: "critical"
+    needs_retesting: false
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: |
+          ❌ REPLACEMENT ORIGINAL SHIPMENT DETAILS - NOT WORKING
+          
+          ISSUE IDENTIFIED: Replacement requests missing original tracking and courier details
+          
+          TEST RESULTS:
+          - ✅ Replacement Retrieval: Found existing replacement request in system
+          - ❌ Original Tracking: original_tracking_number field is null
+          - ❌ Original Courier: original_courier field is null
+          - ✅ Linked Order Data: Order has tracking_number "53642984021" and courier_partner "Bluedart"
+          
+          ROOT CAUSE: 
+          1. Creation logic (lines 76-78) should populate these fields but may not be working
+          2. Enrichment logic (lines 177-194) should backfill missing data but appears inactive
+          3. Existing replacement requests lack original shipment reference data
+          
+          EXPECTED: All replacements should have original_tracking_number and original_courier
+          populated from their linked order's tracking_number and courier_partner fields
+          
+          ACTUAL: Replacement requests have null values for both original shipment fields
+          
+          CRITICAL FIX NEEDED: Ensure proper population and backfilling of original shipment details

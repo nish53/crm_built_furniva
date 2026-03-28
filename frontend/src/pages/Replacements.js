@@ -400,10 +400,35 @@ export const Replacements = () => {
                         <p className="text-sm">{replacement.damage_description}</p>
                       </div>
                       
+                      {/* Original Shipment Details */}
+                      {(replacement.original_tracking_number || replacement.original_courier) && (
+                        <div className="bg-blue-50 border border-blue-200 p-3 rounded-md mb-3">
+                          <p className="text-xs font-semibold text-blue-900 mb-2">Original Shipment Details:</p>
+                          <div className="grid grid-cols-2 gap-2 text-sm">
+                            {replacement.original_tracking_number && (
+                              <div>
+                                <p className="text-xs text-blue-600">Original Tracking:</p>
+                                <p className="font-mono text-xs font-medium">{replacement.original_tracking_number}</p>
+                              </div>
+                            )}
+                            {replacement.original_courier && (
+                              <div>
+                                <p className="text-xs text-blue-600">Original Courier:</p>
+                                <p className="font-medium text-xs">{replacement.original_courier}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* New Replacement Tracking (if added) */}
                       {replacement.tracking_number && (
-                        <div className="flex items-center gap-2 text-sm">
-                          <Truck className="w-4 h-4" />
-                          <span>Tracking: {replacement.tracking_number}</span>
+                        <div className="flex items-center gap-2 text-sm bg-green-50 border border-green-200 p-2 rounded-md">
+                          <Truck className="w-4 h-4 text-green-600" />
+                          <div>
+                            <p className="text-xs text-green-600">Replacement Tracking:</p>
+                            <span className="font-mono text-xs font-medium">{replacement.tracking_number}</span>
+                          </div>
                         </div>
                       )}
                       
